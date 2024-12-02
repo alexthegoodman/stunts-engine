@@ -43,6 +43,12 @@ pub struct BoundingBox {
     pub max: Point,
 }
 
+// Basic shape traits
+pub trait Shape {
+    fn bounding_box(&self) -> BoundingBox;
+    fn contains_point(&self, point: &Point, camera: &Camera) -> bool;
+}
+
 #[derive(Eq, PartialEq, Clone, Copy, EnumIter, Debug)]
 pub enum ToolCategory {
     Shape,
@@ -98,6 +104,23 @@ pub fn point_to_ndc(point: Point, window_size: &WindowSize) -> Point {
         x: ((point.x / window_size.width as f32) * 2.0 - 1.0),
         y: 1.0 - (point.y / window_size.height as f32) * 2.0,
     }
+}
+
+pub fn rgb_to_wgpu(r: u8, g: u8, b: u8, a: f32) -> [f32; 4] {
+    [
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+        a.clamp(0.0, 1.0),
+    ]
+}
+
+pub fn color_to_wgpu(c: f32) -> f32 {
+    c / 255.0
+}
+
+pub fn wgpu_to_human(c: f32) -> f32 {
+    c * 255.0
 }
 
 pub fn string_to_f32(s: &str) -> Result<f32, std::num::ParseFloatError> {
@@ -156,7 +179,7 @@ pub struct PolygonEditConfig {
 pub struct Editor {
     // polygons
     // pub selected_polygon_id: Uuid,
-    // pub polygons: Vec<Polygon>,
+    pub polygons: Vec<Polygon>,
 
     // pub layer_list: Vec<Uuid>,
 
@@ -199,6 +222,7 @@ impl Editor {
             height: viewport_unwrapped.height as u32,
         };
         Editor {
+            polygons: Vec::new(),
             viewport: viewport.clone(),
             // handle_polygon_click: None,
             gpu_resources: None,
@@ -250,18 +274,18 @@ impl Editor {
         self.update_camera_binding(queue);
     }
 
-    // pub fn add_polygon(&mut self, mut polygon: Polygon) {
-    //     let camera = self.camera.as_ref().expect("Couldn't get camera");
-    //     // let world_position = camera.screen_to_world(polygon.transform.position);
-    //     let world_position = polygon.transform.position;
-    //     println!(
-    //         "add polygon position {:?} {:?}",
-    //         world_position, polygon.transform.position
-    //     );
-    //     polygon.transform.position = world_position;
-    //     self.polygons.push(polygon);
-    //     self.run_layers_update();
-    // }
+    pub fn add_polygon(&mut self, mut polygon: Polygon) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        // let world_position = camera.screen_to_world(polygon.transform.position);
+        let world_position = polygon.transform.position;
+        println!(
+            "add polygon position {:?} {:?}",
+            world_position, polygon.transform.position
+        );
+        polygon.transform.position = world_position;
+        self.polygons.push(polygon);
+        // self.run_layers_update();
+    }
 
     pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
         // let mut gpu_helper = cloned_helper.lock().unwrap();
@@ -522,6 +546,7 @@ use cgmath::SquareMatrix;
 use cgmath::Transform;
 
 use crate::camera::{Camera, CameraBinding};
+use crate::polygon::Polygon;
 
 pub fn visualize_ray_intersection(
     // device: &wgpu::Device,
