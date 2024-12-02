@@ -1,0 +1,22 @@
+[package]
+name = "stunts-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = "1.19.0"
+wgpu = "22.1.0"
+pollster = "0.3.0"
+winit = "0.29"
+futures = "0.3.30"
+uuid = { version = "1.8.0", features = ["v4"] }
+lyon_tessellation = "1.0.15"
+floem_renderer = { path = "D:/projects/common/common-floem/renderer", version = "0.1.0" }
+strum = "0.26.3"
+strum_macros = "0.26"
+floem-winit = { git = "https://github.com/lapce/winit", rev = "c8d3b8fd6fa4ffd5e0f99be78aacddcf6de57bcd", features = ["rwh_05"] }
+cgmath = "0.18.0"
+
+[lib]
+name = "stunts_engine"
+path = "src/lib.rs"
