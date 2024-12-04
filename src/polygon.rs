@@ -1,4 +1,5 @@
 use cgmath::{Matrix4, Point3, Vector3};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
 
@@ -684,4 +685,28 @@ pub struct PolygonConfig {
     pub position: Point,
     pub border_radius: f32,
     pub stroke: Stroke,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub struct SavedPoint {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub struct SavedStroke {
+    pub thickness: i32,
+    pub fill: [i32; 4],
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub struct SavedPolygonConfig {
+    pub id: String,
+    pub name: String,
+    pub points: Vec<SavedPoint>,
+    pub fill: [i32; 4],
+    pub dimensions: (i32, i32), // (width, height) in pixels
+    pub position: SavedPoint,
+    pub border_radius: i32,
+    pub stroke: SavedStroke,
 }

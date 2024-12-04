@@ -171,21 +171,21 @@ pub struct PolygonEditConfig {
     // pub signal: RwSignal<String>,
 }
 
-// pub type PolygonClickHandler =
-//     dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig) + Send>> + Send + Sync;
+pub type PolygonClickHandler =
+    dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig) + Send>> + Send + Sync;
 // pub type LayersUpdateHandler =
 //     dyn Fn() -> Option<Box<dyn FnMut(PolygonConfig) + Send>> + Send + Sync;
 
 pub struct Editor {
     // polygons
-    // pub selected_polygon_id: Uuid,
+    pub selected_polygon_id: Uuid,
     pub polygons: Vec<Polygon>,
-
     // pub layer_list: Vec<Uuid>,
+    pub dragging_polygon: Option<usize>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
-    // pub handle_polygon_click: Option<Arc<PolygonClickHandler>>,
+    pub handle_polygon_click: Option<Arc<PolygonClickHandler>>,
     pub gpu_resources: Option<Arc<GpuResources>>,
     // pub handle_layers_update: Option<Arc<LayersUpdateHandler>>,
     // pub control_mode: ControlMode,
@@ -197,7 +197,7 @@ pub struct Editor {
 
     // points
     pub last_mouse_pos: Option<Point>,
-    // pub drag_start: Option<Point>,
+    pub drag_start: Option<Point>,
     pub last_screen: Point, // last mouse position from input event top-left origin
     pub last_world: Point,
     pub last_top_left: Point,   // for inside the editor zone
@@ -222,9 +222,12 @@ impl Editor {
             height: viewport_unwrapped.height as u32,
         };
         Editor {
+            selected_polygon_id: Uuid::nil(),
             polygons: Vec::new(),
+            dragging_polygon: None,
+            drag_start: None,
             viewport: viewport.clone(),
-            // handle_polygon_click: None,
+            handle_polygon_click: None,
             gpu_resources: None,
             // handle_layers_update: None,
             window: None,
@@ -378,6 +381,40 @@ impl Editor {
         //     ControlMode::Brush => self.handle_mouse_down_brush_mode(mouse_pos, window_size, device),
         // }
 
+        // Check if we're clicking on a polygon to drag
+        for (poly_index, polygon) in self.polygons.iter_mut().enumerate() {
+            if polygon.contains_point(&self.last_top_left, &camera) {
+                self.dragging_polygon = Some(poly_index);
+                self.drag_start = Some(self.last_top_left);
+
+                // TODO: make DRY with below
+                if (self.handle_polygon_click.is_some()) {
+                    let handler_creator = self
+                        .handle_polygon_click
+                        .as_ref()
+                        .expect("Couldn't get handler");
+                    let mut handle_click = handler_creator().expect("Couldn't get handler");
+                    handle_click(
+                        polygon.id,
+                        PolygonConfig {
+                            id: polygon.id,
+                            name: polygon.name.clone(),
+                            points: polygon.points.clone(),
+                            dimensions: polygon.dimensions,
+                            position: polygon.transform.position,
+                            border_radius: polygon.border_radius,
+                            fill: polygon.fill,
+                            stroke: polygon.stroke,
+                        },
+                    );
+                    self.selected_polygon_id = polygon.id;
+                    polygon.old_points = Some(polygon.points.clone());
+                }
+
+                return None; // nothing to add to undo stack
+            }
+        }
+
         None
     }
 
@@ -477,36 +514,16 @@ impl Editor {
         // if let Some(index) = polygon_index {
         //     if let Some(selected_polygon) = self.polygons.get(index) {
         //         if (selected_polygon.old_points.is_some()) {
-        //             if (self.dragging_point.is_some() || self.dragging_edge.is_some()) {
-        //                 let old_points = selected_polygon
-        //                     .old_points
-        //                     .as_ref()
-        //                     .expect("Couldn't fetch old points");
-        //                 action_edit = Some(PolygonEditConfig {
-        //                     polygon_id: selected_polygon.id,
-        //                     old_value: PolygonProperty::Points(old_points.to_vec()),
-        //                     new_value: PolygonProperty::Points(selected_polygon.points.clone()),
-        //                     field_name: "points".to_string(),
-        //                 });
-        //             } else if (self.dragging_polygon.is_some()) {
+        //             if (self.dragging_polygon.is_some()) {
         //                 // return PolygonProperty::Position
-        //             } else if (self.is_brushing) {
-        //                 // set self.brush_strokes and reset active_brush?
-        //                 // self.brush_strokes.push(
-        //                 //     self.active_stroke
-        //                 //         .as_ref()
-        //                 //         .expect("Couldn't get active stroke")
-        //                 //         .clone(),
-        //                 // );
-        //                 // return BrushProperty?
         //             }
         //         }
         //     }
         // }
 
         // self.dragging_point = None;
-        // self.dragging_polygon = None;
-        // self.drag_start = None;
+        self.dragging_polygon = None;
+        self.drag_start = None;
         // self.dragging_edge = None;
         // self.is_panning = false;
         // self.is_brushing = false;
@@ -546,7 +563,7 @@ use cgmath::SquareMatrix;
 use cgmath::Transform;
 
 use crate::camera::{Camera, CameraBinding};
-use crate::polygon::Polygon;
+use crate::polygon::{Polygon, PolygonConfig};
 
 pub fn visualize_ray_intersection(
     // device: &wgpu::Device,
