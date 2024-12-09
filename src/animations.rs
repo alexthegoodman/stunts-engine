@@ -54,8 +54,6 @@ pub enum EasingType {
 pub struct UIKeyframe {
     /// Used to associate with this speciifc UI Keyframe
     pub id: String,
-    /// Used to associate with the SkeletonKeyframe for updates
-    // pub skel_key_id: String,
     /// Time of the keyframe
     pub time: Duration,
     /// Value at this keyframe (could be position, rotation, etc)
@@ -67,10 +65,6 @@ pub struct UIKeyframe {
 /// Possible values for keyframes
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum KeyframeValue {
-    // Position([f32; 3]),
-    // Rotation([f32; 4]),
-    // Scale([f32; 3]),
-    // Custom(Vec<f32>),
     Position([i32; 2]),
     Rotation(i32),
     Scale(i32), // this will be 100 for default size to work with i32 and Eq

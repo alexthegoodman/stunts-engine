@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use cgmath::{Matrix4, Point3, Vector2, Vector3, Vector4};
 use floem_renderer::gpu_resources::{self, GpuResources};
@@ -192,6 +193,7 @@ pub struct Editor {
     // state
     pub is_playing: bool,
     pub current_sequence_data: Option<Sequence>,
+    pub last_frame_time: Option<Instant>,
 
     // points
     pub last_mouse_pos: Option<Point>,
@@ -239,7 +241,122 @@ impl Editor {
             ndc: Point { x: 0.0, y: 0.0 },
             is_playing: false,
             current_sequence_data: None,
+            last_frame_time: None,
         }
+    }
+
+    pub fn step_motion_path_animations(&mut self) {
+        if !self.is_playing || self.current_sequence_data.is_none() {
+            return;
+        }
+
+        let now = std::time::Instant::now();
+        let dt = if let Some(last_time) = self.last_frame_time {
+            (now - last_time).as_secs_f32()
+        } else {
+            0.0
+        };
+        self.last_frame_time = Some(now);
+
+        let sequence = self.current_sequence_data.as_ref().unwrap();
+
+        // Update each animation path
+        for animation in &sequence.polygon_motion_paths {
+            // Find the polygon to update
+            let polygon_idx = self
+                .polygons
+                .iter()
+                .position(|p| p.id.to_string() == animation.polygon_id);
+            let Some(polygon_idx) = polygon_idx else {
+                continue;
+            };
+
+            // Go through each property
+            for property in &animation.properties {
+                if property.keyframes.len() < 2 {
+                    continue;
+                }
+
+                // Get current time within animation duration
+                let current_time = Duration::from_secs_f32((dt % animation.duration.as_secs_f32()));
+
+                // Find the surrounding keyframes
+                let (start_frame, end_frame) =
+                    self.get_surrounding_keyframes(&property.keyframes, current_time);
+                let Some((start_frame, end_frame)) = start_frame.zip(end_frame) else {
+                    continue;
+                };
+
+                // Calculate interpolation progress
+                let duration = (end_frame.time - start_frame.time).as_secs_f32();
+                let elapsed = (current_time - start_frame.time).as_secs_f32();
+                let mut progress = elapsed / duration;
+
+                // Apply easing (EaseInOut)
+                progress = if progress < 0.5 {
+                    2.0 * progress * progress
+                } else {
+                    1.0 - (-2.0 * progress + 2.0).powi(2) / 2.0
+                };
+
+                // Apply interpolated value based on property type
+                match (&start_frame.value, &end_frame.value) {
+                    (KeyframeValue::Position(start), KeyframeValue::Position(end)) => {
+                        let x = self.lerp(start[0], end[0], progress);
+                        let y = self.lerp(start[1], end[1], progress);
+                        // self.polygons[polygon_idx].position = [x, y];
+                        self.polygons[polygon_idx].transform.position = Point { x, y };
+                    }
+                    (KeyframeValue::Rotation(start), KeyframeValue::Rotation(end)) => {
+                        // self.polygons[polygon_idx].rotation = self.lerp(*start, *end, progress);
+                    }
+                    (KeyframeValue::Scale(start), KeyframeValue::Scale(end)) => {
+                        // self.polygons[polygon_idx].scale =
+                        //     self.lerp(*start, *end, progress) as f32 / 100.0;
+                    }
+                    (KeyframeValue::Opacity(start), KeyframeValue::Opacity(end)) => {
+                        // self.polygons[polygon_idx].opacity =
+                        //     self.lerp(*start, *end, progress) as f32 / 100.0;
+                        self.polygons[polygon_idx].fill =
+                            [1.0, 1.0, 1.0, self.lerp(*start, *end, progress) / 100.0];
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn get_surrounding_keyframes<'a>(
+        &self,
+        keyframes: &'a [UIKeyframe],
+        current_time: Duration,
+    ) -> (Option<&'a UIKeyframe>, Option<&'a UIKeyframe>) {
+        let mut prev_frame = None;
+        let mut next_frame = None;
+
+        for (i, frame) in keyframes.iter().enumerate() {
+            if frame.time > current_time {
+                next_frame = Some(frame);
+                prev_frame = if i > 0 {
+                    Some(&keyframes[i - 1])
+                } else {
+                    Some(&keyframes[keyframes.len() - 1])
+                };
+                break;
+            }
+        }
+
+        // Handle wrap-around case
+        if next_frame.is_none() {
+            prev_frame = keyframes.last();
+            next_frame = keyframes.first();
+        }
+
+        (prev_frame, next_frame)
+    }
+
+    fn lerp(&self, start: i32, end: i32, progress: f32) -> f32 {
+        start as f32 + ((end - start) as f32 * progress)
     }
 
     pub fn update_camera_binding(&mut self, queue: &wgpu::Queue) {
@@ -579,7 +696,7 @@ impl Ray {
 use cgmath::SquareMatrix;
 use cgmath::Transform;
 
-use crate::animations::Sequence;
+use crate::animations::{AnimationData, EasingType, KeyframeValue, Sequence, UIKeyframe};
 use crate::camera::{Camera, CameraBinding};
 use crate::polygon::{Polygon, PolygonConfig};
 
