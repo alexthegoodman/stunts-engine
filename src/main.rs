@@ -1,3 +1,4 @@
+mod animations;
 mod camera;
 mod dot;
 mod editor;

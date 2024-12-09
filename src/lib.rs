@@ -1,3 +1,4 @@
+pub mod animations;
 pub mod camera;
 pub mod dot;
 pub mod editor;

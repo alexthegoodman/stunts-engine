@@ -160,6 +160,7 @@ pub fn string_to_f32(s: &str) -> Result<f32, std::num::ParseFloatError> {
 #[derive(Debug)]
 pub enum PolygonProperty {
     Width(f32),
+    Height(f32),
 }
 
 #[derive(Debug)]
@@ -173,27 +174,24 @@ pub struct PolygonEditConfig {
 
 pub type PolygonClickHandler =
     dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig) + Send>> + Send + Sync;
-// pub type LayersUpdateHandler =
-//     dyn Fn() -> Option<Box<dyn FnMut(PolygonConfig) + Send>> + Send + Sync;
 
 pub struct Editor {
-    // polygons
+    // data
     pub selected_polygon_id: Uuid,
     pub polygons: Vec<Polygon>,
-    // pub layer_list: Vec<Uuid>,
     pub dragging_polygon: Option<usize>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
     pub handle_polygon_click: Option<Arc<PolygonClickHandler>>,
     pub gpu_resources: Option<Arc<GpuResources>>,
-    // pub handle_layers_update: Option<Arc<LayersUpdateHandler>>,
-    // pub control_mode: ControlMode,
     pub window: Option<Arc<Window>>,
     pub camera: Option<Camera>,
-    // pub is_panning: bool,
-    // pub is_brushing: bool,
     pub camera_binding: Option<CameraBinding>,
+
+    // state
+    pub is_playing: bool,
+    pub current_sequence_data: Option<Sequence>,
 
     // points
     pub last_mouse_pos: Option<Point>,
@@ -229,7 +227,6 @@ impl Editor {
             viewport: viewport.clone(),
             handle_polygon_click: None,
             gpu_resources: None,
-            // handle_layers_update: None,
             window: None,
             camera: None,
             camera_binding: None,
@@ -240,6 +237,8 @@ impl Editor {
             last_top_left: Point { x: 0.0, y: 0.0 },
             global_top_left: Point { x: 0.0, y: 0.0 },
             ndc: Point { x: 0.0, y: 0.0 },
+            is_playing: false,
+            current_sequence_data: None,
         }
     }
 
@@ -291,62 +290,80 @@ impl Editor {
     }
 
     pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
-        // let mut gpu_helper = cloned_helper.lock().unwrap();
-
         // First iteration: find the index of the selected polygon
-        // let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
 
-        // if let Some(index) = polygon_index {
-        //     println!("Found selected polygon with ID: {}", selected_id);
+        if let Some(index) = polygon_index {
+            println!("Found selected polygon with ID: {}", selected_id);
 
-        //     let camera = self.camera.expect("Couldn't get camera");
+            let camera = self.camera.expect("Couldn't get camera");
 
-        //     // Get the necessary data from editor
-        //     let viewport_width = camera.window_size.width;
-        //     let viewport_height = camera.window_size.height;
-        //     let device = &self
-        //         .gpu_resources
-        //         .as_ref()
-        //         .expect("Couldn't get gpu resources")
-        //         .device;
+            // Get the necessary data from editor
+            let viewport_width = camera.window_size.width;
+            let viewport_height = camera.window_size.height;
+            let device = &self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get gpu resources")
+                .device;
 
-        //     let window_size = WindowSize {
-        //         width: viewport_width as u32,
-        //         height: viewport_height as u32,
-        //     };
+            let window_size = WindowSize {
+                width: viewport_width as u32,
+                height: viewport_height as u32,
+            };
 
-        //     // Second iteration: update the selected polygon
-        //     if let Some(selected_polygon) = self.polygons.get_mut(index) {
-        //         match new_value {
-        //             InputValue::Text(s) => match key {
-        //                 _ => println!("No match on input"),
-        //             },
-        //             InputValue::Number(n) => match key {
-        //                 "width" => selected_polygon.update_data_from_dimensions(
-        //                     &window_size,
-        //                     &device,
-        //                     (n, selected_polygon.dimensions.1),
-        //                     &camera,
-        //                 ),
-        //                 _ => println!("No match on input"),
-        //             },
-        //         }
-        //     }
-        // } else {
-        //     println!("No polygon found with the selected ID: {}", selected_id);
-        // }
+            // Second iteration: update the selected polygon
+            if let Some(selected_polygon) = self.polygons.get_mut(index) {
+                match new_value {
+                    InputValue::Text(s) => match key {
+                        _ => println!("No match on input"),
+                    },
+                    InputValue::Number(n) => match key {
+                        "width" => selected_polygon.update_data_from_dimensions(
+                            &window_size,
+                            &device,
+                            (n, selected_polygon.dimensions.1),
+                            &camera,
+                        ),
+                        "height" => selected_polygon.update_data_from_dimensions(
+                            &window_size,
+                            &device,
+                            (selected_polygon.dimensions.0, n),
+                            &camera,
+                        ),
+                        _ => println!("No match on input"),
+                    },
+                }
+            }
+        } else {
+            println!("No polygon found with the selected ID: {}", selected_id);
+        }
     }
 
     pub fn get_polygon_width(&self, selected_id: Uuid) -> f32 {
-        // let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
 
-        // if let Some(index) = polygon_index {
-        //     if let Some(selected_polygon) = self.polygons.get(index) {
-        //         return selected_polygon.dimensions.0;
-        //     } else {
-        //         return 0.0;
-        //     }
-        // }
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.dimensions.0;
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_height(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.dimensions.1;
+            } else {
+                return 0.0;
+            }
+        }
 
         0.0
     }
@@ -562,6 +579,7 @@ impl Ray {
 use cgmath::SquareMatrix;
 use cgmath::Transform;
 
+use crate::animations::Sequence;
 use crate::camera::{Camera, CameraBinding};
 use crate::polygon::{Polygon, PolygonConfig};
 
