@@ -703,10 +703,10 @@ pub struct SavedStroke {
 pub struct SavedPolygonConfig {
     pub id: String,
     pub name: String,
-    pub points: Vec<SavedPoint>,
-    pub fill: [i32; 4],
+    // pub points: Vec<SavedPoint>,
+    // pub fill: [i32; 4],
     pub dimensions: (i32, i32), // (width, height) in pixels
-    pub position: SavedPoint,
-    pub border_radius: i32,
-    pub stroke: SavedStroke,
+                                // pub position: SavedPoint,
+                                // pub border_radius: i32,
+                                // pub stroke: SavedStroke,
 }
