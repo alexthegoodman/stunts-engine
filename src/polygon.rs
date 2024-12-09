@@ -215,8 +215,9 @@ impl Polygon {
         border_radius: f32,
         fill: [f32; 4],
         name: String,
+        id: Uuid,
     ) -> Self {
-        let id = Uuid::new_v4();
+        // let id = Uuid::new_v4();
         let transform = SnTransform::new(position);
         let default_stroke = Stroke {
             thickness: 2.0,
