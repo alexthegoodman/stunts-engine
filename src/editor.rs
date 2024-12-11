@@ -326,7 +326,7 @@ impl Editor {
         }
     }
 
-    fn get_surrounding_keyframes<'a>(
+    pub fn get_surrounding_keyframes<'a>(
         &self,
         keyframes: &'a [UIKeyframe],
         current_time: Duration,
@@ -355,7 +355,7 @@ impl Editor {
         (prev_frame, next_frame)
     }
 
-    fn lerp(&self, start: i32, end: i32, progress: f32) -> f32 {
+    pub fn lerp(&self, start: i32, end: i32, progress: f32) -> f32 {
         start as f32 + ((end - start) as f32 * progress)
     }
 
