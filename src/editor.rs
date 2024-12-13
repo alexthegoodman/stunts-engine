@@ -189,11 +189,13 @@ pub struct Editor {
     pub window: Option<Arc<Window>>,
     pub camera: Option<Camera>,
     pub camera_binding: Option<CameraBinding>,
+    pub model_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
 
     // state
     pub is_playing: bool,
     pub current_sequence_data: Option<Sequence>,
     pub last_frame_time: Option<Instant>,
+    pub start_playing_time: Option<Instant>,
 
     // points
     pub last_mouse_pos: Option<Point>,
@@ -242,6 +244,8 @@ impl Editor {
             is_playing: false,
             current_sequence_data: None,
             last_frame_time: None,
+            start_playing_time: None,
+            model_bind_group_layout: None,
         }
     }
 
@@ -253,6 +257,11 @@ impl Editor {
         let now = std::time::Instant::now();
         let dt = if let Some(last_time) = self.last_frame_time {
             (now - last_time).as_secs_f32()
+        } else {
+            0.0
+        };
+        let total_dt = if let Some(start_playing_time) = self.start_playing_time {
+            (now - start_playing_time).as_secs_f32()
         } else {
             0.0
         };
@@ -278,7 +287,10 @@ impl Editor {
                 }
 
                 // Get current time within animation duration
-                let current_time = Duration::from_secs_f32((dt % animation.duration.as_secs_f32()));
+                let current_time =
+                    Duration::from_secs_f32((total_dt % animation.duration.as_secs_f32()));
+
+                println!("current_time {:?} {:?}", current_time, total_dt);
 
                 // Find the surrounding keyframes
                 let (start_frame, end_frame) =
@@ -299,13 +311,20 @@ impl Editor {
                     1.0 - (-2.0 * progress + 2.0).powi(2) / 2.0
                 };
 
+                println!(
+                    "Polygon Progress {:?} {:?} {:?}",
+                    duration, elapsed, progress
+                );
+
                 // Apply interpolated value based on property type
                 match (&start_frame.value, &end_frame.value) {
                     (KeyframeValue::Position(start), KeyframeValue::Position(end)) => {
                         let x = self.lerp(start[0], end[0], progress);
                         let y = self.lerp(start[1], end[1], progress);
                         // self.polygons[polygon_idx].position = [x, y];
-                        self.polygons[polygon_idx].transform.position = Point { x, y };
+                        println!("Polygon Position {:?} {:?}", x, y);
+                        // self.polygons[polygon_idx].transform.position = Point { x, y };
+                        self.polygons[polygon_idx].transform.update_position([x, y]);
                     }
                     (KeyframeValue::Rotation(start), KeyframeValue::Rotation(end)) => {
                         // self.polygons[polygon_idx].rotation = self.lerp(*start, *end, progress);
@@ -393,15 +412,42 @@ impl Editor {
         self.update_camera_binding(queue);
     }
 
-    pub fn add_polygon(&mut self, mut polygon: Polygon) {
+    pub fn add_polygon(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        camera: &Camera,
+        polygon_config: PolygonConfig,
+        polygon_name: String,
+        new_id: Uuid,
+    ) {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
-        // let world_position = camera.screen_to_world(polygon.transform.position);
-        let world_position = polygon.transform.position;
-        println!(
-            "add polygon position {:?} {:?}",
-            world_position, polygon.transform.position
+        let mut polygon = Polygon::new(
+            window_size,
+            device,
+            &self
+                .model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get model bind group layout"),
+            camera,
+            polygon_config.points,
+            polygon_config.dimensions,
+            polygon_config.position,
+            polygon_config.border_radius,
+            polygon_config.fill,
+            polygon_name,
+            new_id,
         );
-        polygon.transform.position = world_position;
+        // // let world_position = camera.screen_to_world(polygon.transform.position);
+        // let world_position = polygon.transform.position;
+        // println!(
+        //     "add polygon position {:?} {:?}",
+        //     world_position, polygon.transform.position
+        // );
+        // // polygon.transform.position = world_position;
+        // polygon
+        //     .transform
+        //     .update_position([world_position.x, world_position.y]);
         self.polygons.push(polygon);
         // self.run_layers_update();
     }
@@ -439,12 +485,20 @@ impl Editor {
                         "width" => selected_polygon.update_data_from_dimensions(
                             &window_size,
                             &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
                             (n, selected_polygon.dimensions.1),
                             &camera,
                         ),
                         "height" => selected_polygon.update_data_from_dimensions(
                             &window_size,
                             &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
                             (selected_polygon.dimensions.0, n),
                             &camera,
                         ),
@@ -535,7 +589,10 @@ impl Editor {
                             name: polygon.name.clone(),
                             points: polygon.points.clone(),
                             dimensions: polygon.dimensions,
-                            position: polygon.transform.position,
+                            position: Point {
+                                x: polygon.transform.position.x,
+                                y: polygon.transform.position.y,
+                            },
                             border_radius: polygon.border_radius,
                             fill: polygon.fill,
                             stroke: polygon.stroke,

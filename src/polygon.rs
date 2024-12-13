@@ -1,4 +1,6 @@
-use cgmath::{Matrix4, Point3, Vector3};
+use std::sync::Arc;
+
+use cgmath::{Matrix4, Point3, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
@@ -11,7 +13,7 @@ use crate::{
     editor::{
         rgb_to_wgpu, size_to_ndc, visualize_ray_intersection, BoundingBox, Point, Shape, WindowSize,
     },
-    transform::{self, Transform as SnTransform},
+    transform::{self, matrix4_to_raw_array, Transform as SnTransform},
     vertex::{get_z_layer, Vertex},
 };
 
@@ -66,14 +68,22 @@ use lyon_tessellation::{
 pub fn get_polygon_data(
     window_size: &WindowSize,
     device: &wgpu::Device,
+    bind_group_layout: &wgpu::BindGroupLayout,
     camera: &Camera,
     points: Vec<Point>,
     dimensions: (f32, f32),
-    transform: &SnTransform,
+    position: Point,
     border_radius: f32,
     fill: [f32; 4],
     stroke: Stroke,
-) -> (Vec<Vertex>, Vec<u32>, wgpu::Buffer, wgpu::Buffer) {
+) -> (
+    Vec<Vertex>,
+    Vec<u32>,
+    wgpu::Buffer,
+    wgpu::Buffer,
+    wgpu::BindGroup,
+    SnTransform,
+) {
     let mut geometry: VertexBuffers<Vertex, u32> = VertexBuffers::new();
     let mut fill_tessellator = FillTessellator::new();
     let mut stroke_tessellator = StrokeTessellator::new();
@@ -86,12 +96,8 @@ pub fn get_polygon_data(
             &path,
             &FillOptions::default(),
             &mut BuffersBuilder::new(&mut geometry, |vertex: FillVertex| {
-                let x = ((vertex.position().x + transform.position.x) / window_size.width as f32)
-                    * 2.0
-                    - 1.0;
-                let y = 1.0
-                    - ((vertex.position().y + transform.position.y) / window_size.height as f32)
-                        * 2.0;
+                let x = ((vertex.position().x) / window_size.width as f32) * 2.0 - 1.0;
+                let y = 1.0 - ((vertex.position().y) / window_size.height as f32) * 2.0;
 
                 Vertex::new(x, y, get_z_layer(3.0), fill)
             }),
@@ -105,14 +111,8 @@ pub fn get_polygon_data(
                 &path,
                 &StrokeOptions::default().with_line_width(stroke.thickness),
                 &mut BuffersBuilder::new(&mut geometry, |vertex: StrokeVertex| {
-                    let x = ((vertex.position().x + transform.position.x)
-                        / window_size.width as f32)
-                        * 2.0
-                        - 1.0;
-                    let y = 1.0
-                        - ((vertex.position().y + transform.position.y)
-                            / window_size.height as f32)
-                            * 2.0;
+                    let x = ((vertex.position().x) / window_size.width as f32) * 2.0 - 1.0;
+                    let y = 1.0 - ((vertex.position().y) / window_size.height as f32) * 2.0;
                     Vertex::new(x, y, get_z_layer(2.0), stroke.fill) // Black border
                 }),
             )
@@ -131,11 +131,36 @@ pub fn get_polygon_data(
         usage: wgpu::BufferUsages::INDEX,
     });
 
+    let empty_buffer = Matrix4::<f32>::identity();
+    let raw_matrix = matrix4_to_raw_array(&empty_buffer);
+
+    let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Cube Uniform Buffer"),
+        contents: bytemuck::cast_slice(&raw_matrix),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: uniform_buffer.as_entire_binding(),
+        }],
+        label: None,
+    });
+
     (
         geometry.vertices,
         geometry.indices,
         vertex_buffer,
         index_buffer,
+        bind_group,
+        SnTransform::new(
+            Vector2::new(position.x, position.y),
+            0.0,
+            Vector2::new(1.0, 1.0),
+            uniform_buffer,
+        ),
     )
 }
 
@@ -208,6 +233,7 @@ impl Polygon {
     pub fn new(
         window_size: &WindowSize,
         device: &wgpu::Device,
+        bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         camera: &Camera,
         points: Vec<Point>,
         dimensions: (f32, f32),
@@ -218,23 +244,25 @@ impl Polygon {
         id: Uuid,
     ) -> Self {
         // let id = Uuid::new_v4();
-        let transform = SnTransform::new(position);
+        // let transform = SnTransform::new(position);
         let default_stroke = Stroke {
             thickness: 2.0,
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         };
 
-        let (vertices, indices, vertex_buffer, index_buffer) = get_polygon_data(
-            window_size,
-            device,
-            camera,
-            points.clone(),
-            dimensions,
-            &transform,
-            border_radius,
-            fill,
-            default_stroke,
-        );
+        let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
+            get_polygon_data(
+                window_size,
+                device,
+                bind_group_layout,
+                camera,
+                points.clone(),
+                dimensions,
+                position,
+                border_radius,
+                fill,
+                default_stroke,
+            );
 
         Polygon {
             id,
@@ -250,6 +278,7 @@ impl Polygon {
             indices,
             vertex_buffer,
             index_buffer,
+            bind_group,
         }
     }
 
@@ -323,53 +352,71 @@ impl Polygon {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        bind_group_layout: &wgpu::BindGroupLayout,
         dimensions: (f32, f32),
         camera: &Camera,
     ) {
-        let (vertices, indices, vertex_buffer, index_buffer) = get_polygon_data(
-            window_size,
-            device,
-            camera,
-            self.points.clone(),
-            dimensions,
-            &self.transform,
-            self.border_radius,
-            self.fill,
-            self.stroke,
-        );
+        let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
+            get_polygon_data(
+                window_size,
+                device,
+                bind_group_layout,
+                camera,
+                self.points.clone(),
+                dimensions,
+                Point {
+                    x: self.transform.position.x,
+                    y: self.transform.position.y,
+                },
+                self.border_radius,
+                self.fill,
+                self.stroke,
+            );
 
         self.dimensions = dimensions;
         self.vertices = vertices;
         self.indices = indices;
         self.vertex_buffer = vertex_buffer;
         self.index_buffer = index_buffer;
+        self.bind_group = bind_group;
+        self.transform = transform;
     }
 
     pub fn update_data_from_position(
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        bind_group_layout: &wgpu::BindGroupLayout,
         position: Point,
         camera: &Camera,
     ) {
-        self.transform.position = position;
+        // self.transform.position = position;
 
-        let (vertices, indices, vertex_buffer, index_buffer) = get_polygon_data(
-            window_size,
-            device,
-            camera,
-            self.points.clone(),
-            self.dimensions,
-            &self.transform,
-            self.border_radius,
-            self.fill,
-            self.stroke,
-        );
+        let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
+            get_polygon_data(
+                window_size,
+                device,
+                bind_group_layout,
+                camera,
+                self.points.clone(),
+                self.dimensions,
+                Point {
+                    x: self.transform.position.x,
+                    y: self.transform.position.y,
+                },
+                self.border_radius,
+                self.fill,
+                self.stroke,
+            );
 
         self.vertices = vertices;
         self.indices = indices;
         self.vertex_buffer = vertex_buffer;
         self.index_buffer = index_buffer;
+        self.bind_group = bind_group;
+        self.transform = transform;
+
+        self.transform.update_position([position.x, position.y]);
     }
 
     // pub fn update_data_from_border_radius(
@@ -667,6 +714,7 @@ pub struct Polygon {
     pub indices: Vec<u32>,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
+    pub bind_group: wgpu::BindGroup,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -677,6 +725,7 @@ pub struct Stroke {
 
 // I don't like repeating all these fields,
 // but using config as field of polygon requires cloning a lot!
+#[derive(Clone)]
 pub struct PolygonConfig {
     pub id: Uuid,
     pub name: String,
