@@ -32,6 +32,13 @@ pub struct WindowSize {
     pub height: u32,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct WindowSizeShader {
+    pub width: f32,
+    pub height: f32,
+}
+
 // Basic 2D point structure
 #[derive(Clone, Copy, Debug)]
 pub struct Point {
@@ -190,6 +197,7 @@ pub struct Editor {
     pub camera: Option<Camera>,
     pub camera_binding: Option<CameraBinding>,
     pub model_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
+    pub window_size_bind_group: Option<wgpu::BindGroup>,
 
     // state
     pub is_playing: bool,
@@ -246,10 +254,11 @@ impl Editor {
             last_frame_time: None,
             start_playing_time: None,
             model_bind_group_layout: None,
+            window_size_bind_group: None,
         }
     }
 
-    pub fn step_motion_path_animations(&mut self) {
+    pub fn step_motion_path_animations(&mut self, camera: &Camera) {
         if !self.is_playing || self.current_sequence_data.is_none() {
             return;
         }
@@ -324,7 +333,9 @@ impl Editor {
                         // self.polygons[polygon_idx].position = [x, y];
                         println!("Polygon Position {:?} {:?}", x, y);
                         // self.polygons[polygon_idx].transform.position = Point { x, y };
-                        self.polygons[polygon_idx].transform.update_position([x, y]);
+                        self.polygons[polygon_idx]
+                            .transform
+                            .update_position([x, y], &camera.window_size);
                     }
                     (KeyframeValue::Rotation(start), KeyframeValue::Rotation(end)) => {
                         // self.polygons[polygon_idx].rotation = self.lerp(*start, *end, progress);

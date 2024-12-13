@@ -96,8 +96,10 @@ pub fn get_polygon_data(
             &path,
             &FillOptions::default(),
             &mut BuffersBuilder::new(&mut geometry, |vertex: FillVertex| {
-                let x = ((vertex.position().x) / window_size.width as f32) * 2.0 - 1.0;
-                let y = 1.0 - ((vertex.position().y) / window_size.height as f32) * 2.0;
+                // let x = ((vertex.position().x) / window_size.width as f32) * 2.0 - 1.0;
+                // let y = 1.0 - ((vertex.position().y) / window_size.height as f32) * 2.0;
+                let x = vertex.position().x;
+                let y = vertex.position().y;
 
                 Vertex::new(x, y, get_z_layer(3.0), fill)
             }),
@@ -111,8 +113,11 @@ pub fn get_polygon_data(
                 &path,
                 &StrokeOptions::default().with_line_width(stroke.thickness),
                 &mut BuffersBuilder::new(&mut geometry, |vertex: StrokeVertex| {
-                    let x = ((vertex.position().x) / window_size.width as f32) * 2.0 - 1.0;
-                    let y = 1.0 - ((vertex.position().y) / window_size.height as f32) * 2.0;
+                    // let x = ((vertex.position().x) / window_size.width as f32) * 2.0 - 1.0;
+                    // let y = 1.0 - ((vertex.position().y) / window_size.height as f32) * 2.0;
+                    let x = vertex.position().x;
+                    let y = vertex.position().y;
+
                     Vertex::new(x, y, get_z_layer(2.0), stroke.fill) // Black border
                 }),
             )
@@ -160,6 +165,7 @@ pub fn get_polygon_data(
             0.0,
             Vector2::new(1.0, 1.0),
             uniform_buffer,
+            window_size,
         ),
     )
 }
@@ -416,7 +422,8 @@ impl Polygon {
         self.bind_group = bind_group;
         self.transform = transform;
 
-        self.transform.update_position([position.x, position.y]);
+        self.transform
+            .update_position([position.x, position.y], &camera.window_size);
     }
 
     // pub fn update_data_from_border_radius(
