@@ -188,6 +188,7 @@ pub struct Editor {
     pub selected_polygon_id: Uuid,
     pub polygons: Vec<Polygon>,
     pub dragging_polygon: Option<usize>,
+    pub static_polygons: Vec<Polygon>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
@@ -255,6 +256,7 @@ impl Editor {
             start_playing_time: None,
             model_bind_group_layout: None,
             window_size_bind_group: None,
+            static_polygons: Vec::new(),
         }
     }
 
@@ -299,7 +301,7 @@ impl Editor {
                 let current_time =
                     Duration::from_secs_f32((total_dt % animation.duration.as_secs_f32()));
 
-                println!("current_time {:?} {:?}", current_time, total_dt);
+                // println!("current_time {:?} {:?}", current_time, total_dt);
 
                 // Find the surrounding keyframes
                 let (start_frame, end_frame) =
@@ -320,22 +322,25 @@ impl Editor {
                     1.0 - (-2.0 * progress + 2.0).powi(2) / 2.0
                 };
 
-                println!(
-                    "Polygon Progress {:?} {:?} {:?}",
-                    duration, elapsed, progress
-                );
+                // println!(
+                //     "Polygon Progress {:?} {:?} {:?}",
+                //     duration, elapsed, progress
+                // );
 
                 // Apply interpolated value based on property type
                 match (&start_frame.value, &end_frame.value) {
                     (KeyframeValue::Position(start), KeyframeValue::Position(end)) => {
                         let x = self.lerp(start[0], end[0], progress);
                         let y = self.lerp(start[1], end[1], progress);
-                        // self.polygons[polygon_idx].position = [x, y];
-                        println!("Polygon Position {:?} {:?}", x, y);
-                        // self.polygons[polygon_idx].transform.position = Point { x, y };
+
+                        let position = Point {
+                            x: 600.0 + x,
+                            y: 50.0 + y,
+                        };
+
                         self.polygons[polygon_idx]
                             .transform
-                            .update_position([x, y], &camera.window_size);
+                            .update_position([position.x, position.y], &camera.window_size);
                     }
                     (KeyframeValue::Rotation(start), KeyframeValue::Rotation(end)) => {
                         // self.polygons[polygon_idx].rotation = self.lerp(*start, *end, progress);

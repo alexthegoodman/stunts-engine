@@ -256,6 +256,11 @@ impl Polygon {
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         };
 
+        let position = Point {
+            x: 600.0 + position.x,
+            y: 50.0 + position.y,
+        };
+
         let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
             get_polygon_data(
                 window_size,
@@ -421,6 +426,11 @@ impl Polygon {
         self.index_buffer = index_buffer;
         self.bind_group = bind_group;
         self.transform = transform;
+
+        let position = Point {
+            x: 600.0 + position.x,
+            y: 50.0 + position.y,
+        };
 
         self.transform
             .update_position([position.x, position.y], &camera.window_size);
