@@ -183,6 +183,9 @@ pub struct PolygonEditConfig {
 pub type PolygonClickHandler =
     dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig) + Send>> + Send + Sync;
 
+pub type OnMouseUp =
+    dyn Fn() -> Option<Box<dyn FnMut(usize, Point) -> Sequence + Send>> + Send + Sync;
+
 pub struct Editor {
     // data
     pub selected_polygon_id: Uuid,
@@ -199,6 +202,7 @@ pub struct Editor {
     pub camera_binding: Option<CameraBinding>,
     pub model_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
     pub window_size_bind_group: Option<wgpu::BindGroup>,
+    pub on_mouse_up: Option<Arc<OnMouseUp>>,
 
     // state
     pub is_playing: bool,
@@ -257,6 +261,7 @@ impl Editor {
             model_bind_group_layout: None,
             window_size_bind_group: None,
             static_polygons: Vec::new(),
+            on_mouse_up: None,
         }
     }
 
@@ -806,6 +811,12 @@ impl Editor {
         // }
 
         // self.update_cursor();
+
+        if let Some(poly_index) = self.dragging_polygon {
+            if let Some(start) = self.drag_start {
+                self.move_polygon(self.last_top_left, start, poly_index, window_size, device);
+            }
+        }
     }
 
     pub fn handle_mouse_up(&mut self) -> Option<PolygonEditConfig> {
@@ -826,6 +837,15 @@ impl Editor {
         //     }
         // }
 
+        if let Some(poly_index) = self.dragging_polygon {
+            if let Some(on_mouse_up_creator) = &self.on_mouse_up {
+                let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+                let selected_sequence_data = on_up(poly_index, self.last_top_left);
+                self.update_motion_paths(&selected_sequence_data);
+                println!("Motion Paths updated!");
+            }
+        }
+
         // self.dragging_point = None;
         self.dragging_polygon = None;
         self.drag_start = None;
@@ -836,6 +856,29 @@ impl Editor {
         // self.update_cursor();
 
         action_edit
+    }
+
+    pub fn move_polygon(
+        &mut self,
+        mouse_pos: Point,
+        start: Point,
+        poly_index: usize,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
+        let dx = mouse_pos.x - start.x;
+        let dy = mouse_pos.y - start.y;
+        let polygon = &mut self.polygons[poly_index];
+        let new_position = Point {
+            x: polygon.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
+            y: polygon.transform.position.y + dy,
+        };
+        println!("move_polygon {:?}", new_position);
+        // polygon.update_data_from_position(window_size, device, new_position, &camera);
+        self.drag_start = Some(mouse_pos);
+        // self.update_guide_lines(poly_index, window_size);
     }
 
     fn is_close(&self, a: f32, b: f32, threshold: f32) -> bool {
