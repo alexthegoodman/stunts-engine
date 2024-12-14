@@ -394,6 +394,98 @@ impl Editor {
         start as f32 + ((end - start) as f32 * progress)
     }
 
+    /// Create motion path visualization for a polygon
+    pub fn create_motion_path_visualization(&mut self, sequence: &Sequence, polygon_id: &str) {
+        let animation_data = sequence
+            .polygon_motion_paths
+            .iter()
+            .find(|anim| anim.polygon_id == polygon_id)
+            .expect("Couldn't find animation data for polygon");
+
+        // Find position property
+        let position_property = animation_data
+            .properties
+            .iter()
+            .find(|prop| prop.name.starts_with("Position"))
+            .expect("Couldn't find position property");
+
+        // Sort keyframes by time
+        let mut keyframes = position_property.keyframes.clone();
+        keyframes.sort_by_key(|k| k.time);
+
+        // Create path segments between consecutive keyframes
+        for window in keyframes.windows(2) {
+            let start_kf = &window[0];
+            let end_kf = &window[1];
+
+            if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
+                (&start_kf.value, &end_kf.value)
+            {
+                let start_point = Point {
+                    x: start_pos[0] as f32,
+                    y: start_pos[1] as f32,
+                };
+                let end_point = Point {
+                    x: end_pos[0] as f32,
+                    y: end_pos[1] as f32,
+                };
+
+                // Create intermediate points for curved paths if using non-linear easing
+                let num_segments = match start_kf.easing {
+                    EasingType::Linear => 1,
+                    _ => 10, // More segments for curved paths
+                };
+
+                for i in 0..num_segments {
+                    let t1 = start_kf.time + (end_kf.time - start_kf.time) * i / num_segments;
+                    let t2 = start_kf.time + (end_kf.time - start_kf.time) * (i + 1) / num_segments;
+
+                    let pos1 = interpolate_position(start_kf, end_kf, t1);
+                    let pos2 = interpolate_position(start_kf, end_kf, t2);
+
+                    let camera = self.camera.expect("Couldn't get camera");
+
+                    let segment = create_path_segment(
+                        &camera.window_size,
+                        &self
+                            .gpu_resources
+                            .as_ref()
+                            .expect("No GPU resources")
+                            .device,
+                        &self
+                            .model_bind_group_layout
+                            .as_ref()
+                            .expect("No bind group layout"),
+                        &self.camera.expect("No camera"),
+                        Point {
+                            x: pos1[0] as f32,
+                            y: pos1[1] as f32,
+                        },
+                        Point {
+                            x: pos2[0] as f32,
+                            y: pos2[1] as f32,
+                        },
+                        2.0, // thickness of the path
+                    );
+
+                    self.static_polygons.push(segment);
+                }
+            }
+        }
+    }
+
+    /// Update the motion path visualization when keyframes change
+    pub fn update_motion_paths(&mut self, sequence: &Sequence) {
+        // Remove existing motion path segments
+        self.static_polygons
+            .retain(|p| p.name != "motion_path_segment");
+
+        // Recreate motion paths for all polygons
+        for polygon_config in &sequence.active_polygons {
+            self.create_motion_path_visualization(sequence, &polygon_config.id);
+        }
+    }
+
     pub fn update_camera_binding(&mut self, queue: &wgpu::Queue) {
         if (self.camera_binding.is_some()) {
             self.camera_binding
@@ -449,6 +541,7 @@ impl Editor {
             polygon_config.points,
             polygon_config.dimensions,
             polygon_config.position,
+            0.0,
             polygon_config.border_radius,
             polygon_config.fill,
             polygon_name,
@@ -742,6 +835,80 @@ impl Editor {
 
     fn is_close(&self, a: f32, b: f32, threshold: f32) -> bool {
         (a - b).abs() < threshold
+    }
+}
+
+/// Creates a path segment using a rotated square
+fn create_path_segment(
+    window_size: &WindowSize,
+    device: &wgpu::Device,
+    model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+    camera: &Camera,
+    start: Point,
+    end: Point,
+    thickness: f32,
+) -> Polygon {
+    // Calculate rotation angle from start to end point
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let rotation = dy.atan2(dx);
+
+    // Calculate length of the segment
+    let length = (dx * dx + dy * dy).sqrt();
+
+    // Calculate segment midpoint for position
+    let position = Point {
+        x: (start.x + end.x) / 2.0,
+        y: (start.y + end.y) / 2.0,
+    };
+
+    // Create polygon using default square points
+    Polygon::new(
+        window_size,
+        device,
+        model_bind_group_layout,
+        camera,
+        vec![
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 1.0, y: 0.0 },
+            Point { x: 1.0, y: 1.0 },
+            Point { x: 0.0, y: 1.0 },
+        ],
+        (length, thickness), // width = length of segment, height = thickness
+        position,
+        rotation,
+        0.0,
+        [0.5, 0.8, 1.0, 0.6], // light blue with some transparency
+        String::from("motion_path_segment"),
+        Uuid::new_v4(),
+    )
+}
+
+/// Get interpolated position at a specific time
+fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: Duration) -> [i32; 2] {
+    if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
+        (&start.value, &end.value)
+    {
+        let progress = match start.easing {
+            EasingType::Linear => {
+                let total_time = (end.time - start.time).as_secs_f32();
+                let current_time = (time - start.time).as_secs_f32();
+                current_time / total_time
+            }
+            // Add more sophisticated easing calculations here
+            _ => {
+                let total_time = (end.time - start.time).as_secs_f32();
+                let current_time = (time - start.time).as_secs_f32();
+                current_time / total_time
+            }
+        };
+
+        [
+            (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * progress) as i32,
+            (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * progress) as i32,
+        ]
+    } else {
+        panic!("Expected position keyframes")
     }
 }
 
