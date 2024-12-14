@@ -77,6 +77,7 @@ pub fn get_polygon_data(
     border_radius: f32,
     fill: [f32; 4],
     stroke: Stroke,
+    base_layer: f32,
 ) -> (
     Vec<Vertex>,
     Vec<u32>,
@@ -102,7 +103,7 @@ pub fn get_polygon_data(
                 let x = vertex.position().x;
                 let y = vertex.position().y;
 
-                Vertex::new(x, y, get_z_layer(3.0), fill)
+                Vertex::new(x, y, get_z_layer(base_layer + 3.0), fill)
             }),
         )
         .unwrap();
@@ -119,7 +120,8 @@ pub fn get_polygon_data(
                     let x = vertex.position().x;
                     let y = vertex.position().y;
 
-                    Vertex::new(x, y, get_z_layer(2.0), stroke.fill) // Black border
+                    Vertex::new(x, y, get_z_layer(base_layer + 2.0), stroke.fill)
+                    // Black border
                 }),
             )
             .unwrap();
@@ -248,15 +250,17 @@ impl Polygon {
         rotation: f32,
         border_radius: f32,
         fill: [f32; 4],
+        stroke: Stroke,
+        base_layer: f32,
         name: String,
         id: Uuid,
     ) -> Self {
         // let id = Uuid::new_v4();
         // let transform = SnTransform::new(position);
-        let default_stroke = Stroke {
-            thickness: 2.0,
-            fill: rgb_to_wgpu(0, 0, 0, 1.0),
-        };
+        // let default_stroke = Stroke {
+        //     thickness: 2.0,
+        //     fill: rgb_to_wgpu(0, 0, 0, 1.0),
+        // };
 
         let position = Point {
             x: 600.0 + position.x,
@@ -275,7 +279,8 @@ impl Polygon {
                 rotation,
                 border_radius,
                 fill,
-                default_stroke,
+                stroke,
+                base_layer,
             );
 
         Polygon {
@@ -287,7 +292,7 @@ impl Polygon {
             transform,
             border_radius,
             fill,
-            stroke: default_stroke,
+            stroke,
             vertices,
             indices,
             vertex_buffer,
@@ -386,6 +391,7 @@ impl Polygon {
                 self.border_radius,
                 self.fill,
                 self.stroke,
+                0.0,
             );
 
         self.dimensions = dimensions;
@@ -423,6 +429,7 @@ impl Polygon {
                 self.border_radius,
                 self.fill,
                 self.stroke,
+                0.0,
             );
 
         self.vertices = vertices;

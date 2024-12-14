@@ -544,6 +544,11 @@ impl Editor {
             0.0,
             polygon_config.border_radius,
             polygon_config.fill,
+            Stroke {
+                thickness: 2.0,
+                fill: rgb_to_wgpu(0, 0, 0, 1.0),
+            },
+            0.0,
             polygon_name,
             new_id,
         );
@@ -878,7 +883,12 @@ fn create_path_segment(
         position,
         rotation,
         0.0,
-        [0.5, 0.8, 1.0, 0.6], // light blue with some transparency
+        [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
+        Stroke {
+            thickness: 0.0,
+            fill: rgb_to_wgpu(0, 0, 0, 1.0),
+        },
+        -1.0,
         String::from("motion_path_segment"),
         Uuid::new_v4(),
     )
@@ -938,7 +948,7 @@ use cgmath::Transform;
 
 use crate::animations::{AnimationData, EasingType, KeyframeValue, Sequence, UIKeyframe};
 use crate::camera::{Camera, CameraBinding};
-use crate::polygon::{Polygon, PolygonConfig};
+use crate::polygon::{Polygon, PolygonConfig, Stroke};
 
 pub fn visualize_ray_intersection(
     // device: &wgpu::Device,
