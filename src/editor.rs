@@ -569,6 +569,9 @@ impl Editor {
         //     .update_position([world_position.x, world_position.y]);
         self.polygons.push(polygon);
         // self.run_layers_update();
+
+        // TODO: udpate motion paths when adding new polygon
+        // self.update_motion_paths(sequence);
     }
 
     pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
@@ -679,6 +682,22 @@ impl Editor {
         let y = self.ds_ndc_pos.y;
         let mouse_pos = Point { x, y };
         // let world_pos = camera.screen_to_world(mouse_pos);
+
+        let interactive_bounds = BoundingBox {
+            min: Point { x: 550.0, y: 0.0 }, // account for aside width
+            max: Point {
+                x: window_size.width as f32,
+                y: window_size.height as f32,
+            },
+        };
+
+        if (self.last_screen.x < interactive_bounds.min.x
+            || self.last_screen.x > interactive_bounds.max.x
+            || self.last_screen.y < interactive_bounds.min.y
+            || self.last_screen.y > interactive_bounds.max.y)
+        {
+            return None;
+        }
 
         // self.update_cursor();
 
@@ -821,6 +840,24 @@ impl Editor {
 
     pub fn handle_mouse_up(&mut self) -> Option<PolygonEditConfig> {
         let mut action_edit = None;
+
+        let camera = self.camera.expect("Couldn't get camera");
+
+        let interactive_bounds = BoundingBox {
+            min: Point { x: 550.0, y: 0.0 }, // account for aside width
+            max: Point {
+                x: camera.window_size.width as f32,
+                y: camera.window_size.height as f32,
+            },
+        };
+
+        if (self.last_screen.x < interactive_bounds.min.x
+            || self.last_screen.x > interactive_bounds.max.x
+            || self.last_screen.y < interactive_bounds.min.y
+            || self.last_screen.y > interactive_bounds.max.y)
+        {
+            return None;
+        }
 
         // let polygon_index = self
         //     .polygons
