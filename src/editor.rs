@@ -192,6 +192,7 @@ pub struct Editor {
     pub polygons: Vec<Polygon>,
     pub dragging_polygon: Option<usize>,
     pub static_polygons: Vec<Polygon>,
+    pub project_selected: Option<Uuid>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
@@ -203,6 +204,7 @@ pub struct Editor {
     pub model_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
     pub window_size_bind_group: Option<wgpu::BindGroup>,
     pub on_mouse_up: Option<Arc<OnMouseUp>>,
+    pub current_view: String,
 
     // state
     pub is_playing: bool,
@@ -262,6 +264,8 @@ impl Editor {
             window_size_bind_group: None,
             static_polygons: Vec::new(),
             on_mouse_up: None,
+            current_view: "manage_projects".to_string(),
+            project_selected: None,
         }
     }
 

@@ -14,8 +14,6 @@ pub struct Sequence {
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct AnimationData {
-    /// All motion paths in the animation
-    // pub paths: Vec<SkeletonMotionPath>,
     pub id: String,
     /// id of the associated polygon
     pub polygon_id: String,
