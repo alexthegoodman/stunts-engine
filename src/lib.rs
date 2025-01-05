@@ -5,5 +5,6 @@ pub mod editor;
 pub mod export;
 pub mod polygon;
 pub mod text;
+pub mod text_due;
 pub mod transform;
 pub mod vertex;

@@ -5,6 +5,7 @@ mod editor;
 mod export;
 mod polygon;
 mod text;
+mod text_due;
 mod transform;
 mod vertex;
 
