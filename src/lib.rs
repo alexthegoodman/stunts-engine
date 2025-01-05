@@ -4,6 +4,7 @@ pub mod dot;
 pub mod editor;
 pub mod export;
 pub mod polygon;
+pub mod st_image;
 pub mod text;
 pub mod text_due;
 pub mod transform;

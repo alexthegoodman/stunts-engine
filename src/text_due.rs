@@ -8,6 +8,8 @@ use wgpu::{BindGroup, Buffer, Device, Queue, RenderPipeline, TextureFormat};
 // use allsorts::font::read_cmap_subtable;
 use bytemuck::{Pod, Zeroable};
 use cgmath::SquareMatrix;
+use serde::Deserialize;
+use serde::Serialize;
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -22,11 +24,22 @@ struct AtlasGlyph {
     metrics: [f32; 4], // width, height, xmin, ymin in pixels
 }
 
+#[derive(Clone)]
 pub struct TextRendererConfig {
     pub id: Uuid,
     pub name: String,
     pub text: String,
     pub dimensions: (f32, f32),
+    pub position: Point,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub struct SavedTextRendererConfig {
+    pub id: String,
+    pub name: String,
+    pub text: String,
+    pub dimensions: (i32, i32),
+    // position is determined by the keyframes (?)
 }
 
 pub struct TextRenderer {
@@ -52,14 +65,14 @@ pub struct TextRenderer {
 impl TextRenderer {
     pub fn new(
         device: &Device,
-        queue: &Queue,
+        // queue: &Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
         font_data: &[u8],
         window_size: &WindowSize,
         text: String,
+        text_config: TextRendererConfig,
+        id: Uuid,
     ) -> Self {
-        let id = Uuid::new_v4();
-
         // Load and initialize the font
         let font = Font::from_bytes(font_data, fontdue::FontSettings::default())
             .expect("Failed to load font");
@@ -121,7 +134,7 @@ impl TextRenderer {
             text,
             font,
             transform: Transform::new(
-                Vector2::new(100.0, 100.0),
+                Vector2::new(text_config.position.x, text_config.position.y),
                 0.0,
                 Vector2::new(1.0, 1.0),
                 uniform_buffer,
@@ -131,7 +144,7 @@ impl TextRenderer {
             index_buffer,
             vertices: Vec::new(),
             indices: Vec::new(),
-            dimensions: (100.0, 100.0),
+            dimensions: (text_config.dimensions.0, text_config.dimensions.1),
             bind_group,
             atlas_texture,
             atlas_size,

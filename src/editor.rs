@@ -589,6 +589,30 @@ impl Editor {
         // self.update_motion_paths(sequence);
     }
 
+    pub fn add_text_item(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        text_config: TextRendererConfig,
+        text_content: String,
+        new_id: Uuid,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let mut text_item = TextRenderer::new(
+            device,
+            &self
+                .model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get model bind group layout"),
+            &[0], // load font data ahead of time
+            window_size,
+            text_content.clone(),
+            text_config,
+            new_id,
+        );
+        self.text_items.push(text_item);
+    }
+
     pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
         // First iteration: find the index of the selected polygon
         let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);

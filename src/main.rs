@@ -4,6 +4,7 @@ mod dot;
 mod editor;
 mod export;
 mod polygon;
+mod st_image;
 mod text;
 mod text_due;
 mod transform;
