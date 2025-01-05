@@ -4,13 +4,33 @@ use std::path::Path;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
 
+use crate::editor::Point;
 use crate::{
     editor::WindowSize,
     transform::Transform,
     vertex::{get_z_layer, Vertex},
 };
 
+pub struct StImageConfig {
+    pub id: String,
+    pub name: String,
+    pub dimensions: (u32, u32), // overrides actual image size
+    pub position: Point,
+    pub path: String,
+}
+
+pub struct SavedStImageConfig {
+    pub id: String,
+    pub name: String,
+    pub dimensions: (u32, u32),
+    pub position: Point,
+    pub path: String,
+}
+
 pub struct StImage {
+    pub id: String,
+    pub name: String,
+    pub path: String,
     pub texture: wgpu::Texture,
     pub texture_view: TextureView,
     pub transform: Transform,
@@ -25,21 +45,49 @@ impl StImage {
         device: &Device,
         queue: &Queue,
         path: &Path,
-        position: Vector2<f32>,
-        rotation: f32,
-        scale: Vector2<f32>,
+        image_config: StImageConfig,
         window_size: &WindowSize,
         bind_group_layout: &wgpu::BindGroupLayout,
         z_index: f32,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        // Load the image
-        let img = image::open(path)?;
-        let dimensions = img.dimensions();
+        new_id: String,
+    ) -> StImage {
+        // NOTE: may be best to move images into destination project folder before supplying a path to StImage
 
-        // Create texture
+        // specify resizing strategy
+        let feature = "low_quality_resize";
+
+        // Load the image
+        let img = image::open(path).expect("Couldn't open image");
+        let original_dimensions = img.dimensions();
+        let dimensions = image_config.dimensions;
+
+        // Calculate scale factors to maintain aspect ratio
+        let scale_x = dimensions.0 as f32 / original_dimensions.0 as f32;
+        let scale_y = dimensions.1 as f32 / original_dimensions.1 as f32;
+
+        // Option 1: Resize image data before creating texture
+        let img = if (feature == "high_quality_resize") {
+            img.resize_exact(
+                dimensions.0,
+                dimensions.1,
+                image::imageops::FilterType::Lanczos3,
+            )
+        } else {
+            img
+        };
+
+        // Create texture with original or resized dimensions
         let texture_size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
+            width: if (feature == "high_quality_resize") {
+                dimensions.0
+            } else {
+                original_dimensions.0
+            },
+            height: if (feature == "high_quality_resize") {
+                dimensions.1
+            } else {
+                original_dimensions.1
+            },
             depth_or_array_layers: 1,
         };
 
@@ -68,26 +116,30 @@ impl StImage {
             &rgba,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
+                bytes_per_row: Some(4 * texture_size.width),
+                rows_per_image: Some(texture_size.height),
             },
             texture_size,
         );
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Create sampler
+        // Create sampler with appropriate filtering
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
+            mag_filter: if (feature == "high_quality_resize") {
+                wgpu::FilterMode::Linear
+            } else {
+                wgpu::FilterMode::Linear // You might want to use Nearest for pixel art
+            },
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
-        // Create bind group
+        // Rest of the bind group creation...
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
             entries: &[
@@ -111,18 +163,34 @@ impl StImage {
             mapped_at_creation: false,
         });
 
-        let transform = Transform::new(position, rotation, scale, uniform_buffer, window_size);
+        // Option 2: Use scale in transform to adjust size
+        let transform = if (feature != "high_quality_resize") {
+            Transform::new(
+                Vector2::new(image_config.position.x, image_config.position.y),
+                0.0,
+                Vector2::new(scale_x, scale_y), // Apply scaling here instead of resizing image
+                uniform_buffer,
+                window_size,
+            )
+        } else {
+            Transform::new(
+                Vector2::new(image_config.position.x, image_config.position.y),
+                0.0,
+                Vector2::new(1.0, 1.0),
+                uniform_buffer,
+                window_size,
+            )
+        };
 
-        // Create vertices for a quad
+        // Rest of the implementation remains the same...
         let z = get_z_layer(z_index);
         let vertices = [
-            Vertex::new(-0.5, -0.5, z, [1.0, 1.0, 1.0, 1.0]), // Bottom left
-            Vertex::new(0.5, -0.5, z, [1.0, 1.0, 1.0, 1.0]),  // Bottom right
-            Vertex::new(0.5, 0.5, z, [1.0, 1.0, 1.0, 1.0]),   // Top right
-            Vertex::new(-0.5, 0.5, z, [1.0, 1.0, 1.0, 1.0]),  // Top left
+            Vertex::new(-0.5, -0.5, z, [1.0, 1.0, 1.0, 1.0]),
+            Vertex::new(0.5, -0.5, z, [1.0, 1.0, 1.0, 1.0]),
+            Vertex::new(0.5, 0.5, z, [1.0, 1.0, 1.0, 1.0]),
+            Vertex::new(-0.5, 0.5, z, [1.0, 1.0, 1.0, 1.0]),
         ];
 
-        // Set texture coordinates
         let vertices = [
             Vertex {
                 tex_coords: [0.0, 1.0],
@@ -148,7 +216,6 @@ impl StImage {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        // Create index buffer
         let indices: &[u16] = &[0, 1, 2, 2, 3, 0];
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
@@ -156,15 +223,21 @@ impl StImage {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        Ok(Self {
+        Self {
+            id: new_id,
+            name: image_config.name,
+            path: path
+                .to_str()
+                .expect("Couldn't convert to string")
+                .to_string(),
             texture,
             texture_view,
             transform,
             vertex_buffer,
             index_buffer,
-            dimensions,
+            dimensions, // Store the target dimensions
             bind_group,
-        })
+        }
     }
 
     pub fn update(&mut self, queue: &Queue, window_size: &WindowSize) {
@@ -175,6 +248,7 @@ impl StImage {
         self.dimensions
     }
 
+    // will be integrated directly in render loop
     // pub fn draw<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>) {
     //     render_pass.set_bind_group(0, &self.bind_group, &[]);
     //     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));

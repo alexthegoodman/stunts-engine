@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::fmt::Display;
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -186,6 +187,9 @@ pub type PolygonClickHandler =
 pub type TextItemClickHandler =
     dyn Fn() -> Option<Box<dyn FnMut(Uuid, TextRendererConfig) + Send>> + Send + Sync;
 
+pub type ImageItemClickHandler =
+    dyn Fn() -> Option<Box<dyn FnMut(Uuid, StImageConfig) + Send>> + Send + Sync;
+
 pub type OnMouseUp =
     dyn Fn() -> Option<Box<dyn FnMut(usize, Point) -> Sequence + Send>> + Send + Sync;
 
@@ -198,13 +202,14 @@ pub struct Editor {
     pub project_selected: Option<Uuid>,
     pub text_items: Vec<TextRenderer>,
     pub dragging_text: Option<usize>,
-    // pub image_items: Vec<StImage>,
-    // pub dragging_image: Option<usize>,
+    pub image_items: Vec<StImage>,
+    pub dragging_image: Option<usize>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
     pub handle_polygon_click: Option<Arc<PolygonClickHandler>>,
     pub handle_text_click: Option<Arc<TextItemClickHandler>>,
+    pub handle_image_click: Option<Arc<ImageItemClickHandler>>,
     pub gpu_resources: Option<Arc<GpuResources>>,
     pub window: Option<Arc<Window>>,
     pub camera: Option<Camera>,
@@ -254,6 +259,7 @@ impl Editor {
             viewport: viewport.clone(),
             handle_polygon_click: None,
             handle_text_click: None,
+            handle_image_click: None,
             gpu_resources: None,
             window: None,
             camera: None,
@@ -277,6 +283,8 @@ impl Editor {
             project_selected: None,
             text_items: Vec::new(),
             dragging_text: None,
+            image_items: Vec::new(),
+            dragging_image: None,
         }
     }
 
@@ -610,7 +618,35 @@ impl Editor {
             text_config,
             new_id,
         );
+
         self.text_items.push(text_item);
+    }
+
+    pub fn add_image_item(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        image_config: StImageConfig,
+        path: &Path,
+        new_id: Uuid,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let mut image_item = StImage::new(
+            device,
+            queue,
+            path,
+            image_config, // load font data ahead of time
+            window_size,
+            &self
+                .model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get model bind group layout"),
+            0.0,
+            new_id.to_string(),
+        );
+
+        self.image_items.push(image_item);
     }
 
     pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
@@ -1111,6 +1147,7 @@ use cgmath::Transform;
 use crate::animations::{AnimationData, EasingType, KeyframeValue, Sequence, UIKeyframe};
 use crate::camera::{Camera, CameraBinding};
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
+use crate::st_image::{StImage, StImageConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
 
 pub fn visualize_ray_intersection(
