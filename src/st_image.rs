@@ -1,5 +1,6 @@
 use cgmath::{Vector2, Vector3};
 use image::GenericImageView;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
@@ -11,6 +12,7 @@ use crate::{
     vertex::{get_z_layer, Vertex},
 };
 
+#[derive(Clone)]
 pub struct StImageConfig {
     pub id: String,
     pub name: String,
@@ -19,11 +21,11 @@ pub struct StImageConfig {
     pub path: String,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct SavedStImageConfig {
     pub id: String,
     pub name: String,
     pub dimensions: (u32, u32),
-    pub position: Point,
     pub path: String,
 }
 

@@ -3,7 +3,9 @@ use uuid::Uuid;
 
 use std::time::Duration;
 
-use crate::{polygon::SavedPolygonConfig, text_due::SavedTextRendererConfig};
+use crate::{
+    polygon::SavedPolygonConfig, st_image::SavedStImageConfig, text_due::SavedTextRendererConfig,
+};
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct Sequence {
@@ -11,6 +13,7 @@ pub struct Sequence {
     pub active_polygons: Vec<SavedPolygonConfig>, // used for dimensions, etc
     pub polygon_motion_paths: Vec<AnimationData>,
     pub active_text_items: Vec<SavedTextRendererConfig>,
+    pub active_image_items: Vec<SavedStImageConfig>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
