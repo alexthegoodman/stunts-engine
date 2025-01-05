@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::{borrow::Borrow, collections::HashMap};
 
 use cgmath::{Matrix4, Vector2};
 use fontdue::Font;
+use uuid::Uuid;
 use wgpu::{BindGroup, Buffer, Device, Queue, RenderPipeline, TextureFormat};
 // use allsorts::binary::read::ReadScope;
 // use allsorts::font::read_cmap_subtable;
@@ -10,7 +11,8 @@ use cgmath::SquareMatrix;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    editor::WindowSize,
+    camera::Camera,
+    editor::{Point, WindowSize},
     transform::{matrix4_to_raw_array, Transform},
     vertex::Vertex,
 };
@@ -20,17 +22,31 @@ struct AtlasGlyph {
     metrics: [f32; 4], // width, height, xmin, ymin in pixels
 }
 
+pub struct TextRendererConfig {
+    pub id: Uuid,
+    pub name: String,
+    pub text: String,
+    pub dimensions: (f32, f32),
+}
+
 pub struct TextRenderer {
-    font: Font,
-    transform: Transform,
-    bind_group: BindGroup,
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
-    atlas_texture: wgpu::Texture,
-    atlas_size: (u32, u32),
-    next_atlas_position: (u32, u32),
-    current_row_height: u32,
-    glyph_cache: HashMap<char, AtlasGlyph>,
+    pub id: Uuid,
+    pub intialized: bool,
+    pub name: String,
+    pub text: String,
+    pub font: Font,
+    pub transform: Transform,
+    pub bind_group: BindGroup,
+    pub vertex_buffer: Buffer,
+    pub index_buffer: Buffer,
+    pub dimensions: (f32, f32), // (width, height) in pixels
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u16>,
+    pub atlas_texture: wgpu::Texture,
+    pub atlas_size: (u32, u32),
+    pub next_atlas_position: (u32, u32),
+    pub current_row_height: u32,
+    pub glyph_cache: HashMap<char, AtlasGlyph>,
 }
 
 impl TextRenderer {
@@ -40,7 +56,10 @@ impl TextRenderer {
         bind_group_layout: &wgpu::BindGroupLayout,
         font_data: &[u8],
         window_size: &WindowSize,
+        text: String,
     ) -> Self {
+        let id = Uuid::new_v4();
+
         // Load and initialize the font
         let font = Font::from_bytes(font_data, fontdue::FontSettings::default())
             .expect("Failed to load font");
@@ -96,6 +115,10 @@ impl TextRenderer {
         });
 
         Self {
+            id,
+            intialized: false,
+            name: "New Text Item".to_string(),
+            text,
             font,
             transform: Transform::new(
                 Vector2::new(100.0, 100.0),
@@ -106,6 +129,9 @@ impl TextRenderer {
             ),
             vertex_buffer,
             index_buffer,
+            vertices: Vec::new(),
+            indices: Vec::new(),
+            dimensions: (100.0, 100.0),
             bind_group,
             atlas_texture,
             atlas_size,
@@ -181,27 +207,40 @@ impl TextRenderer {
         }
     }
 
+    pub fn update(&mut self, device: &Device, queue: &Queue, text: String, dimensions: (f32, f32)) {
+        self.dimensions = dimensions;
+        self.update_text(device, queue, text);
+
+        self.intialized = true;
+    }
+
+    pub fn update_text(&mut self, device: &Device, queue: &Queue, text: String) {
+        self.text = text;
+        self.render_text(device, queue);
+    }
+
     pub fn render_text<'a>(
         &'a mut self,
-        text: &str,
-        transform: &Transform,
         device: &Device,
         queue: &Queue,
-        render_pass: &mut wgpu::RenderPass<'a>,
+        // render_pass: &mut wgpu::RenderPass<'a>,
     ) {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
         let mut current_x = 0.0;
 
+        let text = self.text.clone();
+        let chars = text.chars();
+
         // First, ensure all glyphs are in the atlas
-        for c in text.chars() {
+        for c in chars.clone() {
             if !self.glyph_cache.contains_key(&c) {
                 let glyph = self.add_glyph_to_atlas(device, queue, c, 32.0);
                 self.glyph_cache.insert(c, glyph);
             }
         }
 
-        for c in text.chars() {
+        for c in chars {
             let glyph = self.glyph_cache.get(&c).unwrap();
 
             let base_vertex = vertices.len() as u16;
@@ -257,10 +296,54 @@ impl TextRenderer {
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
         queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&indices));
 
+        // render_pass will be intergrated in render loop
         // render_pass.set_pipeline(&self.pipeline);
         // render_pass.set_bind_group(0, &self.bind_group, &[]);
         // render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         // render_pass.draw_indexed(0..(indices.len() as u32), 0, 0..1);
+
+        self.vertices = vertices;
+        self.indices = indices;
+    }
+
+    pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
+        let local_point = self.to_local_space(*point, camera);
+
+        // Implement point-in-polygon test using the ray casting algorithm
+        let mut inside = false;
+
+        // TODO: simpler variation based on dimensions
+
+        // let mut j = self.points.len() - 1;
+        // for i in 0..self.points.len() {
+        //     let pi = &self.points[i];
+        //     let pj = &self.points[j];
+
+        //     if ((pi.y > local_point.y) != (pj.y > local_point.y))
+        //         && (local_point.x < (pj.x - pi.x) * (local_point.y - pi.y) / (pj.y - pi.y) + pi.x)
+        //     {
+        //         inside = !inside;
+        //     }
+        //     j = i;
+        // }
+
+        inside
+    }
+
+    pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
+        let untranslated = Point {
+            x: world_point.x - (self.transform.position.x),
+            y: world_point.y - self.transform.position.y,
+        };
+
+        let local_point = Point {
+            x: untranslated.x / (self.dimensions.0),
+            y: untranslated.y / (self.dimensions.1),
+        };
+
+        // println!("local_point {:?} {:?}", self.name, local_point);
+
+        local_point
     }
 }

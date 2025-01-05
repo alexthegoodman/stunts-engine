@@ -183,20 +183,28 @@ pub struct PolygonEditConfig {
 pub type PolygonClickHandler =
     dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig) + Send>> + Send + Sync;
 
+pub type TextItemClickHandler =
+    dyn Fn() -> Option<Box<dyn FnMut(Uuid, TextRendererConfig) + Send>> + Send + Sync;
+
 pub type OnMouseUp =
     dyn Fn() -> Option<Box<dyn FnMut(usize, Point) -> Sequence + Send>> + Send + Sync;
 
 pub struct Editor {
-    // data
+    // visual
     pub selected_polygon_id: Uuid,
     pub polygons: Vec<Polygon>,
     pub dragging_polygon: Option<usize>,
     pub static_polygons: Vec<Polygon>,
     pub project_selected: Option<Uuid>,
+    pub text_items: Vec<TextRenderer>,
+    pub dragging_text: Option<usize>,
+    // pub image_items: Vec<StImage>,
+    // pub dragging_image: Option<usize>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
     pub handle_polygon_click: Option<Arc<PolygonClickHandler>>,
+    pub handle_text_click: Option<Arc<TextItemClickHandler>>,
     pub gpu_resources: Option<Arc<GpuResources>>,
     pub window: Option<Arc<Window>>,
     pub camera: Option<Camera>,
@@ -245,6 +253,7 @@ impl Editor {
             drag_start: None,
             viewport: viewport.clone(),
             handle_polygon_click: None,
+            handle_text_click: None,
             gpu_resources: None,
             window: None,
             camera: None,
@@ -266,6 +275,8 @@ impl Editor {
             on_mouse_up: None,
             current_view: "manage_projects".to_string(),
             project_selected: None,
+            text_items: Vec::new(),
+            dragging_text: None,
         }
     }
 
@@ -748,6 +759,43 @@ impl Editor {
             }
         }
 
+        // Check if we're clicking on a text item to drag
+        for (text_index, text_item) in self.text_items.iter_mut().enumerate() {
+            if text_item.contains_point(&self.last_top_left, &camera) {
+                self.dragging_text = Some(text_index);
+                self.drag_start = Some(self.last_top_left);
+
+                // TODO: make DRY with below
+                if (self.handle_text_click.is_some()) {
+                    let handler_creator = self
+                        .handle_text_click
+                        .as_ref()
+                        .expect("Couldn't get handler");
+                    let mut handle_click = handler_creator().expect("Couldn't get handler");
+                    // handle_click(
+                    //     polygon.id,
+                    //     PolygonConfig {
+                    //         id: polygon.id,
+                    //         name: polygon.name.clone(),
+                    //         points: polygon.points.clone(),
+                    //         dimensions: polygon.dimensions,
+                    //         position: Point {
+                    //             x: polygon.transform.position.x,
+                    //             y: polygon.transform.position.y,
+                    //         },
+                    //         border_radius: polygon.border_radius,
+                    //         fill: polygon.fill,
+                    //         stroke: polygon.stroke,
+                    //     },
+                    // );
+                    // self.selected_polygon_id = polygon.id;
+                    // polygon.old_points = Some(polygon.points.clone());
+                }
+
+                return None; // nothing to add to undo stack
+            }
+        }
+
         None
     }
 
@@ -1039,6 +1087,7 @@ use cgmath::Transform;
 use crate::animations::{AnimationData, EasingType, KeyframeValue, Sequence, UIKeyframe};
 use crate::camera::{Camera, CameraBinding};
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
+use crate::text_due::{TextRenderer, TextRendererConfig};
 
 pub fn visualize_ray_intersection(
     // device: &wgpu::Device,
