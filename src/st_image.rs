@@ -40,6 +40,8 @@ pub struct StImage {
     pub index_buffer: wgpu::Buffer,
     pub dimensions: (u32, u32),
     pub bind_group: wgpu::BindGroup,
+    pub vertices: [Vertex; 4],
+    pub indices: [u16; 6],
 }
 
 impl StImage {
@@ -218,10 +220,10 @@ impl StImage {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let indices: &[u16] = &[0, 1, 2, 2, 3, 0];
+        let indices: [u16; 6] = [0, 1, 2, 2, 3, 0];
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(indices),
+            contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::INDEX,
         });
 
@@ -239,6 +241,8 @@ impl StImage {
             index_buffer,
             dimensions, // Store the target dimensions
             bind_group,
+            vertices,
+            indices: indices.clone(),
         }
     }
 
