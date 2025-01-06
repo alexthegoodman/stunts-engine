@@ -3,6 +3,7 @@ pub mod camera;
 pub mod dot;
 pub mod editor;
 pub mod export;
+pub mod fonts;
 pub mod polygon;
 pub mod st_image;
 pub mod text;
