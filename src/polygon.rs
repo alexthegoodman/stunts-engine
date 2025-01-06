@@ -448,83 +448,113 @@ impl Polygon {
             .update_position([position.x, position.y], &camera.window_size);
     }
 
-    // pub fn update_data_from_border_radius(
-    //     &mut self,
-    //     window_size: &WindowSize,
-    //     device: &wgpu::Device,
-    //     border_radius: f32,
-    //     camera: &Camera,
-    // ) {
-    //     let (vertices, indices, vertex_buffer, index_buffer) = get_polygon_data(
-    //         window_size,
-    //         device,
-    //         camera,
-    //         self.points.clone(),
-    //         self.dimensions,
-    //         &self.transform,
-    //         border_radius,
-    //         self.fill,
-    //         self.stroke,
-    //     );
+    pub fn update_data_from_border_radius(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        border_radius: f32,
+        camera: &Camera,
+    ) {
+        let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
+            get_polygon_data(
+                window_size,
+                device,
+                bind_group_layout,
+                camera,
+                self.points.clone(),
+                self.dimensions,
+                Point {
+                    x: self.transform.position.x,
+                    y: self.transform.position.y,
+                },
+                self.transform.rotation,
+                border_radius,
+                self.fill,
+                self.stroke,
+                0.0,
+            );
 
-    //     self.border_radius = border_radius;
-    //     self.vertices = vertices;
-    //     self.indices = indices;
-    //     self.vertex_buffer = vertex_buffer;
-    //     self.index_buffer = index_buffer;
-    // }
+        self.border_radius = border_radius;
+        self.vertices = vertices;
+        self.indices = indices;
+        self.vertex_buffer = vertex_buffer;
+        self.index_buffer = index_buffer;
+        self.bind_group = bind_group;
+        self.transform = transform;
+    }
 
-    // pub fn update_data_from_stroke(
-    //     &mut self,
-    //     window_size: &WindowSize,
-    //     device: &wgpu::Device,
-    //     stroke: Stroke,
-    //     camera: &Camera,
-    // ) {
-    //     let (vertices, indices, vertex_buffer, index_buffer) = get_polygon_data(
-    //         window_size,
-    //         device,
-    //         camera,
-    //         self.points.clone(),
-    //         self.dimensions,
-    //         &self.transform,
-    //         self.border_radius,
-    //         self.fill,
-    //         stroke,
-    //     );
+    pub fn update_data_from_stroke(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        stroke: Stroke,
+        camera: &Camera,
+    ) {
+        let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
+            get_polygon_data(
+                window_size,
+                device,
+                bind_group_layout,
+                camera,
+                self.points.clone(),
+                self.dimensions,
+                Point {
+                    x: self.transform.position.x,
+                    y: self.transform.position.y,
+                },
+                self.transform.rotation,
+                self.border_radius,
+                self.fill,
+                stroke,
+                0.0,
+            );
 
-    //     self.stroke = stroke;
-    //     self.vertices = vertices;
-    //     self.indices = indices;
-    //     self.vertex_buffer = vertex_buffer;
-    //     self.index_buffer = index_buffer;
-    // }
+        self.stroke = stroke;
+        self.vertices = vertices;
+        self.indices = indices;
+        self.vertex_buffer = vertex_buffer;
+        self.index_buffer = index_buffer;
+        self.bind_group = bind_group;
+        self.transform = transform;
+    }
 
-    // pub fn update_data_from_fill(
-    //     &mut self,
-    //     window_size: &WindowSize,
-    //     device: &wgpu::Device,
-    //     fill: [f32; 4],
-    //     camera: &Camera,
-    // ) {
-    //     let (vertices, indices, vertex_buffer, index_buffer) = get_polygon_data(
-    //         window_size,
-    //         device,
-    //         camera,
-    //         self.points.clone(),
-    //         self.dimensions,
-    //         &self.transform,
-    //         self.border_radius,
-    //         fill,
-    //         self.stroke,
-    //     );
+    pub fn update_data_from_fill(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        fill: [f32; 4],
+        camera: &Camera,
+    ) {
+        let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
+            get_polygon_data(
+                window_size,
+                device,
+                bind_group_layout,
+                camera,
+                self.points.clone(),
+                self.dimensions,
+                Point {
+                    x: self.transform.position.x,
+                    y: self.transform.position.y,
+                },
+                self.transform.rotation,
+                self.border_radius,
+                fill,
+                self.stroke,
+                0.0,
+            );
 
-    //     self.fill = fill;
-    //     self.vertices = vertices;
-    //     self.indices = indices;
-    //     self.vertex_buffer = vertex_buffer;
-    //     self.index_buffer = index_buffer;
-    // }
+        self.fill = fill;
+        self.vertices = vertices;
+        self.indices = indices;
+        self.vertex_buffer = vertex_buffer;
+        self.index_buffer = index_buffer;
+        self.bind_group = bind_group;
+        self.transform = transform;
+    }
 
     pub fn world_bounding_box(&self) -> BoundingBox {
         let mut min_x = f32::MAX;
@@ -783,9 +813,9 @@ pub struct SavedPolygonConfig {
     pub id: String,
     pub name: String,
     // pub points: Vec<SavedPoint>,
-    // pub fill: [i32; 4],
+    pub fill: [i32; 4],
     pub dimensions: (i32, i32), // (width, height) in pixels
-                                // pub position: SavedPoint,
-                                // pub border_radius: i32,
-                                // pub stroke: SavedStroke,
+    pub position: SavedPoint,   // this will signify the 3rd and 4th keyframe in generated keyframes
+    pub border_radius: i32,
+    pub stroke: SavedStroke,
 }

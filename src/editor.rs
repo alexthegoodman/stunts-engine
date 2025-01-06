@@ -170,6 +170,15 @@ pub fn string_to_f32(s: &str) -> Result<f32, std::num::ParseFloatError> {
 pub enum PolygonProperty {
     Width(f32),
     Height(f32),
+    Red(f32),
+    Green(f32),
+    Blue(f32),
+    BorderRadius(f32),
+    StrokeThickness(f32),
+    StrokeRed(f32),
+    StrokeGreen(f32),
+    StrokeBlue(f32),
+    // Points(Vec<Point>),
 }
 
 #[derive(Debug)]
@@ -699,6 +708,128 @@ impl Editor {
                             (selected_polygon.dimensions.0, n),
                             &camera,
                         ),
+                        "border_radius" => selected_polygon.update_data_from_border_radius(
+                            &window_size,
+                            &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            n,
+                            &camera,
+                        ),
+                        "red" => selected_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                color_to_wgpu(n),
+                                selected_polygon.fill[1],
+                                selected_polygon.fill[2],
+                                selected_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
+                        "green" => selected_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                selected_polygon.fill[0],
+                                color_to_wgpu(n),
+                                selected_polygon.fill[2],
+                                selected_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
+                        "blue" => selected_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                selected_polygon.fill[0],
+                                selected_polygon.fill[1],
+                                color_to_wgpu(n),
+                                selected_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
+                        "stroke_thickness" => selected_polygon.update_data_from_stroke(
+                            &window_size,
+                            &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            Stroke {
+                                thickness: n,
+                                fill: selected_polygon.stroke.fill,
+                            },
+                            &camera,
+                        ),
+                        "stroke_red" => selected_polygon.update_data_from_stroke(
+                            &window_size,
+                            &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            Stroke {
+                                thickness: selected_polygon.stroke.thickness,
+                                fill: [
+                                    color_to_wgpu(n),
+                                    selected_polygon.stroke.fill[1],
+                                    selected_polygon.stroke.fill[2],
+                                    selected_polygon.stroke.fill[3],
+                                ],
+                            },
+                            &camera,
+                        ),
+                        "stroke_green" => selected_polygon.update_data_from_stroke(
+                            &window_size,
+                            &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            Stroke {
+                                thickness: selected_polygon.stroke.thickness,
+                                fill: [
+                                    selected_polygon.stroke.fill[0],
+                                    color_to_wgpu(n),
+                                    selected_polygon.stroke.fill[2],
+                                    selected_polygon.stroke.fill[3],
+                                ],
+                            },
+                            &camera,
+                        ),
+                        "stroke_blue" => selected_polygon.update_data_from_stroke(
+                            &window_size,
+                            &device,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            Stroke {
+                                thickness: selected_polygon.stroke.thickness,
+                                fill: [
+                                    selected_polygon.stroke.fill[0],
+                                    selected_polygon.stroke.fill[1],
+                                    color_to_wgpu(n),
+                                    selected_polygon.stroke.fill[3],
+                                ],
+                            },
+                            &camera,
+                        ),
                         _ => println!("No match on input"),
                     },
                 }
@@ -728,6 +859,118 @@ impl Editor {
         if let Some(index) = polygon_index {
             if let Some(selected_polygon) = self.polygons.get(index) {
                 return selected_polygon.dimensions.1;
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_red(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.fill[0];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_green(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.fill[1];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_blue(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.fill[2];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_border_radius(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.border_radius;
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_stroke_thickness(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.stroke.thickness;
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_stroke_red(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.stroke.fill[0];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_stroke_green(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.stroke.fill[1];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_polygon_stroke_blue(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.polygons.get(index) {
+                return selected_polygon.stroke.fill[2];
             } else {
                 return 0.0;
             }
