@@ -234,6 +234,10 @@ pub struct Editor {
     pub current_sequence_data: Option<Sequence>,
     pub last_frame_time: Option<Instant>,
     pub start_playing_time: Option<Instant>,
+    pub video_is_playing: bool,
+    pub video_start_playing_time: Option<Instant>,
+    pub video_current_sequence_timeline: Option<SavedTimelineStateConfig>,
+    pub video_current_sequences_data: Option<Vec<Sequence>>,
 
     // points
     pub last_mouse_pos: Option<Point>,
@@ -299,6 +303,71 @@ impl Editor {
             dragging_text: None,
             image_items: Vec::new(),
             dragging_image: None,
+            video_is_playing: false,
+            video_start_playing_time: None,
+            video_current_sequence_timeline: None,
+            video_current_sequences_data: None,
+        }
+    }
+
+    pub fn step_video_animations(&mut self, camera: &Camera) {
+        if !self.video_is_playing || self.video_current_sequence_timeline.is_none() {
+            return;
+        }
+
+        let now = std::time::Instant::now();
+        let dt = if let Some(last_time) = self.last_frame_time {
+            (now - last_time).as_secs_f32()
+        } else {
+            0.0
+        };
+        let total_dt = if let Some(video_start_playing_time) = self.video_start_playing_time {
+            (now - video_start_playing_time).as_secs_f32()
+        } else {
+            0.0
+        };
+        self.last_frame_time = Some(now);
+
+        let sequence_timeline = self
+            .video_current_sequence_timeline
+            .as_ref()
+            .expect("Couldn't get current sequence timeline");
+
+        // Convert total_dt from seconds to milliseconds for comparison with timeline
+        let current_time_ms = (total_dt * 1000.0) as i32;
+
+        // Get the sequences data
+        let video_current_sequences_data = match self.video_current_sequences_data.as_ref() {
+            Some(data) => data,
+            None => return,
+        };
+
+        // Iterate through timeline sequences in order
+        for ts in &sequence_timeline.timeline_sequences {
+            // Skip audio tracks as we're only handling video
+            if ts.track_type != TrackType::Video {
+                continue;
+            }
+
+            // Check if this sequence should be playing at the current time
+            if current_time_ms >= ts.start_time_ms
+                && current_time_ms < (ts.start_time_ms + ts.duration_ms)
+            {
+                // Find the corresponding sequence data
+                if let Some(sequence) = video_current_sequences_data.iter().find(|s| s.id == ts.id)
+                {
+                    // Calculate local time within this sequence
+                    let sequence_local_time = (current_time_ms - ts.start_time_ms) as f32 / 1000.0;
+                    if let Some(current_sequence) = &self.current_sequence_data {
+                        // Check id to avoid unnecessary cloning
+                        if sequence.id != current_sequence.id {
+                            self.current_sequence_data = Some(sequence.clone());
+                        }
+                    } else {
+                        self.current_sequence_data = Some(sequence.clone());
+                    }
+                }
+            }
         }
     }
 
@@ -320,16 +389,52 @@ impl Editor {
         };
         self.last_frame_time = Some(now);
 
-        let sequence = self.current_sequence_data.as_ref().unwrap();
+        self.step_animate_sequence(total_dt, camera);
+    }
+
+    /// Steps the currently selected sequence unless one is provided
+    pub fn step_animate_sequence(
+        &mut self,
+        // chosen_sequence: Option<&Sequence>,
+        total_dt: f32,
+        camera: &Camera,
+    ) {
+        let sequence = self
+            .current_sequence_data
+            .as_ref()
+            .expect("Couldn't get sequence");
 
         // Update each animation path
         for animation in &sequence.polygon_motion_paths {
             // Find the polygon to update
-            let polygon_idx = self
-                .polygons
-                .iter()
-                .position(|p| p.id.to_string() == animation.polygon_id);
-            let Some(polygon_idx) = polygon_idx else {
+            let object_idx = match animation.object_type {
+                ObjectType::Polygon => {
+                    let polygon_idx = self
+                        .polygons
+                        .iter()
+                        .position(|p| p.id.to_string() == animation.polygon_id);
+
+                    polygon_idx
+                }
+                ObjectType::TextItem => {
+                    let text_idx = self
+                        .text_items
+                        .iter()
+                        .position(|t| t.id.to_string() == animation.polygon_id);
+
+                    text_idx
+                }
+                ObjectType::ImageItem => {
+                    let image_idx = self
+                        .image_items
+                        .iter()
+                        .position(|i| i.id.to_string() == animation.polygon_id);
+
+                    image_idx
+                }
+            };
+
+            let Some(object_idx) = object_idx else {
                 continue;
             };
 
@@ -380,9 +485,23 @@ impl Editor {
                             y: 50.0 + y,
                         };
 
-                        self.polygons[polygon_idx]
-                            .transform
-                            .update_position([position.x, position.y], &camera.window_size);
+                        match animation.object_type {
+                            ObjectType::Polygon => {
+                                self.polygons[object_idx]
+                                    .transform
+                                    .update_position([position.x, position.y], &camera.window_size);
+                            }
+                            ObjectType::TextItem => {
+                                self.text_items[object_idx]
+                                    .transform
+                                    .update_position([position.x, position.y], &camera.window_size);
+                            }
+                            ObjectType::ImageItem => {
+                                self.image_items[object_idx]
+                                    .transform
+                                    .update_position([position.x, position.y], &camera.window_size);
+                            }
+                        }
                     }
                     (KeyframeValue::Rotation(start), KeyframeValue::Rotation(end)) => {
                         // self.polygons[polygon_idx].rotation = self.lerp(*start, *end, progress);
@@ -394,8 +513,15 @@ impl Editor {
                     (KeyframeValue::Opacity(start), KeyframeValue::Opacity(end)) => {
                         // self.polygons[polygon_idx].opacity =
                         //     self.lerp(*start, *end, progress) as f32 / 100.0;
-                        self.polygons[polygon_idx].fill =
-                            [1.0, 1.0, 1.0, self.lerp(*start, *end, progress) / 100.0];
+
+                        match animation.object_type {
+                            ObjectType::Polygon => {
+                                self.polygons[object_idx].fill =
+                                    [1.0, 1.0, 1.0, self.lerp(*start, *end, progress) / 100.0];
+                            }
+                            ObjectType::TextItem => {}
+                            ObjectType::ImageItem => {}
+                        }
                     }
                     _ => {}
                 }
@@ -1398,12 +1524,15 @@ impl Ray {
 use cgmath::SquareMatrix;
 use cgmath::Transform;
 
-use crate::animations::{AnimationData, EasingType, KeyframeValue, Sequence, UIKeyframe};
+use crate::animations::{
+    AnimationData, EasingType, KeyframeValue, ObjectType, Sequence, UIKeyframe,
+};
 use crate::camera::{Camera, CameraBinding};
 use crate::fonts::FontManager;
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
+use crate::timelines::{SavedTimelineStateConfig, TrackType};
 
 pub fn visualize_ray_intersection(
     // device: &wgpu::Device,

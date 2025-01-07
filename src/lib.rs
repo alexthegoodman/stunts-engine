@@ -8,5 +8,6 @@ pub mod polygon;
 pub mod st_image;
 pub mod text;
 pub mod text_due;
+pub mod timelines;
 pub mod transform;
 pub mod vertex;

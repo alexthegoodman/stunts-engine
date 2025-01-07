@@ -8,6 +8,13 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub enum ObjectType {
+    Polygon,
+    TextItem,
+    ImageItem,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct Sequence {
     pub id: String,
     pub active_polygons: Vec<SavedPolygonConfig>, // used for dimensions, etc
@@ -19,6 +26,8 @@ pub struct Sequence {
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct AnimationData {
     pub id: String,
+    /// whether a polygon, image, text, or other
+    pub object_type: ObjectType,
     /// id of the associated polygon
     pub polygon_id: String,
     /// Total duration of the animation
