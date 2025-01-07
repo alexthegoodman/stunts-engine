@@ -4,11 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-// A font cache that supports both eager and lazy loading strategies
-struct FontManager {
-    // Maps font identifier to loaded font data
-    // font_cache: RwLock<HashMap<String, Arc<FontMetadata>>>,
-    font_data: [(String, Vec<u8>, String); 60],
+// A font cache
+pub struct FontManager {
+    pub font_data: [(String, Vec<u8>, String); 60],
 }
 
 impl FontManager {
@@ -318,5 +316,12 @@ impl FontManager {
         ];
 
         Self { font_data }
+    }
+
+    pub fn get_font_by_name(&self, name: &str) -> Option<&[u8]> {
+        self.font_data
+            .iter()
+            .find(|(font_name, _, _)| font_name.eq_ignore_ascii_case(name))
+            .map(|(_, bytes, _)| bytes.as_slice())
     }
 }

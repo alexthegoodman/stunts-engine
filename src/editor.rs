@@ -213,6 +213,7 @@ pub struct Editor {
     pub dragging_text: Option<usize>,
     pub image_items: Vec<StImage>,
     pub dragging_image: Option<usize>,
+    pub font_manager: FontManager,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
@@ -260,7 +261,11 @@ impl Editor {
             width: viewport_unwrapped.width as u32,
             height: viewport_unwrapped.height as u32,
         };
+
+        let font_manager = FontManager::new();
+
         Editor {
+            font_manager,
             selected_polygon_id: Uuid::nil(),
             polygons: Vec::new(),
             dragging_polygon: None,
@@ -615,13 +620,19 @@ impl Editor {
         new_id: Uuid,
     ) {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
+
+        let default_font_family = self
+            .font_manager
+            .get_font_by_name("Aleo")
+            .expect("Couldn't load default font family");
+
         let mut text_item = TextRenderer::new(
             device,
             &self
                 .model_bind_group_layout
                 .as_ref()
                 .expect("Couldn't get model bind group layout"),
-            &[0], // load font data ahead of time
+            default_font_family, // load font data ahead of time
             window_size,
             text_content.clone(),
             text_config,
@@ -1389,6 +1400,7 @@ use cgmath::Transform;
 
 use crate::animations::{AnimationData, EasingType, KeyframeValue, Sequence, UIKeyframe};
 use crate::camera::{Camera, CameraBinding};
+use crate::fonts::FontManager;
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
