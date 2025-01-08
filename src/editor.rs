@@ -326,7 +326,7 @@ impl Editor {
         } else {
             0.0
         };
-        self.last_frame_time = Some(now);
+        // self.last_frame_time = Some(now);
 
         let sequence_timeline = self
             .video_current_sequence_timeline
