@@ -413,31 +413,32 @@ impl Polygon {
     ) {
         // self.transform.position = position;
 
-        let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
-            get_polygon_data(
-                window_size,
-                device,
-                bind_group_layout,
-                camera,
-                self.points.clone(),
-                self.dimensions,
-                Point {
-                    x: self.transform.position.x,
-                    y: self.transform.position.y,
-                },
-                self.transform.rotation,
-                self.border_radius,
-                self.fill,
-                self.stroke,
-                0.0,
-            );
+        // NOTE: should be no need to refetch all vertices when updating position...
+        // let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
+        //     get_polygon_data(
+        //         window_size,
+        //         device,
+        //         bind_group_layout,
+        //         camera,
+        //         self.points.clone(),
+        //         self.dimensions,
+        //         Point {
+        //             x: self.transform.position.x,
+        //             y: self.transform.position.y,
+        //         },
+        //         self.transform.rotation,
+        //         self.border_radius,
+        //         self.fill,
+        //         self.stroke,
+        //         0.0,
+        //     );
 
-        self.vertices = vertices;
-        self.indices = indices;
-        self.vertex_buffer = vertex_buffer;
-        self.index_buffer = index_buffer;
-        self.bind_group = bind_group;
-        self.transform = transform;
+        // self.vertices = vertices;
+        // self.indices = indices;
+        // self.vertex_buffer = vertex_buffer;
+        // self.index_buffer = index_buffer;
+        // self.bind_group = bind_group;
+        // self.transform = transform;
 
         let position = Point {
             x: 600.0 + position.x,

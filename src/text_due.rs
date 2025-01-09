@@ -320,28 +320,42 @@ impl TextRenderer {
         self.indices = indices;
     }
 
+    // pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
+    //     let local_point = self.to_local_space(*point, camera);
+
+    //     // Implement point-in-polygon test using the ray casting algorithm
+    //     let mut inside = false;
+
+    //     // TODO: simpler variation based on dimensions
+
+    //     // let mut j = self.points.len() - 1;
+    //     // for i in 0..self.points.len() {
+    //     //     let pi = &self.points[i];
+    //     //     let pj = &self.points[j];
+
+    //     //     if ((pi.y > local_point.y) != (pj.y > local_point.y))
+    //     //         && (local_point.x < (pj.x - pi.x) * (local_point.y - pi.y) / (pj.y - pi.y) + pi.x)
+    //     //     {
+    //     //         inside = !inside;
+    //     //     }
+    //     //     j = i;
+    //     // }
+
+    //     inside
+    // }
+
     pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
         let local_point = self.to_local_space(*point, camera);
 
-        // Implement point-in-polygon test using the ray casting algorithm
-        let mut inside = false;
+        // Get the bounds of the rectangle based on dimensions
+        // Since dimensions are (width, height), the rectangle extends from (0,0) to (width, height)
+        let (width, height) = self.dimensions;
 
-        // TODO: simpler variation based on dimensions
-
-        // let mut j = self.points.len() - 1;
-        // for i in 0..self.points.len() {
-        //     let pi = &self.points[i];
-        //     let pj = &self.points[j];
-
-        //     if ((pi.y > local_point.y) != (pj.y > local_point.y))
-        //         && (local_point.x < (pj.x - pi.x) * (local_point.y - pi.y) / (pj.y - pi.y) + pi.x)
-        //     {
-        //         inside = !inside;
-        //     }
-        //     j = i;
-        // }
-
-        inside
+        // Check if the point is within the bounds
+        local_point.x >= 0.0
+            && local_point.x <= width
+            && local_point.y >= 0.0
+            && local_point.y <= height
     }
 
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {

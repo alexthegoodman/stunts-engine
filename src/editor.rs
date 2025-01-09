@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -359,6 +360,7 @@ impl Editor {
                     // Calculate local time within this sequence
                     let sequence_local_time = (current_time_ms - ts.start_time_ms) as f32 / 1000.0;
                     if let Some(current_sequence) = &self.current_sequence_data {
+                        // TODO: need to somehow efficiently restore polygons for the sequence
                         // Check id to avoid unnecessary cloning
                         if sequence.id != current_sequence.id {
                             self.current_sequence_data = Some(sequence.clone());
@@ -1212,24 +1214,65 @@ impl Editor {
                         .as_ref()
                         .expect("Couldn't get handler");
                     let mut handle_click = handler_creator().expect("Couldn't get handler");
-                    // handle_click(
-                    //     polygon.id,
-                    //     PolygonConfig {
-                    //         id: polygon.id,
-                    //         name: polygon.name.clone(),
-                    //         points: polygon.points.clone(),
-                    //         dimensions: polygon.dimensions,
-                    //         position: Point {
-                    //             x: polygon.transform.position.x,
-                    //             y: polygon.transform.position.y,
-                    //         },
-                    //         border_radius: polygon.border_radius,
-                    //         fill: polygon.fill,
-                    //         stroke: polygon.stroke,
-                    //     },
-                    // );
-                    // self.selected_polygon_id = polygon.id;
-                    // polygon.old_points = Some(polygon.points.clone());
+                    handle_click(
+                        text_item.id,
+                        TextRendererConfig {
+                            id: text_item.id,
+                            name: text_item.name.clone(),
+                            text: text_item.text.clone(),
+                            // points: polygon.points.clone(),
+                            dimensions: text_item.dimensions,
+                            position: Point {
+                                x: text_item.transform.position.x,
+                                y: text_item.transform.position.y,
+                            },
+                            // border_radius: polygon.border_radius,
+                            // fill: polygon.fill,
+                            // stroke: polygon.stroke,
+                        },
+                    );
+                    self.selected_polygon_id = text_item.id; // TODO: separate property for each object type?
+                                                             // polygon.old_points = Some(polygon.points.clone());
+                }
+
+                return None; // nothing to add to undo stack
+            }
+        }
+
+        // Check if we're clicking on a image item to drag
+        for (image_index, image_item) in self.image_items.iter_mut().enumerate() {
+            if image_item.contains_point(&self.last_top_left, &camera) {
+                self.dragging_image = Some(image_index);
+                self.drag_start = Some(self.last_top_left);
+
+                // TODO: make DRY with below
+                if (self.handle_image_click.is_some()) {
+                    let handler_creator = self
+                        .handle_image_click
+                        .as_ref()
+                        .expect("Couldn't get handler");
+                    let mut handle_click = handler_creator().expect("Couldn't get handler");
+                    let uuid = Uuid::from_str(&image_item.id.clone())
+                        .expect("Couldn't convert string to uuid");
+                    handle_click(
+                        uuid,
+                        StImageConfig {
+                            id: image_item.id.clone(),
+                            name: image_item.name.clone(),
+                            path: image_item.path.clone(),
+                            // points: polygon.points.clone(),
+                            dimensions: image_item.dimensions,
+                            position: Point {
+                                x: image_item.transform.position.x,
+                                y: image_item.transform.position.y,
+                            },
+                            // border_radius: polygon.border_radius,
+                            // fill: polygon.fill,
+                            // stroke: polygon.stroke,
+                        },
+                    );
+                    self.selected_polygon_id = uuid; // TODO: separate property for each object type?
+                                                     // polygon.old_points = Some(polygon.points.clone());
                 }
 
                 return None; // nothing to add to undo stack
@@ -1281,51 +1324,24 @@ impl Editor {
         self.last_screen = Point { x, y };
         self.last_world = camera.screen_to_world(mouse_pos);
 
-        // // Handle panning
-        // if self.is_panning {
-        //     if let Some(last_pos) = self.last_mouse_pos {
-        //         let delta = Vector2::new(ds_ndc_pos.x - last_pos.x, ds_ndc_pos.y - last_pos.y);
-
-        //         // println!("is_panning A {:?}", delta);
-
-        //         let adjusted_delta = Vector2::new(
-        //             -delta.x, // Invert X
-        //             -delta.y, // Keep Y as is
-        //         );
-        //         let delta = adjusted_delta / 2.0;
-
-        //         // println!("is_panning B {:?}", delta);
-        //         // adjusting the camera, so expect delta to be very small like 0-1
-        //         camera.pan(delta);
-        //         let mut camera_binding = self
-        //             .camera_binding
-        //             .as_mut()
-        //             .expect("Couldn't get camera binging");
-        //         let gpu_resources = self
-        //             .gpu_resources
-        //             .as_ref()
-        //             .expect("Couldn't get gpu resources");
-        //         camera_binding.update(&gpu_resources.queue, &camera);
-        //     }
-        //     self.last_mouse_pos = Some(ds_ndc_pos);
-        //     return;
-        // }
-
-        // match self.control_mode {
-        //     ControlMode::Point => {
-        //         self.handle_mouse_move_point_mode(ds_ndc_pos, window_size, device)
-        //     }
-        //     ControlMode::Edge => self.handle_mouse_move_edge_mode(ds_ndc_pos, window_size, device),
-        //     ControlMode::Brush => {
-        //         self.handle_mouse_move_brush_mode(ds_ndc_pos, window_size, device)
-        //     }
-        // }
-
         // self.update_cursor();
 
+        // handle dragging to move objects (polygons, images, text, etc)
         if let Some(poly_index) = self.dragging_polygon {
             if let Some(start) = self.drag_start {
                 self.move_polygon(self.last_top_left, start, poly_index, window_size, device);
+            }
+        }
+
+        if let Some(text_index) = self.dragging_text {
+            if let Some(start) = self.drag_start {
+                self.move_text(self.last_top_left, start, text_index, window_size, device);
+            }
+        }
+
+        if let Some(image_index) = self.dragging_image {
+            if let Some(start) = self.drag_start {
+                self.move_image(self.last_top_left, start, image_index, window_size, device);
             }
         }
     }
@@ -1351,21 +1367,6 @@ impl Editor {
             return None;
         }
 
-        // let polygon_index = self
-        //     .polygons
-        //     .iter()
-        //     .position(|p| p.id == self.selected_polygon_id);
-
-        // if let Some(index) = polygon_index {
-        //     if let Some(selected_polygon) = self.polygons.get(index) {
-        //         if (selected_polygon.old_points.is_some()) {
-        //             if (self.dragging_polygon.is_some()) {
-        //                 // return PolygonProperty::Position
-        //             }
-        //         }
-        //     }
-        // }
-
         if let Some(poly_index) = self.dragging_polygon {
             if let Some(on_mouse_up_creator) = &self.on_mouse_up {
                 let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
@@ -1381,9 +1382,11 @@ impl Editor {
             }
         }
 
-        // self.dragging_point = None;
         self.dragging_polygon = None;
+        self.dragging_text = None;
+        self.dragging_image = None;
         self.drag_start = None;
+
         // self.dragging_edge = None;
         // self.is_panning = false;
         // self.is_brushing = false;
@@ -1410,8 +1413,75 @@ impl Editor {
             x: polygon.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
             y: polygon.transform.position.y + dy,
         };
+
         println!("move_polygon {:?}", new_position);
-        // polygon.update_data_from_position(window_size, device, new_position, &camera);
+
+        polygon.update_data_from_position(
+            window_size,
+            device,
+            self.model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get bind group layout"),
+            new_position,
+            &camera,
+        );
+
+        self.drag_start = Some(mouse_pos);
+        // self.update_guide_lines(poly_index, window_size);
+    }
+
+    pub fn move_text(
+        &mut self,
+        mouse_pos: Point,
+        start: Point,
+        text_index: usize,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
+        let dx = mouse_pos.x - start.x;
+        let dy = mouse_pos.y - start.y;
+        let text_item = &mut self.text_items[text_index];
+        let new_position = Point {
+            x: text_item.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
+            y: text_item.transform.position.y + dy,
+        };
+
+        println!("move_text {:?}", new_position);
+
+        text_item
+            .transform
+            .update_position([new_position.x, new_position.y], window_size);
+
+        self.drag_start = Some(mouse_pos);
+        // self.update_guide_lines(poly_index, window_size);
+    }
+
+    pub fn move_image(
+        &mut self,
+        mouse_pos: Point,
+        start: Point,
+        image_index: usize,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
+        let dx = mouse_pos.x - start.x;
+        let dy = mouse_pos.y - start.y;
+        let image_item = &mut self.image_items[image_index];
+        let new_position = Point {
+            x: image_item.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
+            y: image_item.transform.position.y + dy,
+        };
+
+        println!("move_image {:?}", new_position);
+
+        image_item
+            .transform
+            .update_position([new_position.x, new_position.y], window_size);
+
         self.drag_start = Some(mouse_pos);
         // self.update_guide_lines(poly_index, window_size);
     }
