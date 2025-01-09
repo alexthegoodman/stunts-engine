@@ -615,13 +615,12 @@ impl Editor {
 
                     let camera = self.camera.expect("Couldn't get camera");
 
+                    let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
+
                     let segment = create_path_segment(
                         &camera.window_size,
-                        &self
-                            .gpu_resources
-                            .as_ref()
-                            .expect("No GPU resources")
-                            .device,
+                        &gpu_resources.device,
+                        &gpu_resources.queue,
                         &self
                             .model_bind_group_layout
                             .as_ref()
@@ -694,6 +693,7 @@ impl Editor {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         camera: &Camera,
         polygon_config: PolygonConfig,
         polygon_name: String,
@@ -703,6 +703,7 @@ impl Editor {
         let mut polygon = Polygon::new(
             window_size,
             device,
+            queue,
             &self
                 .model_bind_group_layout
                 .as_ref()
@@ -809,11 +810,12 @@ impl Editor {
             // Get the necessary data from editor
             let viewport_width = camera.window_size.width;
             let viewport_height = camera.window_size.height;
-            let device = &self
+            let gpu_resources = self
                 .gpu_resources
                 .as_ref()
-                .expect("Couldn't get gpu resources")
-                .device;
+                .expect("Couldn't get gpu resources");
+            let device = &gpu_resources.device;
+            let queue = &gpu_resources.queue;
 
             let window_size = WindowSize {
                 width: viewport_width as u32,
@@ -830,6 +832,7 @@ impl Editor {
                         "width" => selected_polygon.update_data_from_dimensions(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -840,6 +843,7 @@ impl Editor {
                         "height" => selected_polygon.update_data_from_dimensions(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -850,6 +854,7 @@ impl Editor {
                         "border_radius" => selected_polygon.update_data_from_border_radius(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -860,6 +865,7 @@ impl Editor {
                         "red" => selected_polygon.update_data_from_fill(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -875,6 +881,7 @@ impl Editor {
                         "green" => selected_polygon.update_data_from_fill(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -890,6 +897,7 @@ impl Editor {
                         "blue" => selected_polygon.update_data_from_fill(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -905,6 +913,7 @@ impl Editor {
                         "stroke_thickness" => selected_polygon.update_data_from_stroke(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -918,6 +927,7 @@ impl Editor {
                         "stroke_red" => selected_polygon.update_data_from_stroke(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -936,6 +946,7 @@ impl Editor {
                         "stroke_green" => selected_polygon.update_data_from_stroke(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -954,6 +965,7 @@ impl Editor {
                         "stroke_blue" => selected_polygon.update_data_from_stroke(
                             &window_size,
                             &device,
+                            &queue,
                             &self
                                 .model_bind_group_layout
                                 .as_ref()
@@ -1495,6 +1507,7 @@ impl Editor {
 fn create_path_segment(
     window_size: &WindowSize,
     device: &wgpu::Device,
+    queue: &wgpu::Queue,
     model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
     camera: &Camera,
     start: Point,
@@ -1519,6 +1532,7 @@ fn create_path_segment(
     Polygon::new(
         window_size,
         device,
+        queue,
         model_bind_group_layout,
         camera,
         vec![

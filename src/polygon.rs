@@ -68,6 +68,7 @@ use lyon_tessellation::{
 pub fn get_polygon_data(
     window_size: &WindowSize,
     device: &wgpu::Device,
+    queue: &wgpu::Queue,
     bind_group_layout: &wgpu::BindGroupLayout,
     camera: &Camera,
     points: Vec<Point>,
@@ -148,12 +149,95 @@ pub fn get_polygon_data(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     });
 
+    // // TODO: create empty / filler texture_view and sampler as texture not in use for polygon
+
+    // let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    //     layout: &bind_group_layout,
+    //     entries: &[
+    //         wgpu::BindGroupEntry {
+    //             binding: 0,
+    //             resource: uniform_buffer.as_entire_binding(),
+    //         },
+    //         wgpu::BindGroupEntry {
+    //             binding: 1,
+    //             resource: wgpu::BindingResource::TextureView(&texture_view),
+    //         },
+    //         wgpu::BindGroupEntry {
+    //             binding: 2,
+    //             resource: wgpu::BindingResource::Sampler(&sampler),
+    //         },
+    //     ],
+    //     label: None,
+    // });
+
+    // Create a 1x1 white texture as a default
+    let texture_size = wgpu::Extent3d {
+        width: 1,
+        height: 1,
+        depth_or_array_layers: 1,
+    };
+
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("Default White Texture"),
+        size: texture_size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+
+    // Create white pixel data
+    let white_pixel: [u8; 4] = [255, 255, 255, 255];
+
+    // Copy white pixel data to texture
+    queue.write_texture(
+        wgpu::ImageCopyTexture {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &white_pixel,
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: Some(4),
+            rows_per_image: None,
+        },
+        texture_size,
+    );
+
+    let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    // Create default sampler
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        ..Default::default()
+    });
+
+    // Now create your bind group with these defaults
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: uniform_buffer.as_entire_binding(),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+        ],
         label: None,
     });
 
@@ -242,6 +326,7 @@ impl Polygon {
     pub fn new(
         window_size: &WindowSize,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         camera: &Camera,
         points: Vec<Point>,
@@ -271,6 +356,7 @@ impl Polygon {
             get_polygon_data(
                 window_size,
                 device,
+                queue,
                 bind_group_layout,
                 camera,
                 points.clone(),
@@ -371,6 +457,7 @@ impl Polygon {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
         dimensions: (f32, f32),
         camera: &Camera,
@@ -379,6 +466,7 @@ impl Polygon {
             get_polygon_data(
                 window_size,
                 device,
+                queue,
                 bind_group_layout,
                 camera,
                 self.points.clone(),
@@ -453,6 +541,7 @@ impl Polygon {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
         border_radius: f32,
         camera: &Camera,
@@ -461,6 +550,7 @@ impl Polygon {
             get_polygon_data(
                 window_size,
                 device,
+                queue,
                 bind_group_layout,
                 camera,
                 self.points.clone(),
@@ -489,6 +579,7 @@ impl Polygon {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
         stroke: Stroke,
         camera: &Camera,
@@ -497,6 +588,7 @@ impl Polygon {
             get_polygon_data(
                 window_size,
                 device,
+                queue,
                 bind_group_layout,
                 camera,
                 self.points.clone(),
@@ -525,6 +617,7 @@ impl Polygon {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
         fill: [f32; 4],
         camera: &Camera,
@@ -533,6 +626,7 @@ impl Polygon {
             get_polygon_data(
                 window_size,
                 device,
+                queue,
                 bind_group_layout,
                 camera,
                 self.points.clone(),

@@ -1,4 +1,5 @@
-use cgmath::{Vector2, Vector3};
+use cgmath::SquareMatrix;
+use cgmath::{Matrix4, Vector2, Vector3};
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -7,6 +8,7 @@ use wgpu::{Device, Queue, TextureView};
 
 use crate::camera::Camera;
 use crate::editor::Point;
+use crate::transform::matrix4_to_raw_array;
 use crate::{
     editor::WindowSize,
     transform::Transform,
@@ -144,28 +146,33 @@ impl StImage {
             ..Default::default()
         });
 
+        let empty_buffer = Matrix4::<f32>::identity();
+        let raw_matrix = matrix4_to_raw_array(&empty_buffer);
+
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Image Uniform Buffer"),
+            contents: bytemuck::cast_slice(&raw_matrix),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         // Rest of the bind group creation...
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
             label: Some("Image Bind Group"),
-        });
-
-        // Create transform uniform buffer
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Transform Uniform Buffer"),
-            size: std::mem::size_of::<[[f32; 4]; 4]>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
         });
 
         // Option 2: Use scale in transform to adjust size
