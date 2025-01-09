@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use wgpu::util::DeviceExt;
 
+use crate::polygon::SavedPoint;
 use crate::{
     camera::Camera,
     editor::{Point, WindowSize},
@@ -39,7 +40,8 @@ pub struct SavedTextRendererConfig {
     pub name: String,
     pub text: String,
     pub dimensions: (i32, i32),
-    // position is determined by the keyframes (?)
+    // position is determined by the keyframes, but initial position is not
+    pub position: SavedPoint,
 }
 
 pub struct TextRenderer {

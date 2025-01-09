@@ -8,6 +8,7 @@ use wgpu::{Device, Queue, TextureView};
 
 use crate::camera::Camera;
 use crate::editor::Point;
+use crate::polygon::SavedPoint;
 use crate::transform::matrix4_to_raw_array;
 use crate::{
     editor::WindowSize,
@@ -30,6 +31,7 @@ pub struct SavedStImageConfig {
     pub name: String,
     pub dimensions: (u32, u32),
     pub path: String,
+    pub position: SavedPoint,
 }
 
 pub struct StImage {
