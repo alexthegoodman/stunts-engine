@@ -61,15 +61,14 @@ impl Transform {
     // }
 
     pub fn update_transform(&self, window_size: &WindowSize) -> Matrix4<f32> {
-        // let x = self.position.x / window_size.width as f32 * 2.0 - 1.0;
-        // let y = 1.0 - self.position.y / window_size.height as f32 * 2.0;
         let x = self.position.x;
         let y = self.position.y;
 
         // Create individual transformation matrices
         let translation = Matrix4::from_translation(Vector3::new(x, y, self.layer));
         let rotation = Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), Rad(self.rotation));
-        let scale = Matrix4::from_scale(self.scale.x);
+        // let scale = Matrix4::from_scale(self.scale.x);
+        let scale = Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, 1.0); // Use both x and y scale
 
         // Combine transformations: translation * rotation * scale
         translation * rotation * scale
