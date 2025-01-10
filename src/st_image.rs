@@ -186,7 +186,7 @@ impl StImage {
         println!("scales {} {}", scale_x, scale_y);
 
         // Option 2: Use scale in transform to adjust size
-        let transform = if (feature != "high_quality_resize") {
+        let mut transform = if (feature != "high_quality_resize") {
             Transform::new(
                 Vector2::new(image_config.position.x, image_config.position.y),
                 0.0,
@@ -204,26 +204,28 @@ impl StImage {
             )
         };
 
+        transform.layer = -1.0;
+
         // Rest of the implementation remains the same...
-        let z = get_z_layer(1.0);
+        // let z = get_z_layer(1.0);
         let vertices = [
             Vertex {
-                position: [-0.5, -0.5, z],
+                position: [-0.5, -0.5, 0.0],
                 tex_coords: [0.0, 1.0],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
-                position: [0.5, -0.5, z],
+                position: [0.5, -0.5, 0.0],
                 tex_coords: [1.0, 1.0],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
-                position: [0.5, 0.5, z],
+                position: [0.5, 0.5, 0.0],
                 tex_coords: [1.0, 0.0],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
-                position: [-0.5, 0.5, z],
+                position: [-0.5, 0.5, 0.0],
                 tex_coords: [0.0, 0.0],
                 color: [1.0, 1.0, 1.0, 1.0],
             },

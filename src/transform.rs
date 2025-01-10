@@ -24,6 +24,7 @@ pub struct Transform {
     pub rotation: f32, // Rotation angle in radians
     pub scale: Vector2<f32>,
     pub uniform_buffer: wgpu::Buffer,
+    pub layer: f32,
 }
 
 impl Transform {
@@ -45,6 +46,7 @@ impl Transform {
             rotation,
             scale,
             uniform_buffer,
+            layer: 0.0,
         }
     }
 
@@ -65,7 +67,7 @@ impl Transform {
         let y = self.position.y;
 
         // Create individual transformation matrices
-        let translation = Matrix4::from_translation(Vector3::new(x, y, 0.0));
+        let translation = Matrix4::from_translation(Vector3::new(x, y, self.layer));
         let rotation = Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), Rad(self.rotation));
         let scale = Matrix4::from_scale(self.scale.x);
 

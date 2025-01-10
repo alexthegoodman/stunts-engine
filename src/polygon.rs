@@ -241,19 +241,23 @@ pub fn get_polygon_data(
         label: None,
     });
 
+    let mut transform = SnTransform::new(
+        Vector2::new(position.x, position.y),
+        rotation,
+        Vector2::new(1.0, 1.0),
+        uniform_buffer,
+        window_size,
+    );
+
+    transform.layer = -2.0;
+
     (
         geometry.vertices,
         geometry.indices,
         vertex_buffer,
         index_buffer,
         bind_group,
-        SnTransform::new(
-            Vector2::new(position.x, position.y),
-            rotation,
-            Vector2::new(1.0, 1.0),
-            uniform_buffer,
-            window_size,
-        ),
+        transform,
     )
 }
 
