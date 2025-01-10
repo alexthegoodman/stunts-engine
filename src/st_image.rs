@@ -46,7 +46,7 @@ pub struct StImage {
     pub dimensions: (u32, u32),
     pub bind_group: wgpu::BindGroup,
     pub vertices: [Vertex; 4],
-    pub indices: [u16; 6],
+    pub indices: [u32; 6],
 }
 
 impl StImage {
@@ -63,7 +63,8 @@ impl StImage {
         // NOTE: may be best to move images into destination project folder before supplying a path to StImage
 
         // specify resizing strategy
-        let feature = "low_quality_resize";
+        let feature = "low_quality_resize"; // faster
+                                            // let feature = "high_quality_resize"; // slow
 
         // Load the image
         let img = image::open(path).expect("Couldn't open image");
@@ -112,7 +113,7 @@ impl StImage {
         });
 
         // Convert image to RGBA
-        let rgba = img.to_rgba8();
+        let rgba = img.to_rgba8().into_raw();
 
         // Write texture data
         queue.write_texture(
@@ -177,6 +178,11 @@ impl StImage {
             label: Some("Image Bind Group"),
         });
 
+        // let scale_x = 1.0;
+        // let scale_y = 1.0;
+
+        println!("scales {} {}", scale_x, scale_y);
+
         // Option 2: Use scale in transform to adjust size
         let transform = if (feature != "high_quality_resize") {
             Transform::new(
@@ -197,30 +203,27 @@ impl StImage {
         };
 
         // Rest of the implementation remains the same...
-        let z = get_z_layer(z_index);
-        let vertices = [
-            Vertex::new(-0.5, -0.5, z, [1.0, 1.0, 1.0, 1.0]),
-            Vertex::new(0.5, -0.5, z, [1.0, 1.0, 1.0, 1.0]),
-            Vertex::new(0.5, 0.5, z, [1.0, 1.0, 1.0, 1.0]),
-            Vertex::new(-0.5, 0.5, z, [1.0, 1.0, 1.0, 1.0]),
-        ];
-
+        let z = get_z_layer(z_index + 3.0);
         let vertices = [
             Vertex {
+                position: [-0.5, -0.5, z],
                 tex_coords: [0.0, 1.0],
-                ..vertices[0]
+                color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
+                position: [0.5, -0.5, z],
                 tex_coords: [1.0, 1.0],
-                ..vertices[1]
+                color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
+                position: [0.5, 0.5, z],
                 tex_coords: [1.0, 0.0],
-                ..vertices[2]
+                color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
+                position: [-0.5, 0.5, z],
                 tex_coords: [0.0, 0.0],
-                ..vertices[3]
+                color: [1.0, 1.0, 1.0, 1.0],
             },
         ];
 
@@ -230,7 +233,7 @@ impl StImage {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let indices: [u16; 6] = [0, 1, 2, 2, 3, 0];
+        let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&indices),

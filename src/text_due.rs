@@ -13,6 +13,7 @@ use serde::Serialize;
 use wgpu::util::DeviceExt;
 
 use crate::polygon::SavedPoint;
+use crate::vertex::get_z_layer;
 use crate::{
     camera::Camera,
     editor::{Point, WindowSize},
@@ -56,7 +57,7 @@ pub struct TextRenderer {
     pub index_buffer: Buffer,
     pub dimensions: (f32, f32), // (width, height) in pixels
     pub vertices: Vec<Vertex>,
-    pub indices: Vec<u16>,
+    pub indices: Vec<u32>,
     pub atlas_texture: wgpu::Texture,
     pub atlas_size: (u32, u32),
     pub next_atlas_position: (u32, u32),
@@ -80,7 +81,7 @@ impl TextRenderer {
             .expect("Failed to load font");
 
         // Create texture atlas
-        let atlas_size = (1024, 1024);
+        let atlas_size = (4096, 4096);
         let atlas_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Glyph Atlas Texture"),
             size: wgpu::Extent3d {
@@ -99,14 +100,14 @@ impl TextRenderer {
         // Initialize empty vertex and index buffers
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Text Vertex Buffer"),
-            size: 1024, // Initial size, can be adjusted
+            size: 4096, // Initial size, can be adjusted
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Text Index Buffer"),
-            size: 1024, // Initial size, can be adjusted
+            size: 4096, // Initial size, can be adjusted
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -264,7 +265,7 @@ impl TextRenderer {
         // render_pass: &mut wgpu::RenderPass<'a>,
     ) {
         let mut vertices = Vec::new();
-        let mut indices = Vec::new();
+        let mut indices: Vec<u32> = Vec::new();
         let mut current_x = 0.0;
 
         let text = self.text.clone();
@@ -281,7 +282,7 @@ impl TextRenderer {
         for c in chars {
             let glyph = self.glyph_cache.get(&c).unwrap();
 
-            let base_vertex = vertices.len() as u16;
+            let base_vertex = vertices.len() as u32;
 
             // Calculate vertex positions using metrics and UV coordinates
             let x0 = current_x + glyph.metrics[2];
@@ -295,24 +296,26 @@ impl TextRenderer {
             let v0 = glyph.uv_rect[1];
             let v1 = v0 + glyph.uv_rect[3];
 
+            let z = get_z_layer(1.0);
+
             vertices.extend_from_slice(&[
                 Vertex {
-                    position: [x0, y0, 0.0],
+                    position: [x0, y0, z],
                     tex_coords: [u0, v0],
                     color: [1.0, 1.0, 1.0, 1.0],
                 },
                 Vertex {
-                    position: [x1, y0, 0.0],
+                    position: [x1, y0, z],
                     tex_coords: [u1, v0],
                     color: [1.0, 1.0, 1.0, 1.0],
                 },
                 Vertex {
-                    position: [x1, y1, 0.0],
+                    position: [x1, y1, z],
                     tex_coords: [u1, v1],
                     color: [1.0, 1.0, 1.0, 1.0],
                 },
                 Vertex {
-                    position: [x0, y1, 0.0],
+                    position: [x0, y1, z],
                     tex_coords: [u0, v1],
                     color: [1.0, 1.0, 1.0, 1.0],
                 },
