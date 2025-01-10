@@ -201,19 +201,19 @@ pub type ImageItemClickHandler =
     dyn Fn() -> Option<Box<dyn FnMut(Uuid, StImageConfig) + Send>> + Send + Sync;
 
 pub type OnMouseUp =
-    dyn Fn() -> Option<Box<dyn FnMut(usize, Point) -> Sequence + Send>> + Send + Sync;
+    dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> Sequence + Send>> + Send + Sync;
 
 pub struct Editor {
     // visual
     pub selected_polygon_id: Uuid,
     pub polygons: Vec<Polygon>,
-    pub dragging_polygon: Option<usize>,
+    pub dragging_polygon: Option<Uuid>,
     pub static_polygons: Vec<Polygon>,
     pub project_selected: Option<Uuid>,
     pub text_items: Vec<TextRenderer>,
-    pub dragging_text: Option<usize>,
+    pub dragging_text: Option<Uuid>,
     pub image_items: Vec<StImage>,
-    pub dragging_image: Option<usize>,
+    pub dragging_image: Option<Uuid>,
     pub font_manager: FontManager,
 
     // viewport
@@ -1179,7 +1179,7 @@ impl Editor {
         // Check if we're clicking on a polygon to drag
         for (poly_index, polygon) in self.polygons.iter_mut().enumerate() {
             if polygon.contains_point(&self.last_top_left, &camera) {
-                self.dragging_polygon = Some(poly_index);
+                self.dragging_polygon = Some(polygon.id);
                 self.drag_start = Some(self.last_top_left);
 
                 // TODO: make DRY with below
@@ -1216,7 +1216,7 @@ impl Editor {
         // Check if we're clicking on a text item to drag
         for (text_index, text_item) in self.text_items.iter_mut().enumerate() {
             if text_item.contains_point(&self.last_top_left, &camera) {
-                self.dragging_text = Some(text_index);
+                self.dragging_text = Some(text_item.id);
                 self.drag_start = Some(self.last_top_left);
 
                 // TODO: make DRY with below
@@ -1254,7 +1254,8 @@ impl Editor {
         // Check if we're clicking on a image item to drag
         for (image_index, image_item) in self.image_items.iter_mut().enumerate() {
             if image_item.contains_point(&self.last_top_left, &camera) {
-                self.dragging_image = Some(image_index);
+                self.dragging_image =
+                    Some(Uuid::from_str(&image_item.id).expect("Couldn't convert to uuid"));
                 self.drag_start = Some(self.last_top_left);
 
                 // TODO: make DRY with below
@@ -1339,21 +1340,21 @@ impl Editor {
         // self.update_cursor();
 
         // handle dragging to move objects (polygons, images, text, etc)
-        if let Some(poly_index) = self.dragging_polygon {
+        if let Some(poly_id) = self.dragging_polygon {
             if let Some(start) = self.drag_start {
-                self.move_polygon(self.last_top_left, start, poly_index, window_size, device);
+                self.move_polygon(self.last_top_left, start, poly_id, window_size, device);
             }
         }
 
-        if let Some(text_index) = self.dragging_text {
+        if let Some(text_id) = self.dragging_text {
             if let Some(start) = self.drag_start {
-                self.move_text(self.last_top_left, start, text_index, window_size, device);
+                self.move_text(self.last_top_left, start, text_id, window_size, device);
             }
         }
 
-        if let Some(image_index) = self.dragging_image {
+        if let Some(image_id) = self.dragging_image {
             if let Some(start) = self.drag_start {
-                self.move_image(self.last_top_left, start, image_index, window_size, device);
+                self.move_image(self.last_top_left, start, image_id, window_size, device);
             }
         }
     }
@@ -1379,11 +1380,21 @@ impl Editor {
             return None;
         }
 
-        if let Some(poly_index) = self.dragging_polygon {
+        let object_id = if let Some(poly_id) = self.dragging_polygon {
+            poly_id
+        } else if let Some(image_id) = self.dragging_image {
+            image_id
+        } else if let Some(text_id) = self.dragging_text {
+            text_id
+        } else {
+            Uuid::nil()
+        };
+
+        if object_id != Uuid::nil() {
             if let Some(on_mouse_up_creator) = &self.on_mouse_up {
                 let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
                 let selected_sequence_data = on_up(
-                    poly_index,
+                    object_id,
                     Point {
                         x: self.last_top_left.x - 600.0,
                         y: self.last_top_left.y - 50.0,
@@ -1412,7 +1423,7 @@ impl Editor {
         &mut self,
         mouse_pos: Point,
         start: Point,
-        poly_index: usize,
+        poly_id: Uuid,
         window_size: &WindowSize,
         device: &wgpu::Device,
     ) {
@@ -1420,7 +1431,12 @@ impl Editor {
         let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
-        let polygon = &mut self.polygons[poly_index];
+        // let polygon = &mut self.polygons[poly_index];
+        let polygon = self
+            .polygons
+            .iter_mut()
+            .find(|p| p.id == poly_id)
+            .expect("Couldn't find polygon");
         let new_position = Point {
             x: polygon.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
             y: polygon.transform.position.y + dy,
@@ -1446,7 +1462,7 @@ impl Editor {
         &mut self,
         mouse_pos: Point,
         start: Point,
-        text_index: usize,
+        text_id: Uuid,
         window_size: &WindowSize,
         device: &wgpu::Device,
     ) {
@@ -1454,7 +1470,12 @@ impl Editor {
         let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
-        let text_item = &mut self.text_items[text_index];
+        // let text_item = &mut self.text_items[text_index];
+        let text_item = self
+            .text_items
+            .iter_mut()
+            .find(|t| t.id == text_id)
+            .expect("Couldn't find text item");
         let new_position = Point {
             x: text_item.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
             y: text_item.transform.position.y + dy,
@@ -1474,7 +1495,7 @@ impl Editor {
         &mut self,
         mouse_pos: Point,
         start: Point,
-        image_index: usize,
+        image_id: Uuid,
         window_size: &WindowSize,
         device: &wgpu::Device,
     ) {
@@ -1482,7 +1503,12 @@ impl Editor {
         let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
-        let image_item = &mut self.image_items[image_index];
+        // let image_item = &mut self.image_items[image_index];
+        let image_item = self
+            .image_items
+            .iter_mut()
+            .find(|i| i.id == image_id.to_string())
+            .expect("Couldn't find image item");
         let new_position = Point {
             x: image_item.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
             y: image_item.transform.position.y + dy,

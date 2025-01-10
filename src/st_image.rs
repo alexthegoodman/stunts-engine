@@ -180,8 +180,10 @@ impl StImage {
             label: Some("Image Bind Group"),
         });
 
-        let scale_x = original_dimensions.0 as f32 * scale_x;
-        let scale_y = original_dimensions.1 as f32 * scale_y;
+        // let scale_x = original_dimensions.0 as f32 * scale_x;
+        // let scale_y = original_dimensions.1 as f32 * scale_y;
+        let scale_x = dimensions.0 as f32;
+        let scale_y = dimensions.1 as f32;
 
         println!("scales {} {}", scale_x, scale_y);
 
