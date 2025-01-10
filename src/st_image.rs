@@ -108,11 +108,13 @@ impl StImage {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            // format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+            view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
         });
 
         // Convert image to RGBA
+        // let rgba = img.to_rgba8();
         let rgba = img.to_rgba8().into_raw();
 
         // Write texture data
@@ -178,8 +180,8 @@ impl StImage {
             label: Some("Image Bind Group"),
         });
 
-        // let scale_x = 1.0;
-        // let scale_y = 1.0;
+        let scale_x = original_dimensions.0 as f32 * scale_x;
+        let scale_y = original_dimensions.1 as f32 * scale_y;
 
         println!("scales {} {}", scale_x, scale_y);
 
@@ -203,7 +205,7 @@ impl StImage {
         };
 
         // Rest of the implementation remains the same...
-        let z = get_z_layer(z_index + 3.0);
+        let z = get_z_layer(1.0);
         let vertices = [
             Vertex {
                 position: [-0.5, -0.5, z],
@@ -233,7 +235,7 @@ impl StImage {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let indices: [u32; 6] = [0, 1, 2, 2, 3, 0];
+        let indices: [u32; 6] = [0, 1, 2, 0, 2, 3];
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&indices),
