@@ -532,10 +532,11 @@ impl Polygon {
         // self.bind_group = bind_group;
         // self.transform = transform;
 
-        let position = Point {
-            x: 600.0 + position.x,
-            y: 50.0 + position.y,
-        };
+        // testing
+        // let position = Point {
+        //     x: 600.0 + position.x,
+        //     y: 50.0 + position.y,
+        // };
 
         self.transform
             .update_position([position.x, position.y], &camera.window_size);
