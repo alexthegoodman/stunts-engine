@@ -274,17 +274,31 @@ impl StImage {
     }
 
     pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
-        let local_point = self.to_local_space(*point, camera);
+        // let local_point = self.to_local_space(*point, camera);
+        let untranslated = Point {
+            x: point.x - (self.transform.position.x),
+            y: point.y - self.transform.position.y,
+        };
 
         // Get the bounds of the rectangle based on dimensions
         // Since dimensions are (width, height), the rectangle extends from (0,0) to (width, height)
         let (width, height) = self.dimensions;
 
-        // Check if the point is within the bounds
-        local_point.x >= 0.0
-            && local_point.x <= width as f32
-            && local_point.y >= 0.0
-            && local_point.y <= height as f32
+        // println!(
+        //     "contains_point scale: {:?} position: {:?} dimensions: {:?} point: {:?} untranslated: {:?}",
+        //     self.transform.scale, self.transform.position, self.dimensions, point, untranslated
+        // );
+
+        // // Check if the point is within the bounds
+        // untranslated.x >= 0.0
+        //     && untranslated.x <= width as f32
+        //     && untranslated.y >= 0.0
+        //     && untranslated.y <= height as f32
+        // Check if the point is within -0.5 to 0.5 range
+        untranslated.x >= -0.5 * self.dimensions.0 as f32
+            && untranslated.x <= 0.5 * self.dimensions.0 as f32
+            && untranslated.y >= -0.5 * self.dimensions.1 as f32
+            && untranslated.y <= 0.5 * self.dimensions.1 as f32
     }
 
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
@@ -293,12 +307,14 @@ impl StImage {
             y: world_point.y - self.transform.position.y,
         };
 
+        println!("untranslated {:?} {:?}", self.name, untranslated);
+
         let local_point = Point {
             x: untranslated.x / (self.dimensions.0 as f32),
             y: untranslated.y / (self.dimensions.1 as f32),
         };
 
-        // println!("local_point {:?} {:?}", self.name, local_point);
+        println!("local_point {:?} {:?}", self.name, local_point);
 
         local_point
     }
