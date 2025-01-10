@@ -200,8 +200,9 @@ pub type TextItemClickHandler =
 pub type ImageItemClickHandler =
     dyn Fn() -> Option<Box<dyn FnMut(Uuid, StImageConfig) + Send>> + Send + Sync;
 
-pub type OnMouseUp =
-    dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> Sequence + Send>> + Send + Sync;
+pub type OnMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence, Vec<UIKeyframe>) + Send>>
+    + Send
+    + Sync;
 
 pub struct Editor {
     // visual
@@ -1393,15 +1394,21 @@ impl Editor {
         if object_id != Uuid::nil() {
             if let Some(on_mouse_up_creator) = &self.on_mouse_up {
                 let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
-                let selected_sequence_data = on_up(
+                let (selected_sequence_data, selected_keyframes) = on_up(
                     object_id,
                     Point {
                         x: self.last_top_left.x - 600.0,
                         y: self.last_top_left.y - 50.0,
                     },
                 );
-                self.update_motion_paths(&selected_sequence_data);
-                println!("Motion Paths updated!");
+
+                // need some way of seeing if keyframe selected
+                // perhaps need some way of opening keyframes explicitly
+                // perhaps a toggle between keyframes and layout
+                if selected_keyframes.len() > 0 {
+                    self.update_motion_paths(&selected_sequence_data);
+                    println!("Motion Paths updated!");
+                }
             }
         }
 
