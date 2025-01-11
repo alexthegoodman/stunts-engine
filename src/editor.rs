@@ -387,13 +387,20 @@ impl Editor {
             }
         }
 
+        println!("prompt {:?}", prompt);
+
         let predictions: Vec<f32> = self
             .inference
             // .infer("0, 5, 354, 154, 239, 91, \n1, 5, 544, 244, 106, 240, ".to_string());
             .infer(prompt);
 
         // predictions are 6 rows per line in the prompt, with each row containing: `object_index, time, width, height, x, y`
-        println!("predictions {:?}", predictions);
+        for (i, predicted) in predictions.clone().into_iter().enumerate() {
+            if i % 6 == 0 {
+                println!();
+            }
+            print!("{}, ", predicted);
+        }
 
         // create motion paths from predictions, each prediction must be rounded
         let motion_path_keyframes = self.create_motion_paths_from_predictions(predictions);
@@ -889,6 +896,14 @@ impl Editor {
         // Recreate motion paths for all polygons
         for polygon_config in &sequence.active_polygons {
             self.create_motion_path_visualization(sequence, &polygon_config.id);
+        }
+        // Recreate motion paths for all texts
+        for text_config in &sequence.active_text_items {
+            self.create_motion_path_visualization(sequence, &text_config.id);
+        }
+        // Recreate motion paths for all images
+        for image_config in &sequence.active_image_items {
+            self.create_motion_path_visualization(sequence, &image_config.id);
         }
     }
 
