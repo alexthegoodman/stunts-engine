@@ -6,6 +6,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use cgmath::{Matrix4, Point3, Vector2, Vector3, Vector4};
+use common_motion_2d_reg::inference::CommonMotionInference;
+use common_motion_2d_reg::interface::load_common_motion_2d;
+use common_motion_2d_reg::Wgpu;
 use floem_renderer::gpu_resources::{self, GpuResources};
 use floem_winit::keyboard::ModifiersState;
 use floem_winit::window::Window;
@@ -250,6 +253,9 @@ pub struct Editor {
     pub global_top_left: Point, // for when recording mouse positions outside the editor zone
     pub ds_ndc_pos: Point,      // double-width sized ndc-style positioning (screen-oriented)
     pub ndc: Point,
+
+    // ai
+    pub inference: CommonMotionInference<Wgpu>,
 }
 
 use std::borrow::{Borrow, BorrowMut};
@@ -270,8 +276,11 @@ impl Editor {
 
         let font_manager = FontManager::new();
 
+        let inference = load_common_motion_2d();
+
         Editor {
             font_manager,
+            inference,
             selected_polygon_id: Uuid::nil(),
             polygons: Vec::new(),
             dragging_polygon: None,
