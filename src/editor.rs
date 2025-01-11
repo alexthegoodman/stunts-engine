@@ -321,6 +321,233 @@ impl Editor {
         }
     }
 
+    pub fn run_motion_inference(&self) -> Vec<AnimationData> {
+        let mut prompt = "".to_string();
+        let mut total = 0;
+        for (i, polygon) in self.polygons.iter().enumerate() {
+            prompt.push_str(&total.to_string());
+            prompt.push_str(", ");
+            prompt.push_str("5");
+            prompt.push_str(", ");
+            prompt.push_str(&polygon.dimensions.0.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&polygon.dimensions.1.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&polygon.transform.position.x.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&polygon.transform.position.y.to_string());
+            prompt.push_str(", ");
+            prompt.push_str("\n");
+            total = total + 1;
+
+            if (total > 6) {
+                break;
+            }
+        }
+
+        for (i, text) in self.text_items.iter().enumerate() {
+            prompt.push_str(&total.to_string());
+            prompt.push_str(", ");
+            prompt.push_str("5");
+            prompt.push_str(", ");
+            prompt.push_str(&text.dimensions.0.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&text.dimensions.1.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&text.transform.position.x.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&text.transform.position.y.to_string());
+            prompt.push_str(", ");
+            prompt.push_str("\n");
+            total = total + 1;
+
+            if (total > 6) {
+                break;
+            }
+        }
+
+        for (i, image) in self.image_items.iter().enumerate() {
+            prompt.push_str(&total.to_string());
+            prompt.push_str(", ");
+            prompt.push_str("5");
+            prompt.push_str(", ");
+            prompt.push_str(&image.dimensions.0.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&image.dimensions.1.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&image.transform.position.x.to_string());
+            prompt.push_str(", ");
+            prompt.push_str(&image.transform.position.y.to_string());
+            prompt.push_str(", ");
+            prompt.push_str("\n");
+            total = total + 1;
+
+            if (total > 6) {
+                break;
+            }
+        }
+
+        let predictions: Vec<f32> = self
+            .inference
+            // .infer("0, 5, 354, 154, 239, 91, \n1, 5, 544, 244, 106, 240, ".to_string());
+            .infer(prompt);
+
+        // predictions are 6 rows per line in the prompt, with each row containing: `object_index, time, width, height, x, y`
+        println!("predictions {:?}", predictions);
+
+        // create motion paths from predictions, each prediction must be rounded
+        let motion_path_keyframes = self.create_motion_paths_from_predictions(predictions);
+
+        motion_path_keyframes
+    }
+
+    pub fn create_motion_paths_from_predictions(
+        &self,
+        predictions: Vec<f32>,
+    ) -> Vec<AnimationData> {
+        let mut animation_data_vec = Vec::new();
+        let values_per_prediction = 6; // object_index, time, width, height, x, y
+        let keyframes_per_object = 6; // number of keyframes per object
+        let timestamps = vec![0, 2500, 5000, 15000, 17500, 20000];
+
+        // Calculate total number of objects from predictions
+        let total_predictions = predictions.len();
+        let num_objects = total_predictions / (values_per_prediction * keyframes_per_object);
+
+        for object_idx in 0..num_objects {
+            let mut position_keyframes = Vec::new();
+
+            // Get the item ID based on the object index
+            let item_id = self.get_item_id(object_idx);
+            let object_type = self.get_object_type(object_idx);
+
+            // Process keyframes for this object
+            for keyframe_idx in 0..keyframes_per_object {
+                let base_idx = object_idx * (values_per_prediction * keyframes_per_object)
+                    + keyframe_idx * values_per_prediction;
+
+                // Skip if out of bounds
+                if base_idx + 5 >= predictions.len() {
+                    continue;
+                }
+
+                let predicted_x = predictions[base_idx + 4].round() as i32;
+                let predicted_y = predictions[base_idx + 5].round() as i32;
+
+                position_keyframes.push(UIKeyframe {
+                    id: Uuid::new_v4().to_string(),
+                    time: Duration::from_millis(timestamps[keyframe_idx] as u64),
+                    value: KeyframeValue::Position([predicted_x, predicted_y]),
+                    easing: EasingType::EaseInOut,
+                });
+            }
+
+            // Only create animation if we have valid keyframes and item ID
+            if !position_keyframes.is_empty() && item_id.is_some() {
+                let properties = vec![
+                    // Position property with predicted values
+                    AnimationProperty {
+                        name: "Position".to_string(),
+                        property_path: "position".to_string(),
+                        children: Vec::new(),
+                        keyframes: position_keyframes,
+                        depth: 0,
+                    },
+                    // Default properties for rotation, scale, opacity
+                    AnimationProperty {
+                        name: "Rotation".to_string(),
+                        property_path: "rotation".to_string(),
+                        children: Vec::new(),
+                        keyframes: timestamps
+                            .iter()
+                            .map(|&t| UIKeyframe {
+                                id: Uuid::new_v4().to_string(),
+                                time: Duration::from_millis(t as u64),
+                                value: KeyframeValue::Rotation(0),
+                                easing: EasingType::EaseInOut,
+                            })
+                            .collect(),
+                        depth: 0,
+                    },
+                    AnimationProperty {
+                        name: "Scale".to_string(),
+                        property_path: "scale".to_string(),
+                        children: Vec::new(),
+                        keyframes: timestamps
+                            .iter()
+                            .map(|&t| UIKeyframe {
+                                id: Uuid::new_v4().to_string(),
+                                time: Duration::from_millis(t as u64),
+                                value: KeyframeValue::Scale(100),
+                                easing: EasingType::EaseInOut,
+                            })
+                            .collect(),
+                        depth: 0,
+                    },
+                    AnimationProperty {
+                        name: "Opacity".to_string(),
+                        property_path: "opacity".to_string(),
+                        children: Vec::new(),
+                        keyframes: timestamps
+                            .iter()
+                            .map(|&t| UIKeyframe {
+                                id: Uuid::new_v4().to_string(),
+                                time: Duration::from_millis(t as u64),
+                                value: KeyframeValue::Opacity(100),
+                                easing: EasingType::EaseInOut,
+                            })
+                            .collect(),
+                        depth: 0,
+                    },
+                ];
+
+                animation_data_vec.push(AnimationData {
+                    id: Uuid::new_v4().to_string(),
+                    object_type: object_type.unwrap_or(ObjectType::Polygon),
+                    polygon_id: item_id.unwrap(),
+                    duration: Duration::from_secs(20),
+                    properties,
+                });
+            }
+        }
+
+        animation_data_vec
+    }
+
+    // Helper function to get item ID based on object index
+    fn get_item_id(&self, object_idx: usize) -> Option<String> {
+        let polygon_count = self.polygons.len();
+        let text_count = self.text_items.len();
+
+        match object_idx {
+            idx if idx < polygon_count => Some(self.polygons[idx].id.clone().to_string()),
+            idx if idx < polygon_count + text_count => {
+                Some(self.text_items[idx - polygon_count].id.clone().to_string())
+            }
+            idx if idx < polygon_count + text_count + self.image_items.len() => Some(
+                self.image_items[idx - (polygon_count + text_count)]
+                    .id
+                    .clone(),
+            ),
+            _ => None,
+        }
+    }
+
+    // Helper function to get object type based on object index
+    fn get_object_type(&self, object_idx: usize) -> Option<ObjectType> {
+        let polygon_count = self.polygons.len();
+        let text_count = self.text_items.len();
+
+        match object_idx {
+            idx if idx < polygon_count => Some(ObjectType::Polygon),
+            idx if idx < polygon_count + text_count => Some(ObjectType::TextItem),
+            idx if idx < polygon_count + text_count + self.image_items.len() => {
+                Some(ObjectType::ImageItem)
+            }
+            _ => None,
+        }
+    }
+
     pub fn step_video_animations(&mut self, camera: &Camera) {
         if !self.video_is_playing || self.video_current_sequence_timeline.is_none() {
             return;
@@ -1598,6 +1825,32 @@ fn create_path_segment(
     )
 }
 
+// Helper function to create default properties with constant values
+fn create_default_property(
+    name: &str,
+    path: &str,
+    value: KeyframeValue,
+    timestamps: &[i32],
+) -> AnimationProperty {
+    let keyframes = timestamps
+        .iter()
+        .map(|&time| UIKeyframe {
+            id: Uuid::new_v4().to_string(),
+            time: Duration::from_millis(time as u64),
+            value: value.clone(),
+            easing: EasingType::EaseInOut,
+        })
+        .collect();
+
+    AnimationProperty {
+        name: name.to_string(),
+        property_path: path.to_string(),
+        children: Vec::new(),
+        keyframes,
+        depth: 0,
+    }
+}
+
 /// Get interpolated position at a specific time
 fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: Duration) -> [i32; 2] {
     if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
@@ -1651,7 +1904,7 @@ use cgmath::SquareMatrix;
 use cgmath::Transform;
 
 use crate::animations::{
-    AnimationData, EasingType, KeyframeValue, ObjectType, Sequence, UIKeyframe,
+    AnimationData, AnimationProperty, EasingType, KeyframeValue, ObjectType, Sequence, UIKeyframe,
 };
 use crate::camera::{Camera, CameraBinding};
 use crate::fonts::FontManager;
