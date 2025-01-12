@@ -2,6 +2,7 @@ pub mod animations;
 pub mod camera;
 pub mod dot;
 pub mod editor;
+pub mod encoder;
 pub mod export;
 pub mod fonts;
 pub mod polygon;

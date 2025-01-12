@@ -2,6 +2,7 @@ mod animations;
 mod camera;
 mod dot;
 mod editor;
+mod encoder;
 mod export;
 mod fonts;
 mod polygon;
