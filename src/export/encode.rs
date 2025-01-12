@@ -185,13 +185,13 @@ fn mf_set_attribute_ratio(
     }
 }
 
-// Example integration with wgpu loop:
-pub fn encode_from_wgpu(
-    encoder: &mut VideoEncoder,
-    texture: &wgpu::Texture,
-) -> windows::core::Result<()> {
-    // Read pixels from texture
-    let buffer = texture.slice(..).get_mapped_range();
-    encoder.write_frame(&buffer)?;
-    Ok(())
-}
+// // Example integration with wgpu loop:
+// pub fn encode_from_wgpu(
+//     encoder: &mut VideoEncoder,
+//     texture: &wgpu::Texture,
+// ) -> windows::core::Result<()> {
+//     // Read pixels from texture
+//     let buffer = texture.slice(..).get_mapped_range();
+//     encoder.write_frame(&buffer)?;
+//     Ok(())
+// }
