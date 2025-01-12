@@ -50,16 +50,17 @@ impl FrameCaptureBuffer {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        render_texture: &wgpu::TextureView,
-        surface_texture: &wgpu::SurfaceTexture,
+        // render_texture: &wgpu::TextureView,
+        // surface_texture: &wgpu::SurfaceTexture,
+        render_texture: &wgpu::Texture,
         encoder: &mut CommandEncoder,
     )
     //-> wgpu::CommandBuffer
     {
         // Copy render texture to capture texture
         encoder.copy_texture_to_texture(
-            // render_texture.texture().as_image_copy(),
-            surface_texture.texture.as_image_copy(),
+            render_texture.as_image_copy(), // as_image_copy() doesn't exist for TextureView
+            // surface_texture.texture.as_image_copy(),
             self.capture_texture.as_image_copy(),
             wgpu::Extent3d {
                 width: self.capture_texture.width(),
