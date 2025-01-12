@@ -3,6 +3,7 @@ use cgmath::{Matrix4, Vector2, Vector3};
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use uuid::Uuid;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
 
@@ -36,6 +37,7 @@ pub struct SavedStImageConfig {
 
 pub struct StImage {
     pub id: String,
+    pub current_sequence_id: Uuid,
     pub name: String,
     pub path: String,
     pub texture: wgpu::Texture,
@@ -47,6 +49,7 @@ pub struct StImage {
     pub bind_group: wgpu::BindGroup,
     pub vertices: [Vertex; 4],
     pub indices: [u32; 6],
+    pub hidden: bool,
 }
 
 impl StImage {
@@ -59,6 +62,7 @@ impl StImage {
         bind_group_layout: &wgpu::BindGroupLayout,
         z_index: f32,
         new_id: String,
+        current_sequence_id: Uuid,
     ) -> StImage {
         // NOTE: may be best to move images into destination project folder before supplying a path to StImage
 
@@ -248,6 +252,7 @@ impl StImage {
 
         Self {
             id: new_id,
+            current_sequence_id,
             name: image_config.name,
             path: path
                 .to_str()
@@ -262,6 +267,7 @@ impl StImage {
             bind_group,
             vertices,
             indices: indices.clone(),
+            hidden: false,
         }
     }
 

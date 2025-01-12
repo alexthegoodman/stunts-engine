@@ -47,6 +47,7 @@ pub struct SavedTextRendererConfig {
 
 pub struct TextRenderer {
     pub id: Uuid,
+    pub current_sequence_id: Uuid,
     pub intialized: bool,
     pub name: String,
     pub text: String,
@@ -63,6 +64,7 @@ pub struct TextRenderer {
     pub next_atlas_position: (u32, u32),
     pub current_row_height: u32,
     pub glyph_cache: HashMap<char, AtlasGlyph>,
+    pub hidden: bool,
 }
 
 impl TextRenderer {
@@ -75,6 +77,7 @@ impl TextRenderer {
         text: String,
         text_config: TextRendererConfig,
         id: Uuid,
+        current_sequence_id: Uuid,
     ) -> Self {
         // Load and initialize the font
         let font = Font::from_bytes(font_data, fontdue::FontSettings::default())
@@ -155,6 +158,7 @@ impl TextRenderer {
 
         Self {
             id,
+            current_sequence_id,
             intialized: false,
             name: "New Text Item".to_string(),
             text,
@@ -177,6 +181,7 @@ impl TextRenderer {
             next_atlas_position: (0, 0),
             current_row_height: 0,
             glyph_cache: HashMap::new(),
+            hidden: false,
         }
     }
 

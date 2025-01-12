@@ -321,6 +321,170 @@ impl Editor {
         }
     }
 
+    pub fn restore_sequence_objects(
+        &mut self,
+        saved_sequence: &Sequence,
+        window_size: WindowSize,
+        camera: &Camera,
+        hidden: bool,
+    ) {
+        saved_sequence.active_polygons.iter().for_each(|p| {
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get GPU Resources");
+
+            // Generate a random number between 0 and 800
+            // let random_number_800 = rng.gen_range(0..=800);
+
+            // Generate a random number between 0 and 450
+            // let random_number_450 = rng.gen_range(0..=450);
+
+            let mut restored_polygon = Polygon::new(
+                &window_size,
+                &gpu_resources.device,
+                &gpu_resources.queue,
+                &self
+                    .model_bind_group_layout
+                    .as_ref()
+                    .expect("Couldn't get model bind group layout"),
+                &camera,
+                // TODO: restoring triangles or non rectangles?
+                vec![
+                    Point { x: 0.0, y: 0.0 },
+                    Point { x: 1.0, y: 0.0 },
+                    Point { x: 1.0, y: 1.0 },
+                    Point { x: 0.0, y: 1.0 },
+                ],
+                (p.dimensions.0 as f32, p.dimensions.1 as f32),
+                Point {
+                    // x: random_number_800 as f32,
+                    // y: random_number_450 as f32,
+                    x: p.position.x as f32,
+                    y: p.position.y as f32,
+                },
+                // TODO: restore rotation?
+                0.0,
+                p.border_radius as f32,
+                [
+                    p.fill[0] as f32,
+                    p.fill[1] as f32,
+                    p.fill[2] as f32,
+                    p.fill[3] as f32,
+                ],
+                Stroke {
+                    thickness: p.stroke.thickness as f32,
+                    fill: [
+                        p.stroke.fill[0] as f32,
+                        p.stroke.fill[1] as f32,
+                        p.stroke.fill[2] as f32,
+                        p.stroke.fill[3] as f32,
+                    ],
+                },
+                -2.0,
+                p.name.clone(),
+                Uuid::from_str(&p.id).expect("Couldn't convert string to uuid"),
+                Uuid::from_str(&saved_sequence.id.clone())
+                    .expect("Couldn't convert string to uuid"),
+            );
+
+            restored_polygon.hidden = hidden;
+
+            // editor.add_polygon(restored_polygon);
+            self.polygons.push(restored_polygon);
+
+            println!("Polygon restored...");
+        });
+
+        saved_sequence.active_text_items.iter().for_each(|t| {
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get GPU Resources");
+
+            // TODO: save and restore chosen font
+
+            let position = Point {
+                x: 600.0 + t.position.x as f32,
+                y: 50.0 + t.position.y as f32,
+            };
+
+            let mut restored_text = TextRenderer::new(
+                &gpu_resources.device,
+                self.model_bind_group_layout
+                    .as_ref()
+                    .expect("Couldn't get model bind group layout"),
+                self.font_manager
+                    .get_font_by_name("Aleo")
+                    .expect("Couldn't get Aleo font"),
+                &window_size,
+                t.text.clone(),
+                TextRendererConfig {
+                    id: Uuid::from_str(&t.id).expect("Couldn't convert uuid"),
+                    name: t.name.clone(),
+                    text: t.text.clone(),
+                    dimensions: (t.dimensions.0 as f32, t.dimensions.1 as f32),
+                    position,
+                },
+                Uuid::from_str(&t.id).expect("Couldn't convert string to uuid"),
+                Uuid::from_str(&saved_sequence.id.clone())
+                    .expect("Couldn't convert string to uuid"),
+            );
+
+            restored_text.hidden = hidden;
+
+            restored_text.render_text(&gpu_resources.device, &gpu_resources.queue);
+
+            // editor.add_polygon(restored_polygon);
+            self.text_items.push(restored_text);
+
+            println!("Text restored...");
+        });
+
+        saved_sequence.active_image_items.iter().for_each(|i| {
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get GPU Resources");
+
+            let position = Point {
+                x: 600.0 + i.position.x as f32,
+                y: 50.0 + i.position.y as f32,
+            };
+
+            let image_config = StImageConfig {
+                id: i.id.clone(),
+                name: i.name.clone(),
+                dimensions: i.dimensions.clone(),
+                path: i.path.clone(),
+                position,
+            };
+
+            let mut restored_image = StImage::new(
+                &gpu_resources.device,
+                &gpu_resources.queue,
+                // string to Path
+                Path::new(&i.path),
+                image_config,
+                &window_size,
+                self.model_bind_group_layout
+                    .as_ref()
+                    .expect("Couldn't get model bind group layout"),
+                -2.0,
+                i.id.clone(),
+                Uuid::from_str(&saved_sequence.id.clone())
+                    .expect("Couldn't convert string to uuid"),
+            );
+
+            restored_image.hidden = hidden;
+
+            // editor.add_polygon(restored_polygon);
+            self.image_items.push(restored_image);
+
+            println!("Image restored...");
+        });
+    }
+
     pub fn run_motion_inference(&self) -> Vec<AnimationData> {
         let mut prompt = "".to_string();
         let mut total = 0;
@@ -333,9 +497,9 @@ impl Editor {
             prompt.push_str(", ");
             prompt.push_str(&polygon.dimensions.1.to_string());
             prompt.push_str(", ");
-            prompt.push_str(&polygon.transform.position.x.to_string());
+            prompt.push_str(&(polygon.transform.position.x - 600.0).to_string());
             prompt.push_str(", ");
-            prompt.push_str(&polygon.transform.position.y.to_string());
+            prompt.push_str(&(polygon.transform.position.y - 50.0).to_string());
             prompt.push_str(", ");
             prompt.push_str("\n");
             total = total + 1;
@@ -354,9 +518,9 @@ impl Editor {
             prompt.push_str(", ");
             prompt.push_str(&text.dimensions.1.to_string());
             prompt.push_str(", ");
-            prompt.push_str(&text.transform.position.x.to_string());
+            prompt.push_str(&(text.transform.position.x - 600.0).to_string());
             prompt.push_str(", ");
-            prompt.push_str(&text.transform.position.y.to_string());
+            prompt.push_str(&(text.transform.position.y - 50.0).to_string());
             prompt.push_str(", ");
             prompt.push_str("\n");
             total = total + 1;
@@ -375,9 +539,9 @@ impl Editor {
             prompt.push_str(", ");
             prompt.push_str(&image.dimensions.1.to_string());
             prompt.push_str(", ");
-            prompt.push_str(&image.transform.position.x.to_string());
+            prompt.push_str(&(image.transform.position.x - 600.0).to_string());
             prompt.push_str(", ");
-            prompt.push_str(&image.transform.position.y.to_string());
+            prompt.push_str(&(image.transform.position.y - 50.0).to_string());
             prompt.push_str(", ");
             prompt.push_str("\n");
             total = total + 1;
@@ -604,10 +768,35 @@ impl Editor {
                     // Calculate local time within this sequence
                     let sequence_local_time = (current_time_ms - ts.start_time_ms) as f32 / 1000.0;
                     if let Some(current_sequence) = &self.current_sequence_data {
-                        // TODO: need to somehow efficiently restore polygons for the sequence
+                        // need to somehow efficiently restore polygons for the sequence
                         // Check id to avoid unnecessary cloning
+                        // plan is to preload with a hidden attribute or similar
                         if sequence.id != current_sequence.id {
                             self.current_sequence_data = Some(sequence.clone());
+                            // set hidden attribute on relevant objects
+                            let current_sequence_id = sequence.id.clone();
+
+                            for polygon in self.polygons.iter_mut() {
+                                if polygon.current_sequence_id.to_string() == current_sequence_id {
+                                    polygon.hidden = false;
+                                } else {
+                                    polygon.hidden = true;
+                                }
+                            }
+                            for text in self.text_items.iter_mut() {
+                                if text.current_sequence_id.to_string() == current_sequence_id {
+                                    text.hidden = false;
+                                } else {
+                                    text.hidden = true;
+                                }
+                            }
+                            for image in self.image_items.iter_mut() {
+                                if image.current_sequence_id.to_string() == current_sequence_id {
+                                    image.hidden = false;
+                                } else {
+                                    image.hidden = true;
+                                }
+                            }
                         }
                     } else {
                         self.current_sequence_data = Some(sequence.clone());
@@ -879,6 +1068,7 @@ impl Editor {
                             y: pos2[1] as f32,
                         },
                         2.0, // thickness of the path
+                        sequence.id.clone(),
                     );
 
                     self.static_polygons.push(segment);
@@ -950,6 +1140,7 @@ impl Editor {
         polygon_config: PolygonConfig,
         polygon_name: String,
         new_id: Uuid,
+        selected_sequence_id: String,
     ) {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
         let mut polygon = Polygon::new(
@@ -974,6 +1165,7 @@ impl Editor {
             0.0,
             polygon_name,
             new_id,
+            Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
         );
         // // let world_position = camera.screen_to_world(polygon.transform.position);
         // let world_position = polygon.transform.position;
@@ -999,6 +1191,7 @@ impl Editor {
         text_config: TextRendererConfig,
         text_content: String,
         new_id: Uuid,
+        selected_sequence_id: String,
     ) {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
 
@@ -1018,6 +1211,7 @@ impl Editor {
             text_content.clone(),
             text_config,
             new_id,
+            Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
         );
 
         self.text_items.push(text_item);
@@ -1031,6 +1225,7 @@ impl Editor {
         image_config: StImageConfig,
         path: &Path,
         new_id: Uuid,
+        selected_sequence_id: String,
     ) {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
         let mut image_item = StImage::new(
@@ -1045,6 +1240,7 @@ impl Editor {
                 .expect("Couldn't get model bind group layout"),
             0.0,
             new_id.to_string(),
+            Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
         );
 
         self.image_items.push(image_item);
@@ -1797,6 +1993,7 @@ fn create_path_segment(
     start: Point,
     end: Point,
     thickness: f32,
+    selected_sequence_id: String,
 ) -> Polygon {
     // Calculate rotation angle from start to end point
     let dx = end.x - start.x;
@@ -1837,6 +2034,7 @@ fn create_path_segment(
         -1.0,
         String::from("motion_path_segment"),
         Uuid::new_v4(),
+        Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
     )
 }
 

@@ -343,6 +343,7 @@ impl Polygon {
         base_layer: f32,
         name: String,
         id: Uuid,
+        current_sequence_id: Uuid,
     ) -> Self {
         // let id = Uuid::new_v4();
         // let transform = SnTransform::new(position);
@@ -375,6 +376,7 @@ impl Polygon {
 
         Polygon {
             id,
+            current_sequence_id,
             name,
             points,
             old_points: None,
@@ -388,6 +390,7 @@ impl Polygon {
             vertex_buffer,
             index_buffer,
             bind_group,
+            hidden: false,
         }
     }
 
@@ -861,6 +864,7 @@ impl Polygon {
 
 pub struct Polygon {
     pub id: Uuid,
+    pub current_sequence_id: Uuid,
     pub name: String,
     pub points: Vec<Point>,
     pub old_points: Option<Vec<Point>>,
@@ -874,6 +878,7 @@ pub struct Polygon {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
+    pub hidden: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
