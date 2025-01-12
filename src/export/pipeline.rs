@@ -1,4 +1,5 @@
 use crate::{
+    animations::Sequence,
     camera::{Camera, CameraBinding},
     editor::{Editor, Viewport, WindowSize, WindowSizeShader},
     vertex::Vertex,
@@ -35,14 +36,31 @@ impl ExportPipeline {
         }
     }
 
-    pub async fn initialize(&mut self, window_size: WindowSize) {
+    pub async fn initialize(&mut self, window_size: WindowSize, sequences: Vec<Sequence>) {
+        let camera = Camera::new(window_size);
+
         let viewport = Arc::new(Mutex::new(Viewport::new(
             window_size.width as f32,
             window_size.height as f32,
         )));
 
-        let export_editor = Editor::new(viewport, None);
+        // create a dedicated editor so it can be used in the async thread
+        let mut export_editor = Editor::new(viewport, None);
 
+        // restore objects to the editor
+        sequences.iter().enumerate().for_each(|(i, s)| {
+            export_editor.restore_sequence_objects(
+                &s,
+                WindowSize {
+                    width: window_size.width as u32,
+                    height: window_size.height as u32,
+                },
+                &camera,
+                true,
+            );
+        });
+
+        // continue on with wgpu items
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             ..Default::default()
         });
@@ -67,7 +85,6 @@ impl ExportPipeline {
             .await
             .expect("Couldn't get gpu device");
 
-        let camera = Camera::new(window_size);
         let mut camera_binding = CameraBinding::new(&device);
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
