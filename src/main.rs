@@ -2,7 +2,7 @@ mod animations;
 mod camera;
 mod dot;
 mod editor;
-mod encoder;
+mod encode;
 mod export;
 mod fonts;
 mod polygon;
@@ -10,6 +10,7 @@ mod st_image;
 mod text;
 mod text_due;
 mod timelines;
+mod transcode;
 mod transform;
 mod vertex;
 
