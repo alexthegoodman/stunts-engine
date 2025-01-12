@@ -255,10 +255,18 @@ pub struct Editor {
     pub ndc: Point,
 
     // ai
-    pub inference: CommonMotionInference<Wgpu>,
+    pub inference: Option<CommonMotionInference<Wgpu>>,
 }
 
 use std::borrow::{Borrow, BorrowMut};
+
+pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>) -> Editor {
+    let inference = load_common_motion_2d();
+
+    let editor = Editor::new(viewport, Some(inference));
+
+    editor
+}
 
 pub enum InputValue {
     Text(String),
@@ -267,7 +275,10 @@ pub enum InputValue {
 }
 
 impl Editor {
-    pub fn new(viewport: Arc<Mutex<Viewport>>) -> Self {
+    pub fn new(
+        viewport: Arc<Mutex<Viewport>>,
+        inference: Option<CommonMotionInference<Wgpu>>,
+    ) -> Self {
         let viewport_unwrapped = viewport.lock().unwrap();
         let window_size = WindowSize {
             width: viewport_unwrapped.width as u32,
@@ -275,8 +286,6 @@ impl Editor {
         };
 
         let font_manager = FontManager::new();
-
-        let inference = load_common_motion_2d();
 
         Editor {
             font_manager,
@@ -553,8 +562,8 @@ impl Editor {
 
         println!("prompt {:?}", prompt);
 
-        let predictions: Vec<f32> = self
-            .inference
+        let inference = self.inference.as_ref().expect("Couldn't get inference");
+        let predictions: Vec<f32> = inference
             // .infer("0, 5, 354, 154, 239, 91, \n1, 5, 544, 244, 106, 240, ".to_string());
             .infer(prompt);
 

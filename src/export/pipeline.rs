@@ -1,6 +1,6 @@
 use crate::{
     camera::{Camera, CameraBinding},
-    editor::{Editor, WindowSize, WindowSizeShader},
+    editor::{Editor, Viewport, WindowSize, WindowSizeShader},
     vertex::Vertex,
 };
 use std::sync::{Arc, Mutex};
@@ -16,6 +16,7 @@ pub struct ExportPipeline {
     pub view: Option<Arc<wgpu::TextureView>>,
     pub depth_view: Option<wgpu::TextureView>,
     pub window_size_bind_group: Option<wgpu::BindGroup>,
+    pub export_editor: Option<Editor>,
 }
 
 impl ExportPipeline {
@@ -30,10 +31,18 @@ impl ExportPipeline {
             view: None,
             depth_view: None,
             window_size_bind_group: None,
+            export_editor: None,
         }
     }
 
     pub async fn initialize(&mut self, window_size: WindowSize) {
+        let viewport = Arc::new(Mutex::new(Viewport::new(
+            window_size.width as f32,
+            window_size.height as f32,
+        )));
+
+        let export_editor = Editor::new(viewport, None);
+
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             ..Default::default()
         });
@@ -278,9 +287,11 @@ impl ExportPipeline {
         self.view = Some(view);
         self.depth_view = Some(depth_view);
         self.window_size_bind_group = Some(window_size_bind_group);
+        self.export_editor = Some(export_editor);
     }
 
-    pub fn render_frame(&self, editor: Arc<Mutex<Editor>>) {
+    pub fn render_frame(&mut self) {
+        let mut editor = self.export_editor.as_mut().expect("Couldn't get editor");
         let device = self.device.as_ref().expect("Couldn't get device");
         let queue = self.queue.as_ref().expect("Couldn't get queue");
         let view = self.view.as_ref().expect("Couldn't get texture view");
@@ -331,11 +342,6 @@ impl ExportPipeline {
             render_pass.set_pipeline(&render_pipeline);
 
             // actual rendering commands
-            // let editor = get_sensor_editor(engine_handle);
-            let mut editor = editor.lock().unwrap();
-
-            // let camera = editor.camera.expect("Couldn't get camera");
-
             editor.step_video_animations(&camera);
             editor.step_motion_path_animations(&camera);
 
