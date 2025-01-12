@@ -2,6 +2,7 @@ use std::path::Path;
 use windows::core::{IUnknown, HRESULT, PCWSTR};
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Media::MediaFoundation::{MFShutdown, MFStartup, MF_VERSION};
+use windows::Win32::System::Com::Urlmon::E_PENDING;
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
 use windows::Win32::System::Memory::HeapEnableTerminationOnCorruption;
 use windows::Win32::System::Memory::HeapSetInformation;
@@ -86,28 +87,6 @@ pub fn encode_media_file<P: AsRef<Path>>(
 use std::time::Duration;
 use windows::core::Result;
 use windows::Win32::Media::MediaFoundation::*;
-
-// Forward declarations of types we'll implement later
-struct Session(IUnknown); // Placeholder for CSession
-                          // type IMFTranscodeProfile = IUnknown; // Placeholder until we have the actual type
-
-impl Session {
-    fn create() -> Result<Self> {
-        todo!("Implement Session::create")
-    }
-
-    fn start_encoding_session(&self, topology: &IMFTopology) -> Result<()> {
-        todo!("Implement start_encoding_session")
-    }
-
-    fn wait(&self, timeout_ms: u32) -> Result<()> {
-        todo!("Implement session wait")
-    }
-
-    fn get_encoding_position(&self) -> Result<i64> {
-        todo!("Implement get encoding position")
-    }
-}
 
 pub fn encode_file(input: PCWSTR, output: PCWSTR, config: &EncoderConfig) -> Result<()> {
     // Create all our COM objects up front so we can use ? operator
@@ -248,6 +227,7 @@ fn create_transcode_profile(config: &EncoderConfig) -> Result<IMFTranscodeProfil
 // use windows::Win32::Media::MediaFoundation::*;
 
 use super::profiles::{AAC_PROFILES, H264_PROFILES};
+use super::session::Session;
 
 fn create_h264_profile(profile_index: usize) -> Result<IMFAttributes> {
     // Ensure the profile index is valid
@@ -344,7 +324,7 @@ fn run_encoding_session(session: &Session, total_duration: Duration) -> Result<(
     loop {
         match session.wait(WAIT_PERIOD_MS) {
             // E_PENDING means encoding is still in progress
-            Err(e) if e.code() == windows::Win32::Foundation::E_PENDING => {
+            Err(e) if e.code() == E_PENDING => {
                 // Get current position
                 let current_position = session.get_encoding_position()?;
 
