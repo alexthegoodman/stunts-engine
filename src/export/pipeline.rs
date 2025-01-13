@@ -47,19 +47,6 @@ impl ExportPipeline {
         // create a dedicated editor so it can be used in the async thread
         let mut export_editor = Editor::new(viewport, None);
 
-        // restore objects to the editor
-        sequences.iter().enumerate().for_each(|(i, s)| {
-            export_editor.restore_sequence_objects(
-                &s,
-                WindowSize {
-                    width: window_size.width as u32,
-                    height: window_size.height as u32,
-                },
-                &camera,
-                true,
-            );
-        });
-
         // continue on with wgpu items
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             ..Default::default()
@@ -86,6 +73,21 @@ impl ExportPipeline {
             .expect("Couldn't get gpu device");
 
         let mut camera_binding = CameraBinding::new(&device);
+
+        // restore objects to the editor
+        sequences.iter().enumerate().for_each(|(i, s)| {
+            export_editor.restore_sequence_objects(
+                &s,
+                WindowSize {
+                    width: window_size.width as u32,
+                    height: window_size.height as u32,
+                },
+                &camera,
+                true,
+                &device,
+                &queue,
+            );
+        });
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {

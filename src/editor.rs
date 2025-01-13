@@ -336,12 +336,14 @@ impl Editor {
         window_size: WindowSize,
         camera: &Camera,
         hidden: bool,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
     ) {
         saved_sequence.active_polygons.iter().for_each(|p| {
-            let gpu_resources = self
-                .gpu_resources
-                .as_ref()
-                .expect("Couldn't get GPU Resources");
+            // let gpu_resources = self
+            //     .gpu_resources
+            //     .as_ref()
+            //     .expect("Couldn't get GPU Resources");
 
             // Generate a random number between 0 and 800
             // let random_number_800 = rng.gen_range(0..=800);
@@ -351,8 +353,8 @@ impl Editor {
 
             let mut restored_polygon = Polygon::new(
                 &window_size,
-                &gpu_resources.device,
-                &gpu_resources.queue,
+                &device,
+                &queue,
                 &self
                     .model_bind_group_layout
                     .as_ref()
@@ -406,10 +408,10 @@ impl Editor {
         });
 
         saved_sequence.active_text_items.iter().for_each(|t| {
-            let gpu_resources = self
-                .gpu_resources
-                .as_ref()
-                .expect("Couldn't get GPU Resources");
+            // let gpu_resources = self
+            //     .gpu_resources
+            //     .as_ref()
+            //     .expect("Couldn't get GPU Resources");
 
             // TODO: save and restore chosen font
 
@@ -419,7 +421,7 @@ impl Editor {
             };
 
             let mut restored_text = TextRenderer::new(
-                &gpu_resources.device,
+                &device,
                 self.model_bind_group_layout
                     .as_ref()
                     .expect("Couldn't get model bind group layout"),
@@ -442,7 +444,7 @@ impl Editor {
 
             restored_text.hidden = hidden;
 
-            restored_text.render_text(&gpu_resources.device, &gpu_resources.queue);
+            restored_text.render_text(&device, &queue);
 
             // editor.add_polygon(restored_polygon);
             self.text_items.push(restored_text);
@@ -451,10 +453,10 @@ impl Editor {
         });
 
         saved_sequence.active_image_items.iter().for_each(|i| {
-            let gpu_resources = self
-                .gpu_resources
-                .as_ref()
-                .expect("Couldn't get GPU Resources");
+            // let gpu_resources = self
+            //     .gpu_resources
+            //     .as_ref()
+            //     .expect("Couldn't get GPU Resources");
 
             let position = Point {
                 x: 600.0 + i.position.x as f32,
@@ -470,8 +472,8 @@ impl Editor {
             };
 
             let mut restored_image = StImage::new(
-                &gpu_resources.device,
-                &gpu_resources.queue,
+                &device,
+                &queue,
                 // string to Path
                 Path::new(&i.path),
                 image_config,
