@@ -797,7 +797,9 @@ impl Editor {
                 && current_time_ms < (ts.start_time_ms + ts.duration_ms)
             {
                 // Find the corresponding sequence data
-                if let Some(sequence) = video_current_sequences_data.iter().find(|s| s.id == ts.id)
+                if let Some(sequence) = video_current_sequences_data
+                    .iter()
+                    .find(|s| s.id == ts.sequence_id)
                 {
                     // Calculate local time within this sequence
                     let sequence_local_time = (current_time_ms - ts.start_time_ms) as f32 / 1000.0;
