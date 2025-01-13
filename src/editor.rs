@@ -730,17 +730,22 @@ impl Editor {
         }
     }
 
-    pub fn step_video_animations(&mut self, camera: &Camera) {
+    pub fn step_video_animations(&mut self, camera: &Camera, provided_current_time_s: Option<f64>) {
         if !self.video_is_playing || self.video_current_sequence_timeline.is_none() {
             return;
         }
 
         let now = std::time::Instant::now();
-        let dt = if let Some(last_time) = self.last_frame_time {
-            (now - last_time).as_secs_f32()
-        } else {
-            0.0
-        };
+        // let dt = if let Some(last_time) = self.last_frame_time {
+        //     (now - last_time).as_secs_f32()
+        // } else {
+        //     0.0
+        // };
+        // let dt = if let Some(provided_dt) = provided_dt {
+        //     provided_dt
+        // } else {
+        //     dt
+        // };
         let total_dt = if let Some(video_start_playing_time) = self.video_start_playing_time {
             (now - video_start_playing_time).as_secs_f32()
         } else {
@@ -754,7 +759,11 @@ impl Editor {
             .expect("Couldn't get current sequence timeline");
 
         // Convert total_dt from seconds to milliseconds for comparison with timeline
-        let current_time_ms = (total_dt * 1000.0) as i32;
+        let current_time_ms = if let Some(provided_current_time_s) = provided_current_time_s {
+            (provided_current_time_s * 1000.0) as i32
+        } else {
+            (total_dt * 1000.0) as i32
+        };
 
         // Get the sequences data
         let video_current_sequences_data = match self.video_current_sequences_data.as_ref() {
@@ -817,25 +826,35 @@ impl Editor {
         }
     }
 
-    pub fn step_motion_path_animations(&mut self, camera: &Camera) {
+    pub fn step_motion_path_animations(
+        &mut self,
+        camera: &Camera,
+        provided_current_time_s: Option<f64>,
+    ) {
         if !self.is_playing || self.current_sequence_data.is_none() {
             return;
         }
 
+        // TODO: disable time based dt determination for export only
         let now = std::time::Instant::now();
-        let dt = if let Some(last_time) = self.last_frame_time {
-            (now - last_time).as_secs_f32()
-        } else {
-            0.0
-        };
+        // let dt = if let Some(last_time) = self.last_frame_time {
+        //     (now - last_time).as_secs_f32()
+        // } else {
+        //     0.0
+        // };
         let total_dt = if let Some(start_playing_time) = self.start_playing_time {
             (now - start_playing_time).as_secs_f32()
         } else {
             0.0
         };
+        let total_dt = if let Some(provided_current_time_s) = provided_current_time_s {
+            provided_current_time_s
+        } else {
+            total_dt as f64
+        };
         self.last_frame_time = Some(now);
 
-        self.step_animate_sequence(total_dt, camera);
+        self.step_animate_sequence(total_dt as f32, camera);
     }
 
     /// Steps the currently selected sequence unless one is provided

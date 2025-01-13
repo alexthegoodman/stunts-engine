@@ -2,10 +2,13 @@ use crate::{
     animations::Sequence,
     camera::{Camera, CameraBinding},
     editor::{Editor, Viewport, WindowSize, WindowSizeShader},
+    timelines::{SavedTimelineStateConfig, TimelineSequence},
     vertex::Vertex,
 };
 use std::sync::{Arc, Mutex};
 use wgpu::{util::DeviceExt, RenderPipeline};
+
+use super::frame_buffer::FrameCaptureBuffer;
 
 pub struct ExportPipeline {
     pub device: Option<wgpu::Device>,
@@ -18,6 +21,7 @@ pub struct ExportPipeline {
     pub depth_view: Option<wgpu::TextureView>,
     pub window_size_bind_group: Option<wgpu::BindGroup>,
     pub export_editor: Option<Editor>,
+    pub frame_buffer: Option<FrameCaptureBuffer>,
 }
 
 impl ExportPipeline {
@@ -33,10 +37,16 @@ impl ExportPipeline {
             depth_view: None,
             window_size_bind_group: None,
             export_editor: None,
+            frame_buffer: None,
         }
     }
 
-    pub async fn initialize(&mut self, window_size: WindowSize, sequences: Vec<Sequence>) {
+    pub async fn initialize(
+        &mut self,
+        window_size: WindowSize,
+        sequences: Vec<Sequence>,
+        video_current_sequence_timeline: SavedTimelineStateConfig,
+    ) {
         let camera = Camera::new(window_size);
 
         let viewport = Arc::new(Mutex::new(Viewport::new(
@@ -83,7 +93,7 @@ impl ExportPipeline {
                     height: window_size.height as u32,
                 },
                 &camera,
-                true,
+                if i == 0 { false } else { true },
                 &device,
                 &queue,
             );
@@ -297,6 +307,20 @@ impl ExportPipeline {
 
         camera_binding.update(&queue, &camera);
 
+        let now = std::time::Instant::now();
+        export_editor.video_start_playing_time = Some(now.clone());
+
+        export_editor.video_current_sequence_timeline = Some(video_current_sequence_timeline);
+        export_editor.video_current_sequences_data = Some(sequences);
+
+        export_editor.video_is_playing = true;
+
+        // also set motion path playing
+        export_editor.start_playing_time = Some(now);
+        export_editor.is_playing = true;
+
+        println!("Video exporting!");
+
         self.device = Some(device);
         self.queue = Some(queue);
         self.camera = Some(camera);
@@ -309,7 +333,7 @@ impl ExportPipeline {
         self.export_editor = Some(export_editor);
     }
 
-    pub fn render_frame(&mut self) {
+    pub fn render_frame(&mut self, current_time: f64) {
         let mut editor = self.export_editor.as_mut().expect("Couldn't get editor");
         let device = self.device.as_ref().expect("Couldn't get device");
         let queue = self.queue.as_ref().expect("Couldn't get queue");
@@ -331,6 +355,11 @@ impl ExportPipeline {
             .as_ref()
             .expect("Couldn't get window size bind group");
         let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let texture = self.texture.as_ref().expect("Couldn't get texture");
+        let frame_buffer = self
+            .frame_buffer
+            .as_ref()
+            .expect("Couldn't get frame buffer");
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
@@ -361,8 +390,8 @@ impl ExportPipeline {
             render_pass.set_pipeline(&render_pipeline);
 
             // actual rendering commands
-            editor.step_video_animations(&camera);
-            editor.step_motion_path_animations(&camera);
+            editor.step_video_animations(&camera, Some(current_time));
+            editor.step_motion_path_animations(&camera, Some(current_time));
 
             render_pass.set_bind_group(0, &camera_binding.bind_group, &[]);
             render_pass.set_bind_group(2, window_size_bind_group, &[]);
@@ -426,6 +455,8 @@ impl ExportPipeline {
                     render_pass.draw_indexed(0..st_image.indices.len() as u32, 0, 0..1);
                 }
             }
+
+            frame_buffer.capture_frame(device, queue, texture, &mut encoder);
         }
     }
 }
