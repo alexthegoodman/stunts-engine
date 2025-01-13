@@ -24,6 +24,7 @@ windows = { version = "0.58", features = ["implement", "Win32_Media_MediaFoundat
 windows-core = "0.58.0"
 image = "0.25.5"
 common-motion-2d-reg = { path = "D:/projects/common/common-motion-2d-reg", version = "0.1.0" }
+tokio = { version = "1.39.0", features = ["full"] }
 
 [lib]
 name = "stunts_engine"

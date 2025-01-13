@@ -1,9 +1,20 @@
-use crate::{animations::Sequence, editor::WindowSize, timelines::SavedTimelineStateConfig};
+use std::sync::Arc;
+
+use tokio::sync::mpsc::{self, UnboundedSender};
 
 use super::{encode::VideoEncoder, frame_buffer::FrameCaptureBuffer, pipeline::ExportPipeline};
+use crate::{animations::Sequence, editor::WindowSize, timelines::SavedTimelineStateConfig};
 
-struct Exporter {
-    video_encoder: VideoEncoder,
+// Progress message sent from export thread to UI
+#[derive(Debug, Clone)]
+pub enum ExportProgress {
+    Progress(f32),
+    Complete,
+    Error(String),
+}
+
+pub struct Exporter {
+    pub video_encoder: VideoEncoder,
 }
 
 impl Exporter {
@@ -20,7 +31,8 @@ impl Exporter {
         video_width: u32,
         video_height: u32,
         total_duration_s: f64,
-    ) {
+        progress_tx: UnboundedSender<ExportProgress>,
+    ) -> Result<Arc<u32>, String> {
         let mut wgpu_pipeline = ExportPipeline::new();
         wgpu_pipeline
             .initialize(window_size, sequences, saved_timeline_state_config)
@@ -63,15 +75,14 @@ impl Exporter {
                 .write_frame(&frame_bytes)
                 .expect("Couldn't write frame");
 
-            // Optional: Add progress reporting
+            // Send progress updates every 60 frames
             if frame_index % 60 == 0 {
-                println!(
-                    "Export progress: {:.1}% ({}/{} frames)",
-                    (frame_index as f32 / total_frames as f32) * 100.0,
-                    frame_index,
-                    total_frames
-                );
+                let progress = (frame_index as f32 / total_frames as f32) * 100.0;
+                println!("export progress {:?}", progress);
+                progress_tx.send(ExportProgress::Progress(progress)).ok();
             }
         }
+
+        Ok(Arc::new((total_frames)))
     }
 }
