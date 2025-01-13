@@ -19,6 +19,7 @@ pub struct Exporter {
 
 impl Exporter {
     pub fn new(output_path: &str) -> Self {
+        println!("Preparing video encoder...");
         let video_encoder = VideoEncoder::new(output_path).expect("Couldn't get video encoder");
         Exporter { video_encoder }
     }
@@ -33,11 +34,13 @@ impl Exporter {
         total_duration_s: f64,
         progress_tx: UnboundedSender<ExportProgress>,
     ) -> Result<Arc<u32>, String> {
+        println!("Preparing wgpu pipeline...");
         let mut wgpu_pipeline = ExportPipeline::new();
         wgpu_pipeline
             .initialize(window_size, sequences, saved_timeline_state_config)
             .await;
 
+        println!("Preparing frame buffer...");
         let frame_buffer = FrameCaptureBuffer::new(
             &wgpu_pipeline.device.as_ref().expect("Couldn't get device"),
             video_width,
@@ -51,6 +54,11 @@ impl Exporter {
         //     .map(|seq| seq.duration)
         //     .sum::<f64>();
         let total_frames = (total_duration_s * FPS).ceil() as u32;
+
+        println!(
+            "total_frames {:?}, total_duration_s: {:?}",
+            total_frames, total_duration_s
+        );
 
         // Frame loop
         for frame_index in 0..total_frames {
@@ -82,6 +90,8 @@ impl Exporter {
                 progress_tx.send(ExportProgress::Progress(progress)).ok();
             }
         }
+
+        println!("Export finished!");
 
         Ok(Arc::new((total_frames)))
     }

@@ -500,20 +500,22 @@ impl Editor {
         let mut prompt = "".to_string();
         let mut total = 0;
         for (i, polygon) in self.polygons.iter().enumerate() {
-            prompt.push_str(&total.to_string());
-            prompt.push_str(", ");
-            prompt.push_str("5");
-            prompt.push_str(", ");
-            prompt.push_str(&polygon.dimensions.0.to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&polygon.dimensions.1.to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&(polygon.transform.position.x - 600.0).to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&(polygon.transform.position.y - 50.0).to_string());
-            prompt.push_str(", ");
-            prompt.push_str("\n");
-            total = total + 1;
+            if !polygon.hidden {
+                prompt.push_str(&total.to_string());
+                prompt.push_str(", ");
+                prompt.push_str("5");
+                prompt.push_str(", ");
+                prompt.push_str(&polygon.dimensions.0.to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&polygon.dimensions.1.to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&(polygon.transform.position.x - 600.0).to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&(polygon.transform.position.y - 50.0).to_string());
+                prompt.push_str(", ");
+                prompt.push_str("\n");
+                total = total + 1;
+            }
 
             if (total > 6) {
                 break;
@@ -521,41 +523,44 @@ impl Editor {
         }
 
         for (i, text) in self.text_items.iter().enumerate() {
-            prompt.push_str(&total.to_string());
-            prompt.push_str(", ");
-            prompt.push_str("5");
-            prompt.push_str(", ");
-            prompt.push_str(&text.dimensions.0.to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&text.dimensions.1.to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&(text.transform.position.x - 600.0).to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&(text.transform.position.y - 50.0).to_string());
-            prompt.push_str(", ");
-            prompt.push_str("\n");
-            total = total + 1;
-
+            if !text.hidden {
+                prompt.push_str(&total.to_string());
+                prompt.push_str(", ");
+                prompt.push_str("5");
+                prompt.push_str(", ");
+                prompt.push_str(&text.dimensions.0.to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&text.dimensions.1.to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&(text.transform.position.x - 600.0).to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&(text.transform.position.y - 50.0).to_string());
+                prompt.push_str(", ");
+                prompt.push_str("\n");
+                total = total + 1;
+            }
             if (total > 6) {
                 break;
             }
         }
 
         for (i, image) in self.image_items.iter().enumerate() {
-            prompt.push_str(&total.to_string());
-            prompt.push_str(", ");
-            prompt.push_str("5");
-            prompt.push_str(", ");
-            prompt.push_str(&image.dimensions.0.to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&image.dimensions.1.to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&(image.transform.position.x - 600.0).to_string());
-            prompt.push_str(", ");
-            prompt.push_str(&(image.transform.position.y - 50.0).to_string());
-            prompt.push_str(", ");
-            prompt.push_str("\n");
-            total = total + 1;
+            if !image.hidden {
+                prompt.push_str(&total.to_string());
+                prompt.push_str(", ");
+                prompt.push_str("5");
+                prompt.push_str(", ");
+                prompt.push_str(&image.dimensions.0.to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&image.dimensions.1.to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&(image.transform.position.x - 600.0).to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&(image.transform.position.y - 50.0).to_string());
+                prompt.push_str(", ");
+                prompt.push_str("\n");
+                total = total + 1;
+            }
 
             if (total > 6) {
                 break;
@@ -698,16 +703,23 @@ impl Editor {
 
     // Helper function to get item ID based on object index
     fn get_item_id(&self, object_idx: usize) -> Option<String> {
-        let polygon_count = self.polygons.len();
-        let text_count = self.text_items.len();
+        // let polygon_count = self.polygons.len();
+        // let text_count = self.text_items.len();
+        let visible_polygons: Vec<&Polygon> = self.polygons.iter().filter(|p| !p.hidden).collect();
+        let visible_texts: Vec<&TextRenderer> =
+            self.text_items.iter().filter(|t| !t.hidden).collect();
+        let visible_images: Vec<&StImage> = self.image_items.iter().filter(|i| !i.hidden).collect();
+
+        let polygon_count = self.polygons.iter().filter(|p| !p.hidden).count();
+        let text_count = self.text_items.iter().filter(|t| !t.hidden).count();
 
         match object_idx {
-            idx if idx < polygon_count => Some(self.polygons[idx].id.clone().to_string()),
+            idx if idx < polygon_count => Some(visible_polygons[idx].id.clone().to_string()),
             idx if idx < polygon_count + text_count => {
-                Some(self.text_items[idx - polygon_count].id.clone().to_string())
+                Some(visible_texts[idx - polygon_count].id.clone().to_string())
             }
-            idx if idx < polygon_count + text_count + self.image_items.len() => Some(
-                self.image_items[idx - (polygon_count + text_count)]
+            idx if idx < polygon_count + text_count + visible_images.len() => Some(
+                visible_images[idx - (polygon_count + text_count)]
                     .id
                     .clone(),
             ),
@@ -717,15 +729,17 @@ impl Editor {
 
     // Helper function to get object type based on object index
     fn get_object_type(&self, object_idx: usize) -> Option<ObjectType> {
-        let polygon_count = self.polygons.len();
-        let text_count = self.text_items.len();
+        // let polygon_count = self.polygons.len();
+        // let text_count = self.text_items.len();
+
+        let polygon_count = self.polygons.iter().filter(|p| !p.hidden).count();
+        let text_count = self.text_items.iter().filter(|t| !t.hidden).count();
+        let image_count = self.image_items.iter().filter(|i| !i.hidden).count();
 
         match object_idx {
             idx if idx < polygon_count => Some(ObjectType::Polygon),
             idx if idx < polygon_count + text_count => Some(ObjectType::TextItem),
-            idx if idx < polygon_count + text_count + self.image_items.len() => {
-                Some(ObjectType::ImageItem)
-            }
+            idx if idx < polygon_count + text_count + image_count => Some(ObjectType::ImageItem),
             _ => None,
         }
     }
