@@ -317,7 +317,7 @@ pub fn draw_dot(
     let y = point.y;
 
     let scale_factor = camera.zoom;
-    let radius = 10.0 * scale_factor; // Just use a single radius for a solid dot
+    let radius = 5.0 * scale_factor; // Just use a single radius for a solid dot
 
     let segments = 32 as u32; // Number of segments to approximate the circle
     let dot_z = get_z_layer(2.0);

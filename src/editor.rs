@@ -1060,7 +1060,12 @@ impl Editor {
 
     /// Create motion path visualization for a polygon
     /// // TODO: make for curves? already creates segments for the purpose
-    pub fn create_motion_path_visualization(&mut self, sequence: &Sequence, polygon_id: &str) {
+    pub fn create_motion_path_visualization(
+        &mut self,
+        sequence: &Sequence,
+        polygon_id: &str,
+        color_index: u32,
+    ) {
         let animation_data = sequence
             .polygon_motion_paths
             .iter()
@@ -1078,13 +1083,15 @@ impl Editor {
         let mut keyframes = position_property.keyframes.clone();
         keyframes.sort_by_key(|k| k.time);
 
-        let mut rng = rand::thread_rng();
+        // let mut rng = rand::thread_rng();
 
-        let random_number_r = rng.gen_range(1..=250);
-        let random_number_g = rng.gen_range(1..=250);
-        let random_number_b = rng.gen_range(1..=250);
+        // let random_number_r = rng.gen_range(1..=250);
+        // let random_number_g = rng.gen_range(1..=250);
+        // let random_number_b = rng.gen_range(1..=250);
 
-        let path_fill = rgb_to_wgpu(random_number_r, random_number_g, random_number_b, 1.0);
+        let (fill_r, fill_g, fill_b) = get_full_color(color_index);
+
+        let path_fill = rgb_to_wgpu(fill_r as u8, fill_g as u8, fill_b as u8, 1.0);
 
         let polygon_id = Uuid::from_str(polygon_id).expect("Couldn't convert string to uuid");
 
@@ -1187,16 +1194,20 @@ impl Editor {
             .retain(|p| p.name != "motion_path_segment" && p.name != "motion_path_handle");
 
         // Recreate motion paths for all polygons
+        let mut color_index = 1;
         for polygon_config in &sequence.active_polygons {
-            self.create_motion_path_visualization(sequence, &polygon_config.id);
+            self.create_motion_path_visualization(sequence, &polygon_config.id, color_index);
+            color_index = color_index + 1;
         }
         // Recreate motion paths for all texts
         for text_config in &sequence.active_text_items {
-            self.create_motion_path_visualization(sequence, &text_config.id);
+            self.create_motion_path_visualization(sequence, &text_config.id, color_index);
+            color_index = color_index + 1;
         }
         // Recreate motion paths for all images
         for image_config in &sequence.active_image_items {
-            self.create_motion_path_visualization(sequence, &image_config.id);
+            self.create_motion_path_visualization(sequence, &image_config.id, color_index);
+            color_index = color_index + 1;
         }
     }
 
@@ -2487,5 +2498,30 @@ pub fn visualize_ray_intersection(
         origin,
         ndc: Point { x: ndc.0, y: ndc.1 },
         top_left,
+    }
+}
+
+fn get_color(color_index: u32) -> u32 {
+    // Normalize the color_index to be within 0-29 range
+    let normalized_index = color_index % 30;
+
+    // Calculate which shade we're on (0-9)
+    let shade_index = normalized_index / 3;
+
+    // Calculate the shade intensity (0-255)
+    // Using a range of 25-255 to avoid completely black colors
+    55 + (shade_index * 20) // (255 - 25) / 10 ≈ 23 steps
+}
+
+fn get_full_color(index: u32) -> (u32, u32, u32) {
+    // Normalize the index
+    let normalized_index = index % 30;
+
+    // Determine which color gets the intensity (0=red, 1=green, 2=blue)
+    match normalized_index % 3 {
+        0 => (get_color(index), 10, 10), // Red
+        1 => (10, get_color(index), 10), // Green
+        2 => (10, 10, get_color(index)), // Blue
+        _ => unreachable!(),
     }
 }
