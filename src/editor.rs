@@ -2220,6 +2220,23 @@ impl Editor {
     fn is_close(&self, a: f32, b: f32, threshold: f32) -> bool {
         (a - b).abs() < threshold
     }
+
+    pub fn hide_all_objects(&mut self) {
+        // Remove objects
+        self.polygons.iter_mut().for_each(|p| {
+            p.hidden = true;
+        });
+        self.text_items.iter_mut().for_each(|t| {
+            t.hidden = true;
+        });
+        self.image_items.iter_mut().for_each(|i| {
+            i.hidden = true;
+        });
+
+        // Remove existing motion path segments
+        self.static_polygons
+            .retain(|p| p.name != "motion_path_segment" && p.name != "motion_path_handle");
+    }
 }
 
 /// Creates a path segment using a rotated square
