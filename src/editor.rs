@@ -227,6 +227,7 @@ pub struct Editor {
     pub dragging_path_handle: Option<Uuid>,
     pub dragging_path_object: Option<Uuid>,
     pub dragging_path_keyframe: Option<Uuid>,
+    pub cursor_dot: Option<RingDot>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
@@ -340,6 +341,7 @@ impl Editor {
             on_handle_mouse_up: None,
             dragging_path_object: None,
             dragging_path_keyframe: None,
+            cursor_dot: None,
         }
     }
 
@@ -1916,6 +1918,13 @@ impl Editor {
 
         // self.update_cursor();
 
+        if let Some(dot) = &mut self.cursor_dot {
+            // let ndc_position = point_to_ndc(self.last_top_left, &window_size);
+            // println!("move dot {:?}", self.last_top_left);
+            dot.transform
+                .update_position([self.last_top_left.x, self.last_top_left.y], window_size);
+        }
+
         // handle motion path handles
         if let Some(poly_id) = self.dragging_path_handle {
             if let Some(start) = self.drag_start {
@@ -2384,6 +2393,7 @@ use crate::animations::{
     AnimationData, AnimationProperty, EasingType, KeyframeValue, ObjectType, Sequence, UIKeyframe,
 };
 use crate::camera::{Camera, CameraBinding};
+use crate::dot::RingDot;
 use crate::fonts::FontManager;
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};

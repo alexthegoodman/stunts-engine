@@ -1,10 +1,11 @@
-use cgmath::Vector2;
+use cgmath::SquareMatrix;
+use cgmath::{Matrix4, Vector2};
 use wgpu::util::DeviceExt;
 
 use crate::{
     camera::{self, Camera},
-    editor::size_to_ndc,
-    editor::{Point, WindowSize},
+    editor::{size_to_ndc, Point, WindowSize},
+    transform::{matrix4_to_raw_array, Transform},
     vertex::{get_z_layer, Vertex},
 };
 
@@ -96,7 +97,215 @@ pub fn distance(a: Point, b: Point) -> f32 {
     (dx * dx + dy * dy).sqrt()
 }
 
+pub struct RingDot {
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub transform: Transform,
+    pub bind_group: wgpu::BindGroup,
+}
+
+impl RingDot {
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        window_size: &WindowSize,
+        point: Point,
+        color: [f32; 4],
+        camera: &Camera,
+    ) -> Self {
+        let point = Point {
+            x: 600.0 + point.x,
+            y: 50.0 + point.y,
+        };
+
+        let (vertices, indices, vertex_buffer, index_buffer) =
+            draw_dot(device, window_size, Point { x: 0.0, y: 0.0 }, color, camera);
+
+        // Create a 1x1 white texture as a default
+        let texture_size = wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        };
+
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Default White Texture"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        // Create white pixel data
+        let white_pixel: [u8; 4] = [255, 255, 255, 255];
+        // let blue_pixel: [u8; 4] = [10, 20, 255, 255]; // testing
+
+        // Copy white pixel data to texture
+        queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &white_pixel,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: None,
+            },
+            texture_size,
+        );
+
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create default sampler
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let empty_buffer = Matrix4::<f32>::identity();
+        let raw_matrix = matrix4_to_raw_array(&empty_buffer);
+
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("RingDot Uniform Buffer"),
+            contents: bytemuck::cast_slice(&raw_matrix),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Now create your bind group with these defaults
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: None,
+        });
+
+        let mut transform = Transform::new(
+            Vector2::new(point.x, point.y),
+            0.0,
+            Vector2::new(1.0, 1.0),
+            uniform_buffer,
+            window_size,
+        );
+
+        transform.layer = -2.0;
+
+        return RingDot {
+            vertices,
+            indices,
+            vertex_buffer,
+            index_buffer,
+            transform,
+            bind_group,
+        };
+    }
+}
+
 // draws a ring currently
+// pub fn draw_ring(
+//     device: &wgpu::Device,
+//     window_size: &WindowSize,
+//     point: Point,
+//     color: [f32; 4],
+//     camera: &Camera,
+// ) -> (Vec<Vertex>, Vec<u32>, wgpu::Buffer, wgpu::Buffer) {
+//     let x = point.x;
+//     let y = point.y;
+
+//     let scale_factor = camera.zoom;
+//     let outer_radius = 0.01 * scale_factor;
+//     let inner_radius = outer_radius * 0.7;
+
+//     // println!("outer_radius {:?}", outer_radius);
+
+//     let segments = 32 as u32; // Number of segments to approximate the circle
+
+//     let dot_z = get_z_layer(2.0);
+
+//     let mut vertices = Vec::with_capacity((segments * 2) as usize);
+//     let mut indices: Vec<u32> = Vec::with_capacity((segments * 6) as usize);
+
+//     // use indices to fill space between inner and outer vertices
+//     for i in 0..segments {
+//         let i = i as u32;
+//         let angle = 2.0 * std::f32::consts::PI * i as f32 / segments as f32;
+//         let (sin, cos) = angle.sin_cos();
+
+//         // Outer vertex
+//         vertices.push(Vertex::new(
+//             x + outer_radius * cos,
+//             y + outer_radius * sin,
+//             dot_z,
+//             color,
+//         ));
+
+//         // Inner vertex
+//         vertices.push(Vertex::new(
+//             x + inner_radius * cos,
+//             y + inner_radius * sin,
+//             dot_z,
+//             color,
+//         ));
+
+//         let base = i * 2;
+//         let next_base = ((i + 1) % segments) * 2;
+
+//         // Two triangles to form a quad
+//         indices.extend_from_slice(&[
+//             base,
+//             base + 1,
+//             next_base + 1,
+//             base,
+//             next_base + 1,
+//             next_base,
+//         ]);
+//     }
+
+//     // println!("dot vertices {:?}", vertices);
+
+//     // Create a buffer for the vertices
+//     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+//         label: Some("Ring Dot Vertex Buffer"),
+//         contents: bytemuck::cast_slice(&vertices),
+//         usage: wgpu::BufferUsages::VERTEX,
+//     });
+
+//     // Create a buffer for the indices
+//     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+//         label: Some("Ring Dot Index Buffer"),
+//         contents: bytemuck::cast_slice(&indices),
+//         usage: wgpu::BufferUsages::INDEX,
+//     });
+
+//     (vertices, indices, vertex_buffer, index_buffer)
+// }
+
+// draws actual dot
 pub fn draw_dot(
     device: &wgpu::Device,
     window_size: &WindowSize,
@@ -108,66 +317,49 @@ pub fn draw_dot(
     let y = point.y;
 
     let scale_factor = camera.zoom;
-    let outer_radius = 0.01 * scale_factor;
-    let inner_radius = outer_radius * 0.7;
-
-    // println!("outer_radius {:?}", outer_radius);
+    let radius = 10.0 * scale_factor; // Just use a single radius for a solid dot
 
     let segments = 32 as u32; // Number of segments to approximate the circle
+    let dot_z = get_z_layer(2.0);
 
-    let dot_z = get_z_layer(1.0);
+    let mut vertices = Vec::with_capacity((segments + 1) as usize); // +1 for center vertex
+    let mut indices: Vec<u32> = Vec::with_capacity((segments * 3) as usize); // 3 vertices per triangle
 
-    let mut vertices = Vec::with_capacity((segments * 2) as usize);
-    let mut indices: Vec<u32> = Vec::with_capacity((segments * 6) as usize);
+    // Add center vertex
+    vertices.push(Vertex::new(x, y, dot_z, color));
 
-    // use indices to fill space between inner and outer vertices
+    // Create outer vertices
     for i in 0..segments {
-        let i = i as u32;
         let angle = 2.0 * std::f32::consts::PI * i as f32 / segments as f32;
         let (sin, cos) = angle.sin_cos();
 
-        // Outer vertex
         vertices.push(Vertex::new(
-            x + outer_radius * cos,
-            y + outer_radius * sin,
+            x + radius * cos,
+            y + radius * sin,
             dot_z,
             color,
         ));
 
-        // Inner vertex
-        vertices.push(Vertex::new(
-            x + inner_radius * cos,
-            y + inner_radius * sin,
-            dot_z,
-            color,
-        ));
+        // Create triangles from center to outer edge
+        let current_vertex = i + 1; // +1 because vertex 0 is the center
+        let next_vertex = (i + 1) % segments + 1;
 
-        let base = i * 2;
-        let next_base = ((i + 1) % segments) * 2;
-
-        // Two triangles to form a quad
         indices.extend_from_slice(&[
-            base,
-            base + 1,
-            next_base + 1,
-            base,
-            next_base + 1,
-            next_base,
+            0, // Center vertex
+            current_vertex,
+            next_vertex,
         ]);
     }
 
-    // println!("dot vertices {:?}", vertices);
-
-    // Create a buffer for the vertices
+    // Create buffers
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Ring Dot Vertex Buffer"),
+        label: Some("Dot Vertex Buffer"),
         contents: bytemuck::cast_slice(&vertices),
         usage: wgpu::BufferUsages::VERTEX,
     });
 
-    // Create a buffer for the indices
     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Ring Dot Index Buffer"),
+        label: Some("Dot Index Buffer"),
         contents: bytemuck::cast_slice(&indices),
         usage: wgpu::BufferUsages::INDEX,
     });
