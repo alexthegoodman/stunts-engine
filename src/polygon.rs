@@ -275,6 +275,10 @@ fn create_rounded_polygon_path(
     // Scale border radius to match dimensions
     let scaled_radius = border_radius / dimensions.0.min(dimensions.1);
 
+    // Calculate half dimensions for centering
+    let half_width = dimensions.0 / 2.0;
+    let half_height = dimensions.1 / 2.0;
+
     for i in 0..n {
         let p0 = normalized_points[(i + n - 1) % n];
         let p1 = normalized_points[i];
@@ -291,7 +295,13 @@ fn create_rounded_polygon_path(
         let offset1 = Vector::new(v1.x / len1 * radius, v1.y / len1 * radius);
         let offset2 = Vector::new(v2.x / len2 * radius, v2.y / len2 * radius);
 
-        let p1_scaled = LyonPoint::new(p1.x * dimensions.0, p1.y * dimensions.1);
+        // let p1_scaled = LyonPoint::new(p1.x * dimensions.0, p1.y * dimensions.1);
+
+        // Scale and center the point
+        let p1_scaled = LyonPoint::new(
+            (p1.x * dimensions.0) - half_width,
+            (p1.y * dimensions.1) - half_height,
+        );
 
         let corner_start = point(
             p1_scaled.x - offset1.x * dimensions.0,
@@ -397,9 +407,10 @@ impl Polygon {
     }
 
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
+        // update for centering
         let untranslated = Point {
-            x: world_point.x - (self.transform.position.x),
-            y: world_point.y - self.transform.position.y,
+            x: (world_point.x - self.transform.position.x) + (self.dimensions.0 / 2.0),
+            y: (world_point.y - self.transform.position.y) + (self.dimensions.1 / 2.0),
         };
 
         let local_point = Point {

@@ -208,7 +208,7 @@ pub type OnMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence,
     + Send
     + Sync;
 
-pub type OnHandleMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence, Vec<UIKeyframe>) + Send>>
+pub type OnHandleMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Uuid, Point) -> (Sequence, Vec<UIKeyframe>) + Send>>
     + Send
     + Sync;
 
@@ -1057,6 +1057,7 @@ impl Editor {
     }
 
     /// Create motion path visualization for a polygon
+    /// // TODO: make for curves? already creates segments for the purpose
     pub fn create_motion_path_visualization(&mut self, sequence: &Sequence, polygon_id: &str) {
         let animation_data = sequence
             .polygon_motion_paths
@@ -2023,6 +2024,7 @@ impl Editor {
                 let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
                 let (selected_sequence_data, selected_keyframes) = on_up(
                     handle_keyframe_id,
+                    handle_object_id,
                     Point {
                         x: self.last_top_left.x - 600.0,
                         y: self.last_top_left.y - 50.0,
@@ -2042,6 +2044,7 @@ impl Editor {
         self.drag_start = None;
         self.dragging_path_handle = None;
         self.dragging_path_object = None;
+        self.dragging_path_keyframe = None;
 
         // self.dragging_edge = None;
         // self.guide_lines.clear();
@@ -2285,7 +2288,7 @@ fn create_path_handle(
         (size, size), // width = length of segment, height = thickness
         end,
         0.0,
-        0.0,
+        15.0,
         // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
         fill,
         Stroke {
