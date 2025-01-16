@@ -37,7 +37,13 @@ impl Exporter {
         println!("Preparing wgpu pipeline...");
         let mut wgpu_pipeline = ExportPipeline::new();
         wgpu_pipeline
-            .initialize(window_size, sequences, saved_timeline_state_config)
+            .initialize(
+                window_size,
+                sequences,
+                saved_timeline_state_config,
+                video_width,
+                video_height,
+            )
             .await;
 
         println!("Preparing frame buffer...");

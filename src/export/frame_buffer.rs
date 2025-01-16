@@ -20,7 +20,9 @@ impl FrameCaptureBuffer {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         };
 
@@ -50,13 +52,9 @@ impl FrameCaptureBuffer {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        // render_texture: &wgpu::TextureView,
-        // surface_texture: &wgpu::SurfaceTexture,
         render_texture: &wgpu::Texture,
         encoder: &mut CommandEncoder,
-    )
-    //-> wgpu::CommandBuffer
-    {
+    ) {
         // Copy render texture to capture texture
         encoder.copy_texture_to_texture(
             render_texture.as_image_copy(), // as_image_copy() doesn't exist for TextureView
@@ -89,8 +87,6 @@ impl FrameCaptureBuffer {
                 depth_or_array_layers: 1,
             },
         );
-
-        // encoder.finish()
     }
 
     pub async fn get_frame_data(&self, device: &wgpu::Device) -> Vec<u8> {

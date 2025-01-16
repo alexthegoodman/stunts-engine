@@ -12,6 +12,7 @@ use common_motion_2d_reg::Wgpu;
 use floem_renderer::gpu_resources::{self, GpuResources};
 use floem_winit::keyboard::ModifiersState;
 use floem_winit::window::Window;
+use rand::Rng;
 use std::f32::consts::PI;
 use uuid::Uuid;
 use winit::window::CursorIcon;
@@ -1062,6 +1063,14 @@ impl Editor {
         let mut keyframes = position_property.keyframes.clone();
         keyframes.sort_by_key(|k| k.time);
 
+        let mut rng = rand::thread_rng();
+
+        let random_number_r = rng.gen_range(1..=250);
+        let random_number_g = rng.gen_range(1..=250);
+        let random_number_b = rng.gen_range(1..=250);
+
+        let path_fill = rgb_to_wgpu(random_number_r, random_number_g, random_number_b, 1.0);
+
         // Create path segments between consecutive keyframes
         for window in keyframes.windows(2) {
             let start_kf = &window[0];
@@ -1115,6 +1124,7 @@ impl Editor {
                         },
                         2.0, // thickness of the path
                         sequence.id.clone(),
+                        path_fill,
                     );
 
                     self.static_polygons.push(segment);
@@ -1672,6 +1682,10 @@ impl Editor {
 
         // Check if we're clicking on a polygon to drag
         for (poly_index, polygon) in self.polygons.iter_mut().enumerate() {
+            if polygon.hidden {
+                continue;
+            }
+
             if polygon.contains_point(&self.last_top_left, &camera) {
                 self.dragging_polygon = Some(polygon.id);
                 self.drag_start = Some(self.last_top_left);
@@ -1709,6 +1723,10 @@ impl Editor {
 
         // Check if we're clicking on a text item to drag
         for (text_index, text_item) in self.text_items.iter_mut().enumerate() {
+            if text_item.hidden {
+                continue;
+            }
+
             if text_item.contains_point(&self.last_top_left, &camera) {
                 self.dragging_text = Some(text_item.id);
                 self.drag_start = Some(self.last_top_left);
@@ -1747,6 +1765,10 @@ impl Editor {
 
         // Check if we're clicking on a image item to drag
         for (image_index, image_item) in self.image_items.iter_mut().enumerate() {
+            if image_item.hidden {
+                continue;
+            }
+
             if image_item.contains_point(&self.last_top_left, &camera) {
                 self.dragging_image =
                     Some(Uuid::from_str(&image_item.id).expect("Couldn't convert to uuid"));
@@ -2040,6 +2062,7 @@ fn create_path_segment(
     end: Point,
     thickness: f32,
     selected_sequence_id: String,
+    fill: [f32; 4],
 ) -> Polygon {
     // Calculate rotation angle from start to end point
     let dx = end.x - start.x;
@@ -2072,7 +2095,8 @@ fn create_path_segment(
         position,
         rotation,
         0.0,
-        [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
+        // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
+        fill,
         Stroke {
             thickness: 0.0,
             fill: rgb_to_wgpu(0, 0, 0, 1.0),

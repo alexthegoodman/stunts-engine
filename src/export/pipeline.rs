@@ -46,12 +46,23 @@ impl ExportPipeline {
         window_size: WindowSize,
         sequences: Vec<Sequence>,
         video_current_sequence_timeline: SavedTimelineStateConfig,
+        video_width: u32,
+        video_height: u32,
     ) {
-        let camera = Camera::new(window_size);
+        let camera = Camera::new(
+            //window_size
+            WindowSize {
+                width: video_width,
+                height: video_height,
+            },
+        );
 
         let viewport = Arc::new(Mutex::new(Viewport::new(
-            window_size.width as f32,
-            window_size.height as f32,
+            // swap for video dimensions?
+            // window_size.width as f32,
+            // window_size.height as f32,
+            video_width as f32,
+            video_height as f32,
         )));
 
         // create a dedicated editor so it can be used in the async thread
@@ -84,29 +95,16 @@ impl ExportPipeline {
 
         let mut camera_binding = CameraBinding::new(&device);
 
-        // restore objects to the editor
-        sequences.iter().enumerate().for_each(|(i, s)| {
-            export_editor.restore_sequence_objects(
-                &s,
-                WindowSize {
-                    width: window_size.width as u32,
-                    height: window_size.height as u32,
-                },
-                &camera,
-                if i == 0 { false } else { true },
-                &device,
-                &queue,
-            );
-        });
-
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: window_size.width.clone(),
-                height: window_size.height.clone(),
+                // width: window_size.width.clone(),
+                // height: window_size.height.clone(),
+                width: video_width.clone(),
+                height: video_height.clone(),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 4, // used in a multisampled environment
+            sample_count: 1, // used in a multisampled environment
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth24Plus,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -165,8 +163,11 @@ impl ExportPipeline {
         let window_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&[WindowSizeShader {
-                width: window_size.width as f32,
-                height: window_size.height as f32,
+                // swap for vidoe dimensions?
+                // width: window_size.width as f32,
+                // height: window_size.height as f32,
+                width: video_width.clone() as f32,
+                height: video_height.clone() as f32,
             }]),
             usage: wgpu::BufferUsages::UNIFORM,
         });
@@ -223,7 +224,8 @@ impl ExportPipeline {
         //     .surface
         //     .get_capabilities(&gpu_resources.adapter);
         // let swapchain_format = swapchain_capabilities.formats[0]; // Choosing the first available format
-        let swapchain_format = wgpu::TextureFormat::Bgra8UnormSrgb; // hardcode for now - may be able to change from the floem requirement
+        // let swapchain_format = wgpu::TextureFormat::Bgra8UnormSrgb; // hardcode for now - may be able to change from the floem requirement
+        let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
 
         // Configure the render pipeline
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -285,8 +287,10 @@ impl ExportPipeline {
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: window_size.width,
-                height: window_size.height,
+                // width: window_size.width,
+                // height: window_size.height,
+                width: video_width.clone(),
+                height: video_height.clone(),
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -294,7 +298,7 @@ impl ExportPipeline {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: swapchain_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: Some("Export render texture"),
             view_formats: &[],
         });
@@ -307,6 +311,27 @@ impl ExportPipeline {
 
         camera_binding.update(&queue, &camera);
 
+        // set needed editor properties
+        export_editor.model_bind_group_layout = Some(model_bind_group_layout);
+
+        // restore objects to the editor
+        sequences.iter().enumerate().for_each(|(i, s)| {
+            export_editor.restore_sequence_objects(
+                &s,
+                WindowSize {
+                    // width: window_size.width as u32,
+                    // height: window_size.height as u32,
+                    width: video_width.clone(),
+                    height: video_height.clone(),
+                },
+                &camera,
+                if i == 0 { false } else { true },
+                &device,
+                &queue,
+            );
+        });
+
+        // begin playback
         let now = std::time::Instant::now();
         export_editor.video_start_playing_time = Some(now.clone());
 
@@ -456,7 +481,13 @@ impl ExportPipeline {
                 }
             }
 
+            // Drop the render pass before doing texture copies
+            drop(render_pass);
+
             frame_buffer.capture_frame(device, queue, texture, &mut encoder);
+
+            let command_buffer = encoder.finish();
+            queue.submit(std::iter::once(command_buffer));
         }
     }
 }
