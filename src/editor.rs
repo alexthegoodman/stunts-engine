@@ -208,6 +208,10 @@ pub type OnMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence,
     + Send
     + Sync;
 
+pub type OnHandleMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence, Vec<UIKeyframe>) + Send>>
+    + Send
+    + Sync;
+
 pub struct Editor {
     // visual
     pub selected_polygon_id: Uuid,
@@ -220,6 +224,9 @@ pub struct Editor {
     pub image_items: Vec<StImage>,
     pub dragging_image: Option<Uuid>,
     pub font_manager: FontManager,
+    pub dragging_path_handle: Option<Uuid>,
+    pub dragging_path_object: Option<Uuid>,
+    pub dragging_path_keyframe: Option<Uuid>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
@@ -233,6 +240,7 @@ pub struct Editor {
     pub model_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
     pub window_size_bind_group: Option<wgpu::BindGroup>,
     pub on_mouse_up: Option<Arc<OnMouseUp>>,
+    pub on_handle_mouse_up: Option<Arc<OnHandleMouseUp>>,
     pub current_view: String,
 
     // state
@@ -328,6 +336,10 @@ impl Editor {
             video_start_playing_time: None,
             video_current_sequence_timeline: None,
             video_current_sequences_data: None,
+            dragging_path_handle: None,
+            on_handle_mouse_up: None,
+            dragging_path_object: None,
+            dragging_path_keyframe: None,
         }
     }
 
@@ -1071,10 +1083,14 @@ impl Editor {
 
         let path_fill = rgb_to_wgpu(random_number_r, random_number_g, random_number_b, 1.0);
 
+        let polygon_id = Uuid::from_str(polygon_id).expect("Couldn't convert string to uuid");
+
         // Create path segments between consecutive keyframes
         for window in keyframes.windows(2) {
             let start_kf = &window[0];
             let end_kf = &window[1];
+
+            let end_kf_id = Uuid::from_str(&end_kf.id).expect("Couldn't convert string to uuid");
 
             if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
                 (&start_kf.value, &end_kf.value)
@@ -1094,6 +1110,30 @@ impl Editor {
                     _ => 10, // More segments for curved paths
                 };
 
+                let camera = self.camera.expect("Couldn't get camera");
+                let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
+
+                let mut handle = create_path_handle(
+                    &camera.window_size,
+                    &gpu_resources.device,
+                    &gpu_resources.queue,
+                    &self
+                        .model_bind_group_layout
+                        .as_ref()
+                        .expect("No bind group layout"),
+                    &self.camera.expect("No camera"),
+                    start_point,
+                    end_point,
+                    10.0, // width and height
+                    sequence.id.clone(),
+                    path_fill,
+                );
+
+                handle.source_polygon_id = Some(polygon_id);
+                handle.source_keyframe_id = Some(end_kf_id);
+
+                self.static_polygons.push(handle);
+
                 for i in 0..num_segments {
                     let t1 = start_kf.time + (end_kf.time - start_kf.time) * i / num_segments;
                     let t2 = start_kf.time + (end_kf.time - start_kf.time) * (i + 1) / num_segments;
@@ -1105,7 +1145,7 @@ impl Editor {
 
                     let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
 
-                    let segment = create_path_segment(
+                    let mut segment = create_path_segment(
                         &camera.window_size,
                         &gpu_resources.device,
                         &gpu_resources.queue,
@@ -1127,6 +1167,10 @@ impl Editor {
                         path_fill,
                     );
 
+                    // segment.source_polygon_id = Some(polygon_id);
+                    // segment.source_keyframe_id =
+                    // Some(end_kf_id);
+
                     self.static_polygons.push(segment);
                 }
             }
@@ -1137,7 +1181,7 @@ impl Editor {
     pub fn update_motion_paths(&mut self, sequence: &Sequence) {
         // Remove existing motion path segments
         self.static_polygons
-            .retain(|p| p.name != "motion_path_segment");
+            .retain(|p| p.name != "motion_path_segment" && p.name != "motion_path_handle");
 
         // Recreate motion paths for all polygons
         for polygon_config in &sequence.active_polygons {
@@ -1681,6 +1725,22 @@ impl Editor {
         // }
 
         // Check if we're clicking on a polygon to drag
+        for (poly_index, polygon) in self.static_polygons.iter_mut().enumerate() {
+            if polygon.name != "motion_path_handle".to_string() {
+                continue;
+            }
+
+            if polygon.contains_point(&self.last_top_left, &camera) {
+                self.dragging_path_handle = Some(polygon.id);
+                self.dragging_path_object = polygon.source_polygon_id;
+                self.dragging_path_keyframe = polygon.source_keyframe_id;
+                self.drag_start = Some(self.last_top_left);
+
+                return None; // nothing to add to undo stack
+            }
+        }
+
+        // Check if we're clicking on a polygon to drag
         for (poly_index, polygon) in self.polygons.iter_mut().enumerate() {
             if polygon.hidden {
                 continue;
@@ -1855,6 +1915,13 @@ impl Editor {
 
         // self.update_cursor();
 
+        // handle motion path handles
+        if let Some(poly_id) = self.dragging_path_handle {
+            if let Some(start) = self.drag_start {
+                self.move_static_polygon(self.last_top_left, start, poly_id, window_size, device);
+            }
+        }
+
         // handle dragging to move objects (polygons, images, text, etc)
         if let Some(poly_id) = self.dragging_polygon {
             if let Some(start) = self.drag_start {
@@ -1888,6 +1955,7 @@ impl Editor {
             },
         };
 
+        // TODO: does another bounds cause this to get stuck?
         if (self.last_screen.x < interactive_bounds.min.x
             || self.last_screen.x > interactive_bounds.max.x
             || self.last_screen.y < interactive_bounds.min.y
@@ -1896,6 +1964,7 @@ impl Editor {
             return None;
         }
 
+        // handle object on mouse up
         let object_id = if let Some(poly_id) = self.dragging_polygon {
             poly_id
         } else if let Some(image_id) = self.dragging_image {
@@ -1927,14 +1996,54 @@ impl Editor {
             }
         }
 
+        // handle handle on mouse up
+        let handle_id = if let Some(poly_id) = self.dragging_path_handle {
+            poly_id
+        } else {
+            Uuid::nil()
+        };
+
+        // the object (polygon, text image, etc) related to this motion path handle
+        let handle_object_id = if let Some(poly_id) = self.dragging_path_object {
+            poly_id
+        } else {
+            Uuid::nil()
+        };
+
+        // the keyframe associated with this motion path handle
+        let handle_keyframe_id = if let Some(kf_id) = self.dragging_path_keyframe {
+            kf_id
+        } else {
+            Uuid::nil()
+        };
+
+        if handle_keyframe_id != Uuid::nil() {
+            // need to update saved state and motion paths, handle polygon position already updated
+            if let Some(on_mouse_up_creator) = &self.on_handle_mouse_up {
+                let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+                let (selected_sequence_data, selected_keyframes) = on_up(
+                    handle_keyframe_id,
+                    Point {
+                        x: self.last_top_left.x - 600.0,
+                        y: self.last_top_left.y - 50.0,
+                    },
+                );
+
+                // always updated when handle is moved
+                self.update_motion_paths(&selected_sequence_data);
+                println!("Motion Paths updated!");
+            }
+        }
+
+        // reset variables
         self.dragging_polygon = None;
         self.dragging_text = None;
         self.dragging_image = None;
         self.drag_start = None;
+        self.dragging_path_handle = None;
+        self.dragging_path_object = None;
 
         // self.dragging_edge = None;
-        // self.is_panning = false;
-        // self.is_brushing = false;
         // self.guide_lines.clear();
         // self.update_cursor();
 
@@ -1953,12 +2062,51 @@ impl Editor {
         let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
-        // let polygon = &mut self.polygons[poly_index];
         let polygon = self
             .polygons
             .iter_mut()
             .find(|p| p.id == poly_id)
             .expect("Couldn't find polygon");
+
+        let new_position = Point {
+            x: polygon.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
+            y: polygon.transform.position.y + dy,
+        };
+
+        println!("move_polygon {:?}", new_position);
+
+        polygon.update_data_from_position(
+            window_size,
+            device,
+            self.model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get bind group layout"),
+            new_position,
+            &camera,
+        );
+
+        self.drag_start = Some(mouse_pos);
+        // self.update_guide_lines(poly_index, window_size);
+    }
+
+    pub fn move_static_polygon(
+        &mut self,
+        mouse_pos: Point,
+        start: Point,
+        poly_id: Uuid,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
+        let dx = mouse_pos.x - start.x;
+        let dy = mouse_pos.y - start.y;
+        let polygon = self
+            .static_polygons
+            .iter_mut()
+            .find(|p| p.id == poly_id)
+            .expect("Couldn't find polygon");
+
         let new_position = Point {
             x: polygon.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
             y: polygon.transform.position.y + dy,
@@ -2103,6 +2251,49 @@ fn create_path_segment(
         },
         -1.0,
         String::from("motion_path_segment"),
+        Uuid::new_v4(),
+        Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
+    )
+}
+
+/// Creates a path segment using a rotated square
+fn create_path_handle(
+    window_size: &WindowSize,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+    camera: &Camera,
+    start: Point,
+    end: Point,
+    size: f32,
+    selected_sequence_id: String,
+    fill: [f32; 4],
+) -> Polygon {
+    // Create polygon using default square points
+    Polygon::new(
+        window_size,
+        device,
+        queue,
+        model_bind_group_layout,
+        camera,
+        vec![
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 1.0, y: 0.0 },
+            Point { x: 1.0, y: 1.0 },
+            Point { x: 0.0, y: 1.0 },
+        ],
+        (size, size), // width = length of segment, height = thickness
+        end,
+        0.0,
+        0.0,
+        // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
+        fill,
+        Stroke {
+            thickness: 0.0,
+            fill: rgb_to_wgpu(0, 0, 0, 1.0),
+        },
+        -1.0,
+        String::from("motion_path_handle"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
     )

@@ -377,6 +377,8 @@ impl Polygon {
         Polygon {
             id,
             current_sequence_id,
+            source_polygon_id: None,
+            source_keyframe_id: None,
             name,
             points,
             old_points: None,
@@ -865,6 +867,8 @@ impl Polygon {
 pub struct Polygon {
     pub id: Uuid,
     pub current_sequence_id: Uuid,
+    pub source_polygon_id: Option<Uuid>,
+    pub source_keyframe_id: Option<Uuid>,
     pub name: String,
     pub points: Vec<Point>,
     pub old_points: Option<Vec<Point>>,
