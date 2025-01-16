@@ -2527,7 +2527,7 @@ fn get_color(color_index: u32) -> u32 {
 
     // Calculate the shade intensity (0-255)
     // Using a range of 25-255 to avoid completely black colors
-    55 + (shade_index * 20) // (255 - 25) / 10 ≈ 23 steps
+    155 + (shade_index * 10) // (255 - 25) / 10 ≈ 23 steps
 }
 
 fn get_full_color(index: u32) -> (u32, u32, u32) {
