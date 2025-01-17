@@ -34,6 +34,7 @@ pub struct TextRendererConfig {
     pub font_family: String,
     pub dimensions: (f32, f32),
     pub position: Point,
+    pub layer: i32,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -45,6 +46,7 @@ pub struct SavedTextRendererConfig {
     pub dimensions: (i32, i32),
     // position is determined by the keyframes, but initial position is not
     pub position: SavedPoint,
+    pub layer: i32,
 }
 
 pub struct TextRenderer {
@@ -68,6 +70,7 @@ pub struct TextRenderer {
     pub current_row_height: u32,
     pub glyph_cache: HashMap<char, AtlasGlyph>,
     pub hidden: bool,
+    pub layer: i32,
 }
 
 impl TextRenderer {
@@ -160,6 +163,16 @@ impl TextRenderer {
             label: None,
         });
 
+        let mut transform = Transform::new(
+            Vector2::new(text_config.position.x, text_config.position.y),
+            0.0,
+            Vector2::new(1.0, 1.0),
+            uniform_buffer,
+            window_size,
+        );
+
+        transform.layer = text_config.layer as f32;
+
         Self {
             id,
             current_sequence_id,
@@ -168,13 +181,7 @@ impl TextRenderer {
             text,
             font,
             font_family: text_config.font_family.clone(),
-            transform: Transform::new(
-                Vector2::new(text_config.position.x, text_config.position.y),
-                0.0,
-                Vector2::new(1.0, 1.0),
-                uniform_buffer,
-                window_size,
-            ),
+            transform,
             vertex_buffer,
             index_buffer,
             vertices: Vec::new(),
@@ -187,7 +194,13 @@ impl TextRenderer {
             current_row_height: 0,
             glyph_cache: HashMap::new(),
             hidden: false,
+            layer: text_config.layer,
         }
+    }
+
+    pub fn update_layer(&mut self, layer_index: i32) {
+        self.layer = layer_index;
+        self.transform.layer = layer_index as f32;
     }
 
     fn add_glyph_to_atlas(
@@ -418,5 +431,20 @@ impl TextRenderer {
         // println!("local_point {:?} {:?}", self.name, local_point);
 
         local_point
+    }
+
+    pub fn to_config(&self) -> TextRendererConfig {
+        TextRendererConfig {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            text: self.text.clone(),
+            font_family: self.font_family.clone(),
+            dimensions: self.dimensions,
+            position: Point {
+                x: self.transform.position.x,
+                y: self.transform.position.y,
+            },
+            layer: self.layer,
+        }
     }
 }

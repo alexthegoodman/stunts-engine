@@ -418,6 +418,7 @@ impl Editor {
                     ],
                 },
                 -2.0,
+                p.layer.clone(),
                 p.name.clone(),
                 Uuid::from_str(&p.id).expect("Couldn't convert string to uuid"),
                 Uuid::from_str(&saved_sequence.id.clone())
@@ -462,6 +463,7 @@ impl Editor {
                     font_family: t.font_family.clone(),
                     dimensions: (t.dimensions.0 as f32, t.dimensions.1 as f32),
                     position,
+                    layer: t.layer.clone(),
                 },
                 Uuid::from_str(&t.id).expect("Couldn't convert string to uuid"),
                 Uuid::from_str(&saved_sequence.id.clone())
@@ -495,6 +497,7 @@ impl Editor {
                 dimensions: i.dimensions.clone(),
                 path: i.path.clone(),
                 position,
+                layer: i.layer.clone(),
             };
 
             let mut restored_image = StImage::new(
@@ -1288,6 +1291,7 @@ impl Editor {
                 fill: rgb_to_wgpu(0, 0, 0, 1.0),
             },
             0.0,
+            polygon_config.layer,
             polygon_name,
             new_id,
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
@@ -1810,6 +1814,7 @@ impl Editor {
                             border_radius: polygon.border_radius,
                             fill: polygon.fill,
                             stroke: polygon.stroke,
+                            layer: polygon.layer,
                         },
                     );
                     self.selected_polygon_id = polygon.id;
@@ -1850,6 +1855,7 @@ impl Editor {
                                 x: text_item.transform.position.x,
                                 y: text_item.transform.position.y,
                             },
+                            layer: text_item.layer,
                             // border_radius: polygon.border_radius,
                             // fill: polygon.fill,
                             // stroke: polygon.stroke,
@@ -1895,9 +1901,9 @@ impl Editor {
                                 x: image_item.transform.position.x,
                                 y: image_item.transform.position.y,
                             },
-                            // border_radius: polygon.border_radius,
-                            // fill: polygon.fill,
-                            // stroke: polygon.stroke,
+                            layer: image_item.layer, // border_radius: polygon.border_radius,
+                                                     // fill: polygon.fill,
+                                                     // stroke: polygon.stroke,
                         },
                     );
                     self.selected_polygon_id = uuid; // TODO: separate property for each object type?
@@ -2300,6 +2306,7 @@ fn create_path_segment(
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         },
         -1.0,
+        -2,
         String::from("motion_path_segment"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
@@ -2343,6 +2350,7 @@ fn create_path_handle(
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         },
         -1.0,
+        -2,
         String::from("motion_path_handle"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),

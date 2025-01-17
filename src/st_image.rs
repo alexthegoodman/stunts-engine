@@ -24,6 +24,7 @@ pub struct StImageConfig {
     pub dimensions: (u32, u32), // overrides actual image size
     pub position: Point,
     pub path: String,
+    pub layer: i32,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -33,6 +34,7 @@ pub struct SavedStImageConfig {
     pub dimensions: (u32, u32),
     pub path: String,
     pub position: SavedPoint,
+    pub layer: i32,
 }
 
 pub struct StImage {
@@ -50,6 +52,7 @@ pub struct StImage {
     pub vertices: [Vertex; 4],
     pub indices: [u32; 6],
     pub hidden: bool,
+    pub layer: i32,
 }
 
 impl StImage {
@@ -210,7 +213,7 @@ impl StImage {
             )
         };
 
-        transform.layer = -1.0;
+        transform.layer = image_config.layer as f32;
 
         // Rest of the implementation remains the same...
         // let z = get_z_layer(1.0);
@@ -272,7 +275,13 @@ impl StImage {
             vertices,
             indices: indices.clone(),
             hidden: false,
+            layer: image_config.layer,
         }
+    }
+
+    pub fn update_layer(&mut self, layer_index: i32) {
+        self.layer = layer_index;
+        self.transform.layer = layer_index as f32;
     }
 
     pub fn update(&mut self, queue: &Queue, window_size: &WindowSize) {
@@ -336,4 +345,18 @@ impl StImage {
     //     render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
     //     render_pass.draw_indexed(0..6, 0, 0..1);
     // }
+
+    pub fn to_config(&self) -> StImageConfig {
+        StImageConfig {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            path: self.path.clone(),
+            dimensions: self.dimensions,
+            position: Point {
+                x: self.transform.position.x,
+                y: self.transform.position.y,
+            },
+            layer: self.layer,
+        }
+    }
 }

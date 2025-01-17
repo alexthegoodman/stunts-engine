@@ -79,6 +79,7 @@ pub fn get_polygon_data(
     fill: [f32; 4],
     stroke: Stroke,
     base_layer: f32,
+    transform_layer: i32,
 ) -> (
     Vec<Vertex>,
     Vec<u32>,
@@ -249,7 +250,7 @@ pub fn get_polygon_data(
         window_size,
     );
 
-    transform.layer = -2.0;
+    transform.layer = transform_layer as f32;
 
     (
         geometry.vertices,
@@ -351,6 +352,7 @@ impl Polygon {
         fill: [f32; 4],
         stroke: Stroke,
         base_layer: f32,
+        transform_layer: i32,
         name: String,
         id: Uuid,
         current_sequence_id: Uuid,
@@ -382,6 +384,7 @@ impl Polygon {
                 fill,
                 stroke,
                 base_layer,
+                transform_layer,
             );
 
         Polygon {
@@ -403,7 +406,13 @@ impl Polygon {
             index_buffer,
             bind_group,
             hidden: false,
+            layer: transform_layer,
         }
+    }
+
+    pub fn update_layer(&mut self, layer_index: i32) {
+        self.layer = layer_index;
+        self.transform.layer = layer_index as f32;
     }
 
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
@@ -500,6 +509,7 @@ impl Polygon {
                 self.fill,
                 self.stroke,
                 0.0,
+                self.layer,
             );
 
         self.dimensions = dimensions;
@@ -585,6 +595,7 @@ impl Polygon {
                 self.fill,
                 self.stroke,
                 0.0,
+                self.layer,
             );
 
         self.border_radius = border_radius;
@@ -623,6 +634,7 @@ impl Polygon {
                 self.fill,
                 stroke,
                 0.0,
+                self.layer,
             );
 
         self.stroke = stroke;
@@ -661,6 +673,7 @@ impl Polygon {
                 fill,
                 self.stroke,
                 0.0,
+                self.layer,
             );
 
         self.fill = fill;
@@ -850,6 +863,7 @@ impl Polygon {
             },
             border_radius: self.border_radius,
             stroke: self.stroke,
+            layer: self.layer,
         }
     }
 }
@@ -894,6 +908,7 @@ pub struct Polygon {
     pub index_buffer: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
     pub hidden: bool,
+    pub layer: i32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -914,6 +929,7 @@ pub struct PolygonConfig {
     pub position: Point,
     pub border_radius: f32,
     pub stroke: Stroke,
+    pub layer: i32,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -938,4 +954,5 @@ pub struct SavedPolygonConfig {
     pub position: SavedPoint,   // this will signify the 3rd and 4th keyframe in generated keyframes
     pub border_radius: i32,
     pub stroke: SavedStroke,
+    pub layer: i32,
 }
