@@ -451,8 +451,8 @@ impl Editor {
                     .as_ref()
                     .expect("Couldn't get model bind group layout"),
                 self.font_manager
-                    .get_font_by_name("Aleo")
-                    .expect("Couldn't get Aleo font"),
+                    .get_font_by_name(&t.font_family)
+                    .expect("Couldn't get font family"),
                 &window_size,
                 t.text.clone(),
                 TextRendererConfig {
