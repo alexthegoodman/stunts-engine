@@ -1722,10 +1722,10 @@ impl Editor {
             },
         };
 
-        if (self.last_screen.x < interactive_bounds.min.x
-            || self.last_screen.x > interactive_bounds.max.x
-            || self.last_screen.y < interactive_bounds.min.y
-            || self.last_screen.y > interactive_bounds.max.y)
+        if (self.global_top_left.x < interactive_bounds.min.x
+            || self.global_top_left.x > interactive_bounds.max.x
+            || self.global_top_left.y < interactive_bounds.min.y
+            || self.global_top_left.y > interactive_bounds.max.y)
         {
             return None;
         }
@@ -1912,10 +1912,10 @@ impl Editor {
             },
         };
 
-        if (x < interactive_bounds.min.x
-            || x > interactive_bounds.max.x
-            || y < interactive_bounds.min.y
-            || y > interactive_bounds.max.y)
+        if (self.global_top_left.x < interactive_bounds.min.x
+            || self.global_top_left.x > interactive_bounds.max.x
+            || self.global_top_left.y < interactive_bounds.min.y
+            || self.global_top_left.y > interactive_bounds.max.y)
         {
             return;
         }
@@ -1977,10 +1977,10 @@ impl Editor {
         };
 
         // TODO: does another bounds cause this to get stuck?
-        if (self.last_screen.x < interactive_bounds.min.x
-            || self.last_screen.x > interactive_bounds.max.x
-            || self.last_screen.y < interactive_bounds.min.y
-            || self.last_screen.y > interactive_bounds.max.y)
+        if (self.global_top_left.x < interactive_bounds.min.x
+            || self.global_top_left.x > interactive_bounds.max.x
+            || self.global_top_left.y < interactive_bounds.min.y
+            || self.global_top_left.y > interactive_bounds.max.y)
         {
             return None;
         }
