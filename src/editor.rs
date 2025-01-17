@@ -243,6 +243,7 @@ pub struct Editor {
     pub on_mouse_up: Option<Arc<OnMouseUp>>,
     pub on_handle_mouse_up: Option<Arc<OnHandleMouseUp>>,
     pub current_view: String,
+    pub interactive_bounds: BoundingBox,
 
     // state
     pub is_playing: bool,
@@ -342,6 +343,15 @@ impl Editor {
             dragging_path_object: None,
             dragging_path_keyframe: None,
             cursor_dot: None,
+            // TODO: update interactive bounds on window resize?
+            interactive_bounds: BoundingBox {
+                min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
+                max: Point {
+                    x: window_size.width as f32,
+                    // y: window_size.height as f32 - 350.0, // 350.0 for timeline space
+                    y: 550.0, // allow for 50.0 padding below and above the canvas
+                },
+            },
         }
     }
 
@@ -1714,18 +1724,10 @@ impl Editor {
         let mouse_pos = Point { x, y };
         // let world_pos = camera.screen_to_world(mouse_pos);
 
-        let interactive_bounds = BoundingBox {
-            min: Point { x: 550.0, y: 0.0 }, // account for aside width
-            max: Point {
-                x: window_size.width as f32,
-                y: window_size.height as f32,
-            },
-        };
-
-        if (self.global_top_left.x < interactive_bounds.min.x
-            || self.global_top_left.x > interactive_bounds.max.x
-            || self.global_top_left.y < interactive_bounds.min.y
-            || self.global_top_left.y > interactive_bounds.max.y)
+        if (self.global_top_left.x < self.interactive_bounds.min.x
+            || self.global_top_left.x > self.interactive_bounds.max.x
+            || self.global_top_left.y < self.interactive_bounds.min.y
+            || self.global_top_left.y > self.interactive_bounds.max.y)
         {
             return None;
         }
@@ -1904,18 +1906,10 @@ impl Editor {
 
         self.global_top_left = top_left;
 
-        let interactive_bounds = BoundingBox {
-            min: Point { x: 550.0, y: 0.0 }, // account for aside width
-            max: Point {
-                x: window_size.width as f32,
-                y: window_size.height as f32,
-            },
-        };
-
-        if (self.global_top_left.x < interactive_bounds.min.x
-            || self.global_top_left.x > interactive_bounds.max.x
-            || self.global_top_left.y < interactive_bounds.min.y
-            || self.global_top_left.y > interactive_bounds.max.y)
+        if (self.global_top_left.x < self.interactive_bounds.min.x
+            || self.global_top_left.x > self.interactive_bounds.max.x
+            || self.global_top_left.y < self.interactive_bounds.min.y
+            || self.global_top_left.y > self.interactive_bounds.max.y)
         {
             return;
         }
@@ -1968,19 +1962,11 @@ impl Editor {
 
         let camera = self.camera.expect("Couldn't get camera");
 
-        let interactive_bounds = BoundingBox {
-            min: Point { x: 550.0, y: 0.0 }, // account for aside width
-            max: Point {
-                x: camera.window_size.width as f32,
-                y: camera.window_size.height as f32,
-            },
-        };
-
         // TODO: does another bounds cause this to get stuck?
-        if (self.global_top_left.x < interactive_bounds.min.x
-            || self.global_top_left.x > interactive_bounds.max.x
-            || self.global_top_left.y < interactive_bounds.min.y
-            || self.global_top_left.y > interactive_bounds.max.y)
+        if (self.global_top_left.x < self.interactive_bounds.min.x
+            || self.global_top_left.x > self.interactive_bounds.max.x
+            || self.global_top_left.y < self.interactive_bounds.min.y
+            || self.global_top_left.y > self.interactive_bounds.max.y)
         {
             return None;
         }
