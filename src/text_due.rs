@@ -31,6 +31,7 @@ pub struct TextRendererConfig {
     pub id: Uuid,
     pub name: String,
     pub text: String,
+    pub font_family: String,
     pub dimensions: (f32, f32),
     pub position: Point,
 }
@@ -40,6 +41,7 @@ pub struct SavedTextRendererConfig {
     pub id: String,
     pub name: String,
     pub text: String,
+    pub font_family: String,
     pub dimensions: (i32, i32),
     // position is determined by the keyframes, but initial position is not
     pub position: SavedPoint,
@@ -52,6 +54,7 @@ pub struct TextRenderer {
     pub name: String,
     pub text: String,
     pub font: Font,
+    pub font_family: String,
     pub transform: Transform,
     pub bind_group: BindGroup,
     pub vertex_buffer: Buffer,
@@ -80,6 +83,7 @@ impl TextRenderer {
         current_sequence_id: Uuid,
     ) -> Self {
         // Load and initialize the font
+        // TODO: inefficient to load this font per text item
         let font = Font::from_bytes(font_data, fontdue::FontSettings::default())
             .expect("Failed to load font");
 
@@ -163,6 +167,7 @@ impl TextRenderer {
             name: "New Text Item".to_string(),
             text,
             font,
+            font_family: text_config.font_family.clone(),
             transform: Transform::new(
                 Vector2::new(text_config.position.x, text_config.position.y),
                 0.0,
@@ -261,6 +266,14 @@ impl TextRenderer {
     pub fn update_text(&mut self, device: &Device, queue: &Queue, text: String) {
         self.text = text;
         self.render_text(device, queue);
+    }
+
+    pub fn update_font_family(&mut self, font_data: &[u8]) {
+        let font = Font::from_bytes(font_data, fontdue::FontSettings::default())
+            .expect("Failed to load font");
+
+        self.font = font;
+        self.glyph_cache = HashMap::new();
     }
 
     pub fn render_text<'a>(

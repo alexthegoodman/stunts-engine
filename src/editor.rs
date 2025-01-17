@@ -459,6 +459,7 @@ impl Editor {
                     id: Uuid::from_str(&t.id).expect("Couldn't convert uuid"),
                     name: t.name.clone(),
                     text: t.text.clone(),
+                    font_family: t.font_family.clone(),
                     dimensions: (t.dimensions.0 as f32, t.dimensions.1 as f32),
                     position,
                 },
@@ -1321,7 +1322,7 @@ impl Editor {
 
         let default_font_family = self
             .font_manager
-            .get_font_by_name("Aleo")
+            .get_font_by_name(&text_config.font_family)
             .expect("Couldn't load default font family");
 
         let mut text_item = TextRenderer::new(
@@ -1702,6 +1703,28 @@ impl Editor {
         0.0
     }
 
+    pub fn update_text_font_family(&mut self, font_id: String, selected_text_id: Uuid) {
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get gpu resources");
+
+        let new_font_family = self
+            .font_manager
+            .get_font_by_name(&font_id)
+            .expect("Couldn't load default font family");
+
+        let text_item = self
+            .text_items
+            .iter_mut()
+            .find(|t| t.id == selected_text_id)
+            .expect("Couldn't find text item");
+
+        text_item.font_family = font_id.clone();
+        text_item.update_font_family(new_font_family);
+        text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
+    }
+
     // pub fn update_date_from_window_resize(
     //     &mut self,
     //     window_size: &WindowSize,
@@ -1820,6 +1843,7 @@ impl Editor {
                             id: text_item.id,
                             name: text_item.name.clone(),
                             text: text_item.text.clone(),
+                            font_family: text_item.font_family.clone(),
                             // points: polygon.points.clone(),
                             dimensions: text_item.dimensions,
                             position: Point {
