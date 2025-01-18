@@ -22,9 +22,9 @@ use crate::{
     vertex::Vertex,
 };
 
-struct AtlasGlyph {
-    uv_rect: [f32; 4], // x, y, width, height in UV coordinates
-    metrics: [f32; 4], // width, height, xmin, ymin in pixels
+pub struct AtlasGlyph {
+    pub uv_rect: [f32; 4], // x, y, width, height in UV coordinates
+    pub metrics: [f32; 4], // width, height, xmin, ymin in pixels
 }
 
 #[derive(Clone)]
@@ -33,6 +33,7 @@ pub struct TextRendererConfig {
     pub name: String,
     pub text: String,
     pub font_family: String,
+    pub font_size: i32,
     pub dimensions: (f32, f32),
     pub position: Point,
     pub layer: i32,
@@ -45,6 +46,7 @@ pub struct SavedTextRendererConfig {
     pub name: String,
     pub text: String,
     pub font_family: String,
+    pub font_size: i32,
     pub dimensions: (i32, i32),
     // position is determined by the keyframes, but initial position is not
     pub position: SavedPoint,
@@ -71,10 +73,11 @@ pub struct TextRenderer {
     pub atlas_size: (u32, u32),
     pub next_atlas_position: (u32, u32),
     pub current_row_height: u32,
-    pub glyph_cache: HashMap<char, AtlasGlyph>,
+    pub glyph_cache: HashMap<String, AtlasGlyph>,
     pub hidden: bool,
     pub layer: i32,
     pub color: [i32; 4],
+    pub font_size: i32,
 }
 
 impl TextRenderer {
@@ -202,6 +205,7 @@ impl TextRenderer {
             hidden: false,
             layer: text_config.layer,
             color: text_config.color,
+            font_size: text_config.font_size,
         }
     }
 
@@ -210,14 +214,8 @@ impl TextRenderer {
         self.transform.layer = layer_index as f32;
     }
 
-    fn add_glyph_to_atlas(
-        &mut self,
-        device: &Device,
-        queue: &Queue,
-        c: char,
-        size: f32,
-    ) -> AtlasGlyph {
-        let (metrics, bitmap) = self.font.rasterize(c, size);
+    fn add_glyph_to_atlas(&mut self, device: &Device, queue: &Queue, c: char) -> AtlasGlyph {
+        let (metrics, bitmap) = self.font.rasterize(c, self.font_size as f32);
 
         // more efficient way than this could involve shader, perhaps a mode as uniform buffer
         let mut rgba_data = Vec::with_capacity(bitmap.len() * 4);
@@ -318,14 +316,16 @@ impl TextRenderer {
 
         // First, ensure all glyphs are in the atlas
         for c in chars.clone() {
-            if !self.glyph_cache.contains_key(&c) {
-                let glyph = self.add_glyph_to_atlas(device, queue, c, 32.0);
-                self.glyph_cache.insert(c, glyph);
+            let key = c.to_string() + &self.font_size.to_string();
+            if !self.glyph_cache.contains_key(&key) {
+                let glyph = self.add_glyph_to_atlas(device, queue, c);
+                self.glyph_cache.insert(key, glyph);
             }
         }
 
         for c in chars {
-            let glyph = self.glyph_cache.get(&c).unwrap();
+            let key = c.to_string() + &self.font_size.to_string();
+            let glyph = self.glyph_cache.get(&key).unwrap();
 
             let base_vertex = vertices.len() as u32;
 
@@ -465,6 +465,7 @@ impl TextRenderer {
             },
             layer: self.layer,
             color: self.color,
+            font_size: self.font_size,
         }
     }
 }

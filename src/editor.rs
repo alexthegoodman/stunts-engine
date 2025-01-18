@@ -465,6 +465,7 @@ impl Editor {
                     position,
                     layer: t.layer.clone(),
                     color: t.color.clone(),
+                    font_size: t.font_size.clone(),
                 },
                 Uuid::from_str(&t.id).expect("Couldn't convert string to uuid"),
                 Uuid::from_str(&saved_sequence.id.clone())
@@ -1765,6 +1766,22 @@ impl Editor {
         text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
     }
 
+    pub fn update_text_size(&mut self, selected_text_id: Uuid, size: i32) {
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get gpu resources");
+
+        let text_item = self
+            .text_items
+            .iter_mut()
+            .find(|t| t.id == selected_text_id)
+            .expect("Couldn't find text item");
+
+        text_item.font_size = size;
+        text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
+    }
+
     // pub fn update_date_from_window_resize(
     //     &mut self,
     //     window_size: &WindowSize,
@@ -1892,9 +1909,10 @@ impl Editor {
                                 y: text_item.transform.position.y,
                             },
                             layer: text_item.layer,
-                            color: text_item.color, // border_radius: polygon.border_radius,
-                                                    // fill: polygon.fill,
-                                                    // stroke: polygon.stroke,
+                            color: text_item.color,
+                            font_size: text_item.font_size, // border_radius: polygon.border_radius,
+                                                            // fill: polygon.fill,
+                                                            // stroke: polygon.stroke,
                         },
                     );
                     self.selected_polygon_id = text_item.id; // TODO: separate property for each object type?
