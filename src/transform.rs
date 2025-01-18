@@ -138,3 +138,94 @@ pub fn matrix4_to_raw_array(matrix: &Matrix4<f32>) -> [[f32; 4]; 4] {
     }
     array
 }
+
+// UPCOMING: perspective illusion with side scaling (each object has 4 sides in transform)
+// use cgmath::{Matrix4, Vector2, Vector3, Rad};
+// use std::f32::consts::PI;
+
+// pub struct Transform {
+//     pub position: Vector2<f32>,
+//     pub rotation: f32,
+//     pub scale: Vector2<f32>,
+//     // Add side scales - clockwise from top
+//     pub side_scales: [f32; 4],
+//     pub uniform_buffer: wgpu::Buffer,
+//     pub layer: f32,
+// }
+
+// impl Transform {
+//     pub fn new(
+//         position: Vector2<f32>,
+//         rotation: f32,
+//         scale: Vector2<f32>,
+//         uniform_buffer: wgpu::Buffer,
+//         window_size: &WindowSize,
+//     ) -> Self {
+//         Self {
+//             position,
+//             rotation,
+//             scale,
+//             // Initialize all sides with scale 1.0
+//             side_scales: [1.0; 4],
+//             uniform_buffer,
+//             layer: 0.0,
+//         }
+//     }
+
+//     // Add method to update individual side scales
+//     pub fn update_side_scale(&mut self, side: usize, scale: f32) {
+//         if side < 4 {
+//             self.side_scales[side] = scale;
+//         }
+//     }
+
+//     pub fn update_transform(&self, window_size: &WindowSize) -> Matrix4<f32> {
+//         let x = self.position.x;
+//         let y = self.position.y;
+
+//         // Basic transformations
+//         let translation = Matrix4::from_translation(Vector3::new(x, y, self.layer));
+//         let rotation = Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), Rad(self.rotation));
+//         let base_scale = Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, 1.0);
+
+//         // Create perspective-like effect using side scales
+//         // This creates a shear matrix that affects each side differently
+//         let perspective_matrix = Matrix4::new(
+//             self.side_scales[0], 0.0, 0.0, 0.0,
+//             0.0, self.side_scales[1], 0.0, 0.0,
+//             0.0, 0.0, self.side_scales[2], 0.0,
+//             0.0, 0.0, 0.0, self.side_scales[3],
+//         );
+
+//         // Combine all transformations
+//         // Order: translation * rotation * base_scale * perspective
+//         translation * rotation * base_scale * perspective_matrix
+//     }
+
+//     // Helper method to set all side scales at once
+//     pub fn set_side_scales(&mut self, scales: [f32; 4]) {
+//         self.side_scales = scales;
+//     }
+
+//     // Helper method to create a perspective effect
+//     pub fn set_perspective(&mut self, angle: f32) {
+//         // Calculate side scales based on perspective angle
+//         let top_scale = 1.0;
+//         let right_scale = 1.0 - (angle.sin() * 0.5);
+//         let bottom_scale = 1.0 - (angle.cos() * 0.5);
+//         let left_scale = 1.0 - (angle.sin() * 0.5);
+
+//         self.side_scales = [top_scale, right_scale, bottom_scale, left_scale];
+//     }
+
+//     // Rest of your existing methods remain the same...
+// }
+
+// // Scale individual sides
+// transform.update_side_scale(0, 1.0);  // Top
+// transform.update_side_scale(1, 0.8);  // Right
+// transform.update_side_scale(2, 0.6);  // Bottom
+// transform.update_side_scale(3, 0.8);  // Left
+
+// // Or create a perspective effect
+// transform.set_perspective(45.0_f32.to_radians());

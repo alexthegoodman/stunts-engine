@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use wgpu::util::DeviceExt;
 
+use crate::editor::rgb_to_wgpu;
 use crate::polygon::SavedPoint;
 use crate::vertex::get_z_layer;
 use crate::{
@@ -35,6 +36,7 @@ pub struct TextRendererConfig {
     pub dimensions: (f32, f32),
     pub position: Point,
     pub layer: i32,
+    pub color: [i32; 4],
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -47,6 +49,7 @@ pub struct SavedTextRendererConfig {
     // position is determined by the keyframes, but initial position is not
     pub position: SavedPoint,
     pub layer: i32,
+    pub color: [i32; 4],
 }
 
 pub struct TextRenderer {
@@ -71,6 +74,7 @@ pub struct TextRenderer {
     pub glyph_cache: HashMap<char, AtlasGlyph>,
     pub hidden: bool,
     pub layer: i32,
+    pub color: [i32; 4],
 }
 
 impl TextRenderer {
@@ -101,9 +105,11 @@ impl TextRenderer {
             },
             mip_level_count: 1,
             sample_count: 1,
-            view_formats: &[wgpu::TextureFormat::R8Unorm],
+            // view_formats: &[wgpu::TextureFormat::R8Unorm],
+            view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
+            // format: wgpu::TextureFormat::R8Unorm,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         });
 
@@ -195,6 +201,7 @@ impl TextRenderer {
             glyph_cache: HashMap::new(),
             hidden: false,
             layer: text_config.layer,
+            color: text_config.color,
         }
     }
 
@@ -211,6 +218,12 @@ impl TextRenderer {
         size: f32,
     ) -> AtlasGlyph {
         let (metrics, bitmap) = self.font.rasterize(c, size);
+
+        // more efficient way than this could involve shader, perhaps a mode as uniform buffer
+        let mut rgba_data = Vec::with_capacity(bitmap.len() * 4);
+        for &alpha in bitmap.iter() {
+            rgba_data.extend_from_slice(&[255, 255, 255, alpha]);
+        }
 
         // Check if we need to move to the next row
         if self.next_atlas_position.0 + metrics.width as u32 > self.atlas_size.0 {
@@ -242,10 +255,11 @@ impl TextRenderer {
                 },
                 aspect: wgpu::TextureAspect::All,
             },
-            &bitmap,
+            // &bitmap,
+            &rgba_data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(metrics.width as u32),
+                bytes_per_row: Some(metrics.width as u32 * 4), // *4 for rgba
                 rows_per_image: Some(metrics.height as u32),
             },
             wgpu::Extent3d {
@@ -329,26 +343,38 @@ impl TextRenderer {
 
             let z = get_z_layer(1.0);
 
+            // let test_color = rgb_to_wgpu(20, 200, 20, 1.0);
+            let active_color = rgb_to_wgpu(
+                self.color[0] as u8,
+                self.color[1] as u8,
+                self.color[2] as u8,
+                1.0,
+            );
+
             vertices.extend_from_slice(&[
                 Vertex {
                     position: [x0, y0, z],
                     tex_coords: [u0, v0],
-                    color: [1.0, 1.0, 1.0, 1.0],
+                    // color: [1.0, 1.0, 1.0, 1.0],
+                    color: active_color,
                 },
                 Vertex {
                     position: [x1, y0, z],
                     tex_coords: [u1, v0],
-                    color: [1.0, 1.0, 1.0, 1.0],
+                    // color: [1.0, 1.0, 1.0, 1.0],
+                    color: active_color,
                 },
                 Vertex {
                     position: [x1, y1, z],
                     tex_coords: [u1, v1],
-                    color: [1.0, 1.0, 1.0, 1.0],
+                    // color: [1.0, 1.0, 1.0, 1.0],
+                    color: active_color,
                 },
                 Vertex {
                     position: [x0, y1, z],
                     tex_coords: [u0, v1],
-                    color: [1.0, 1.0, 1.0, 1.0],
+                    // color: [1.0, 1.0, 1.0, 1.0],
+                    color: active_color,
                 },
             ]);
 
@@ -367,13 +393,6 @@ impl TextRenderer {
         // Update buffers and draw
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
         queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&indices));
-
-        // render_pass will be intergrated in render loop
-        // render_pass.set_pipeline(&self.pipeline);
-        // render_pass.set_bind_group(0, &self.bind_group, &[]);
-        // render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        // render_pass.draw_indexed(0..(indices.len() as u32), 0, 0..1);
 
         self.vertices = vertices;
         self.indices = indices;
@@ -445,6 +464,7 @@ impl TextRenderer {
                 y: self.transform.position.y,
             },
             layer: self.layer,
+            color: self.color,
         }
     }
 }

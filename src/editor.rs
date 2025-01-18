@@ -464,6 +464,7 @@ impl Editor {
                     dimensions: (t.dimensions.0 as f32, t.dimensions.1 as f32),
                     position,
                     layer: t.layer.clone(),
+                    color: t.color.clone(),
                 },
                 Uuid::from_str(&t.id).expect("Couldn't convert string to uuid"),
                 Uuid::from_str(&saved_sequence.id.clone())
@@ -530,6 +531,11 @@ impl Editor {
         let mut total = 0;
         for (i, polygon) in self.polygons.iter().enumerate() {
             if !polygon.hidden {
+                let x = polygon.transform.position.x - 600.0;
+                let x = (x / 800.0) * 100.0; // testing percentage based training
+                let y = polygon.transform.position.y - 50.0;
+                let y = (y / 450.0) * 100.0;
+
                 prompt.push_str(&total.to_string());
                 prompt.push_str(", ");
                 prompt.push_str("5");
@@ -538,9 +544,9 @@ impl Editor {
                 prompt.push_str(", ");
                 prompt.push_str(&polygon.dimensions.1.to_string());
                 prompt.push_str(", ");
-                prompt.push_str(&(polygon.transform.position.x - 600.0).to_string());
+                prompt.push_str(&(x.round() as i32).to_string());
                 prompt.push_str(", ");
-                prompt.push_str(&(polygon.transform.position.y - 50.0).to_string());
+                prompt.push_str(&(y.round() as i32).to_string());
                 prompt.push_str(", ");
                 prompt.push_str("\n");
                 total = total + 1;
@@ -553,6 +559,11 @@ impl Editor {
 
         for (i, text) in self.text_items.iter().enumerate() {
             if !text.hidden {
+                let x = text.transform.position.x - 600.0;
+                let x = (x / 800.0) * 100.0; // testing percentage based training
+                let y = text.transform.position.y - 50.0;
+                let y = (y / 450.0) * 100.0;
+
                 prompt.push_str(&total.to_string());
                 prompt.push_str(", ");
                 prompt.push_str("5");
@@ -561,9 +572,9 @@ impl Editor {
                 prompt.push_str(", ");
                 prompt.push_str(&text.dimensions.1.to_string());
                 prompt.push_str(", ");
-                prompt.push_str(&(text.transform.position.x - 600.0).to_string());
+                prompt.push_str(&(x.round() as i32).to_string());
                 prompt.push_str(", ");
-                prompt.push_str(&(text.transform.position.y - 50.0).to_string());
+                prompt.push_str(&(y.round() as i32).to_string());
                 prompt.push_str(", ");
                 prompt.push_str("\n");
                 total = total + 1;
@@ -575,6 +586,11 @@ impl Editor {
 
         for (i, image) in self.image_items.iter().enumerate() {
             if !image.hidden {
+                let x = image.transform.position.x - 600.0;
+                let x = (x / 800.0) * 100.0; // testing percentage based training
+                let y = image.transform.position.y - 50.0;
+                let y = (y / 450.0) * 100.0;
+
                 prompt.push_str(&total.to_string());
                 prompt.push_str(", ");
                 prompt.push_str("5");
@@ -583,9 +599,9 @@ impl Editor {
                 prompt.push_str(", ");
                 prompt.push_str(&image.dimensions.1.to_string());
                 prompt.push_str(", ");
-                prompt.push_str(&(image.transform.position.x - 600.0).to_string());
+                prompt.push_str(&(x.round() as i32).to_string());
                 prompt.push_str(", ");
-                prompt.push_str(&(image.transform.position.y - 50.0).to_string());
+                prompt.push_str(&(y.round() as i32).to_string());
                 prompt.push_str(", ");
                 prompt.push_str("\n");
                 total = total + 1;
@@ -647,8 +663,12 @@ impl Editor {
                     continue;
                 }
 
-                let predicted_x = predictions[base_idx + 4].round() as i32;
-                let predicted_y = predictions[base_idx + 5].round() as i32;
+                // let predicted_x = predictions[base_idx + 4].round() as i32;
+                // let predicted_y = predictions[base_idx + 5].round() as i32;
+
+                // testing percentage based training
+                let predicted_x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
+                let predicted_y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
 
                 position_keyframes.push(UIKeyframe {
                     id: Uuid::new_v4().to_string(),
@@ -1729,6 +1749,22 @@ impl Editor {
         text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
     }
 
+    pub fn update_text_color(&mut self, selected_text_id: Uuid, color: [i32; 4]) {
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get gpu resources");
+
+        let text_item = self
+            .text_items
+            .iter_mut()
+            .find(|t| t.id == selected_text_id)
+            .expect("Couldn't find text item");
+
+        text_item.color = color;
+        text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
+    }
+
     // pub fn update_date_from_window_resize(
     //     &mut self,
     //     window_size: &WindowSize,
@@ -1856,9 +1892,9 @@ impl Editor {
                                 y: text_item.transform.position.y,
                             },
                             layer: text_item.layer,
-                            // border_radius: polygon.border_radius,
-                            // fill: polygon.fill,
-                            // stroke: polygon.stroke,
+                            color: text_item.color, // border_radius: polygon.border_radius,
+                                                    // fill: polygon.fill,
+                                                    // stroke: polygon.stroke,
                         },
                     );
                     self.selected_polygon_id = text_item.id; // TODO: separate property for each object type?

@@ -122,7 +122,7 @@ pub fn get_polygon_data(
                     let x = vertex.position().x;
                     let y = vertex.position().y;
 
-                    Vertex::new(x, y, get_z_layer(base_layer + 2.0), stroke.fill)
+                    Vertex::new(x, y, get_z_layer(base_layer + 4.0), stroke.fill)
                     // Black border
                 }),
             )
