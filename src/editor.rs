@@ -69,23 +69,6 @@ pub enum ToolCategory {
     Brush,
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, EnumIter, Debug)]
-pub enum ControlMode {
-    Point,
-    Edge,
-    Brush,
-}
-
-impl Display for ControlMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ControlMode::Point => f.write_str("Point"),
-            ControlMode::Edge => f.write_str("Edge"),
-            ControlMode::Brush => f.write_str("Brush"),
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct Viewport {
     pub width: f32,
@@ -212,6 +195,12 @@ pub type OnHandleMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Uuid, Point) -
     + Send
     + Sync;
 
+#[derive(Eq, PartialEq, Clone, Copy, EnumIter, Debug)]
+pub enum ControlMode {
+    Select,
+    Pan,
+}
+
 pub struct Editor {
     // visual
     pub selected_polygon_id: Uuid,
@@ -254,6 +243,8 @@ pub struct Editor {
     pub video_start_playing_time: Option<Instant>,
     pub video_current_sequence_timeline: Option<SavedTimelineStateConfig>,
     pub video_current_sequences_data: Option<Vec<Sequence>>,
+    pub control_mode: ControlMode,
+    pub is_panning: bool,
 
     // points
     pub last_mouse_pos: Option<Point>,
@@ -343,6 +334,8 @@ impl Editor {
             dragging_path_object: None,
             dragging_path_keyframe: None,
             cursor_dot: None,
+            control_mode: ControlMode::Select,
+            is_panning: false,
             // TODO: update interactive bounds on window resize?
             interactive_bounds: BoundingBox {
                 min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
@@ -1258,18 +1251,18 @@ impl Editor {
     pub fn handle_wheel(&mut self, delta: f32, mouse_pos: Point, queue: &wgpu::Queue) {
         let camera = self.camera.as_mut().expect("Couldnt't get camera");
 
-        let interactive_bounds = BoundingBox {
-            min: Point { x: 550.0, y: 0.0 }, // account for aside width
-            max: Point {
-                x: camera.window_size.width as f32,
-                y: camera.window_size.height as f32,
-            },
-        };
+        // let interactive_bounds = BoundingBox {
+        //     min: Point { x: 550.0, y: 0.0 }, // account for aside width
+        //     max: Point {
+        //         x: camera.window_size.width as f32,
+        //         y: camera.window_size.height as f32,
+        //     },
+        // };
 
-        if (mouse_pos.x < interactive_bounds.min.x
-            || mouse_pos.x > interactive_bounds.max.x
-            || mouse_pos.y < interactive_bounds.min.y
-            || mouse_pos.y > interactive_bounds.max.y)
+        if (mouse_pos.x < self.interactive_bounds.min.x
+            || mouse_pos.x > self.interactive_bounds.max.x
+            || mouse_pos.y < self.interactive_bounds.min.y
+            || mouse_pos.y > self.interactive_bounds.max.y)
         {
             return;
         }
@@ -1820,6 +1813,13 @@ impl Editor {
         //     ControlMode::Brush => self.handle_mouse_down_brush_mode(mouse_pos, window_size, device),
         // }
 
+        if self.control_mode == ControlMode::Pan {
+            self.is_panning = true;
+            self.drag_start = Some(self.last_top_left);
+
+            return None;
+        }
+
         // Check if we're clicking on a polygon to drag
         for (poly_index, polygon) in self.static_polygons.iter_mut().enumerate() {
             if polygon.name != "motion_path_handle".to_string() {
@@ -1975,6 +1975,7 @@ impl Editor {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         x: f32,
         y: f32,
     ) {
@@ -2012,6 +2013,19 @@ impl Editor {
             // println!("move dot {:?}", self.last_top_left);
             dot.transform
                 .update_position([self.last_top_left.x, self.last_top_left.y], window_size);
+        }
+
+        // handle panning
+        if self.control_mode == ControlMode::Pan && self.is_panning {
+            if let Some(start) = self.drag_start {
+                let dx = self.last_top_left.x - start.x;
+                let dy = self.last_top_left.y - start.y;
+                let new_x = camera.position.x + dx;
+                let new_y = camera.position.y + dy;
+
+                camera.position = Vector2::new(new_x, new_y);
+                self.update_camera_binding(queue);
+            }
         }
 
         // handle motion path handles
@@ -2179,6 +2193,7 @@ impl Editor {
         self.dragging_path_handle = None;
         self.dragging_path_object = None;
         self.dragging_path_keyframe = None;
+        self.is_panning = false;
 
         // self.dragging_edge = None;
         // self.guide_lines.clear();
