@@ -255,6 +255,7 @@ pub struct Editor {
     pub global_top_left: Point, // for when recording mouse positions outside the editor zone
     pub ds_ndc_pos: Point,      // double-width sized ndc-style positioning (screen-oriented)
     pub ndc: Point,
+    pub previous_top_left: Point,
 
     // ai
     pub inference: Option<CommonMotionInference<Wgpu>>,
@@ -311,6 +312,7 @@ impl Editor {
             last_top_left: Point { x: 0.0, y: 0.0 },
             global_top_left: Point { x: 0.0, y: 0.0 },
             ndc: Point { x: 0.0, y: 0.0 },
+            previous_top_left: Point { x: 0.0, y: 0.0 },
             is_playing: false,
             current_sequence_data: None,
             last_frame_time: None,
@@ -1239,12 +1241,20 @@ impl Editor {
         }
     }
 
-    pub fn update_camera_binding(&mut self, queue: &wgpu::Queue) {
+    pub fn update_camera_binding(&mut self) {
         if (self.camera_binding.is_some()) {
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get gpu resources");
+
             self.camera_binding
                 .as_mut()
                 .expect("Couldn't get camera binding")
-                .update(queue, &self.camera.as_ref().expect("Couldn't get camera"));
+                .update(
+                    &gpu_resources.queue,
+                    &self.camera.as_ref().expect("Couldn't get camera"),
+                );
         }
     }
 
@@ -1270,7 +1280,7 @@ impl Editor {
         // let zoom_factor = if delta > 0.0 { 1.1 } else { 0.9 };
         let zoom_factor = delta / 10.0;
         camera.zoom(zoom_factor, mouse_pos);
-        self.update_camera_binding(queue);
+        self.update_camera_binding();
     }
 
     pub fn add_polygon(
@@ -1797,10 +1807,10 @@ impl Editor {
         let mouse_pos = Point { x, y };
         // let world_pos = camera.screen_to_world(mouse_pos);
 
-        if (self.global_top_left.x < self.interactive_bounds.min.x
-            || self.global_top_left.x > self.interactive_bounds.max.x
-            || self.global_top_left.y < self.interactive_bounds.min.y
-            || self.global_top_left.y > self.interactive_bounds.max.y)
+        if (self.last_screen.x < self.interactive_bounds.min.x
+            || self.last_screen.x > self.interactive_bounds.max.x
+            || self.last_screen.y < self.interactive_bounds.min.y
+            || self.last_screen.y > self.interactive_bounds.max.y)
         {
             return None;
         }
@@ -1990,12 +2000,15 @@ impl Editor {
         let top_left = ds_ndc.top_left;
 
         self.global_top_left = top_left;
+        self.last_screen = Point { x, y };
 
-        if (self.global_top_left.x < self.interactive_bounds.min.x
-            || self.global_top_left.x > self.interactive_bounds.max.x
-            || self.global_top_left.y < self.interactive_bounds.min.y
-            || self.global_top_left.y > self.interactive_bounds.max.y)
+        if (self.last_screen.x < self.interactive_bounds.min.x
+            || self.last_screen.x > self.interactive_bounds.max.x
+            || self.last_screen.y < self.interactive_bounds.min.y
+            || self.last_screen.y > self.interactive_bounds.max.y)
         {
+            // reset when out of bounds
+            self.is_panning = false;
             return;
         }
 
@@ -2003,7 +2016,6 @@ impl Editor {
         self.ds_ndc_pos = ds_ndc_pos;
         self.ndc = ds_ndc.ndc;
 
-        self.last_screen = Point { x, y };
         self.last_world = camera.screen_to_world(mouse_pos);
 
         // self.update_cursor();
@@ -2017,15 +2029,23 @@ impl Editor {
 
         // handle panning
         if self.control_mode == ControlMode::Pan && self.is_panning {
-            if let Some(start) = self.drag_start {
-                let dx = self.last_top_left.x - start.x;
-                let dy = self.last_top_left.y - start.y;
-                let new_x = camera.position.x + dx;
-                let new_y = camera.position.y + dy;
+            let dx = (self.previous_top_left.x - self.last_top_left.x);
+            let dy = (self.last_top_left.y - self.previous_top_left.y);
+            let new_x = camera.position.x + dx;
+            let new_y = camera.position.y + dy;
 
-                camera.position = Vector2::new(new_x, new_y);
-                self.update_camera_binding(queue);
-            }
+            camera.position = Vector2::new(new_x, new_y);
+            // self.update_camera_binding(); // call in render loop, much more efficient
+            // self.interactive_bounds = BoundingBox {
+            //     max: Point {
+            //         x: self.interactive_bounds.max.x + dx,
+            //         y: self.interactive_bounds.max.y + dy,
+            //     },
+            //     min: Point {
+            //         x: self.interactive_bounds.min.x + dx,
+            //         y: self.interactive_bounds.min.y + dy,
+            //     },
+            // }
         }
 
         // handle motion path handles
@@ -2053,6 +2073,8 @@ impl Editor {
                 self.move_image(self.last_top_left, start, image_id, window_size, device);
             }
         }
+
+        self.previous_top_left = self.last_top_left;
     }
 
     pub fn handle_mouse_up(&mut self) -> Option<PolygonEditConfig> {
@@ -2061,10 +2083,10 @@ impl Editor {
         let camera = self.camera.expect("Couldn't get camera");
 
         // TODO: does another bounds cause this to get stuck?
-        if (self.global_top_left.x < self.interactive_bounds.min.x
-            || self.global_top_left.x > self.interactive_bounds.max.x
-            || self.global_top_left.y < self.interactive_bounds.min.y
-            || self.global_top_left.y > self.interactive_bounds.max.y)
+        if (self.last_screen.x < self.interactive_bounds.min.x
+            || self.last_screen.x > self.interactive_bounds.max.x
+            || self.last_screen.y < self.interactive_bounds.min.y
+            || self.last_screen.y > self.interactive_bounds.max.y)
         {
             return None;
         }
@@ -2200,6 +2222,22 @@ impl Editor {
         // self.update_cursor();
 
         action_edit
+    }
+
+    pub fn reset_bounds(&mut self, window_size: &WindowSize) {
+        let mut camera = self.camera.expect("Couldn't get camera");
+
+        camera.position = Vector2::new(0.0, 0.0);
+        camera.zoom = 1.0;
+        self.update_camera_binding();
+        self.interactive_bounds = BoundingBox {
+            min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
+            max: Point {
+                x: window_size.width as f32,
+                // y: window_size.height as f32 - 350.0, // 350.0 for timeline space
+                y: 550.0, // allow for 50.0 padding below and above the canvas
+            },
+        };
     }
 
     pub fn move_polygon(
