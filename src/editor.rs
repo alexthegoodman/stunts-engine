@@ -2056,24 +2056,53 @@ impl Editor {
         }
 
         // handle object on mouse up
-        let object_id = if let Some(poly_id) = self.dragging_polygon {
-            poly_id
+        let mut object_id = Uuid::nil();
+        let mut active_point = None;
+        if let Some(poly_id) = self.dragging_polygon {
+            object_id = poly_id;
+            let active_polygon = self
+                .polygons
+                .iter()
+                .find(|p| p.id == poly_id)
+                .expect("Couldn't find polygon");
+            active_point = Some(Point {
+                x: active_polygon.transform.position.x,
+                y: active_polygon.transform.position.y,
+            });
         } else if let Some(image_id) = self.dragging_image {
-            image_id
+            object_id = image_id;
+            let active_image = self
+                .image_items
+                .iter()
+                .find(|i| i.id == image_id.to_string())
+                .expect("Couldn't find image");
+            active_point = Some(Point {
+                x: active_image.transform.position.x,
+                y: active_image.transform.position.y,
+            });
         } else if let Some(text_id) = self.dragging_text {
-            text_id
-        } else {
-            Uuid::nil()
-        };
+            object_id = text_id;
+            let active_text = self
+                .text_items
+                .iter()
+                .find(|t| t.id == text_id)
+                .expect("Couldn't find text");
+            active_point = Some(Point {
+                x: active_text.transform.position.x,
+                y: active_text.transform.position.y,
+            });
+        }
 
-        if object_id != Uuid::nil() {
+        if object_id != Uuid::nil() && active_point.is_some() {
             if let Some(on_mouse_up_creator) = &self.on_mouse_up {
                 let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+
+                let active_point = active_point.expect("Couldn't get active point");
                 let (selected_sequence_data, selected_keyframes) = on_up(
                     object_id,
                     Point {
-                        x: self.last_top_left.x - 600.0,
-                        y: self.last_top_left.y - 50.0,
+                        x: active_point.x - 600.0,
+                        y: active_point.y - 50.0,
                     },
                 );
 
@@ -2094,6 +2123,19 @@ impl Editor {
             Uuid::nil()
         };
 
+        let mut handle_point = None;
+        if handle_id != Uuid::nil() {
+            let active_handle = self
+                .static_polygons
+                .iter()
+                .find(|p| p.id == handle_id)
+                .expect("Couldn't find handle");
+            handle_point = Some(Point {
+                x: active_handle.transform.position.x,
+                y: active_handle.transform.position.y,
+            })
+        }
+
         // the object (polygon, text image, etc) related to this motion path handle
         let handle_object_id = if let Some(poly_id) = self.dragging_path_object {
             poly_id
@@ -2108,16 +2150,18 @@ impl Editor {
             Uuid::nil()
         };
 
-        if handle_keyframe_id != Uuid::nil() {
+        if handle_keyframe_id != Uuid::nil() && handle_point.is_some() {
             // need to update saved state and motion paths, handle polygon position already updated
             if let Some(on_mouse_up_creator) = &self.on_handle_mouse_up {
                 let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+
+                let handle_point = handle_point.expect("Couldn't get handle point");
                 let (selected_sequence_data, selected_keyframes) = on_up(
                     handle_keyframe_id,
                     handle_object_id,
                     Point {
-                        x: self.last_top_left.x - 600.0,
-                        y: self.last_top_left.y - 50.0,
+                        x: handle_point.x - 600.0,
+                        y: handle_point.y - 50.0,
                     },
                 );
 
