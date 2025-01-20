@@ -838,8 +838,8 @@ impl Editor {
             None => return,
         };
 
-        let mut elapsed = 0;
-        let mut current_found = false;
+        // let mut elapsed = 0;
+        // let mut current_found = false;
 
         // Iterate through timeline sequences in order
         for ts in &sequence_timeline.timeline_sequences {
@@ -849,65 +849,63 @@ impl Editor {
             }
 
             // dynamic start times
-            if let Some(current_sequence) = &self.current_sequence_data {
-                if !current_found {
-                    elapsed = elapsed + ts.duration_ms;
-                }
+            // if let Some(current_sequence) = &self.current_sequence_data {
+            //     if !current_found {
+            //         elapsed = elapsed + ts.duration_ms;
+            //     }
 
-                if current_sequence.id == ts.sequence_id {
-                    current_found = true;
-                }
-            } else {
-                current_found = true;
-            }
+            //     if current_sequence.id == ts.sequence_id {
+            //         current_found = true;
+            //     }
+            // } else {
+            //     current_found = true;
+            // }
 
+            // if current_found {}
             // Check if this sequence should be playing at the current time
-            if current_found {
-                if current_time_ms >= elapsed && current_time_ms < (elapsed + ts.duration_ms) {
-                    // Find the corresponding sequence data
-                    if let Some(sequence) = video_current_sequences_data
-                        .iter()
-                        .find(|s| s.id == ts.sequence_id)
-                    {
-                        // Calculate local time within this sequence
-                        let sequence_local_time = (current_time_ms - elapsed) as f32 / 1000.0;
-                        if let Some(current_sequence) = &self.current_sequence_data {
-                            // need to somehow efficiently restore polygons for the sequence
-                            // Check id to avoid unnecessary cloning
-                            // plan is to preload with a hidden attribute or similar
-                            if sequence.id != current_sequence.id {
-                                self.current_sequence_data = Some(sequence.clone());
-                                // set hidden attribute on relevant objects
-                                let current_sequence_id = sequence.id.clone();
+            if current_time_ms >= ts.start_time_ms
+                && current_time_ms < (ts.start_time_ms + ts.duration_ms)
+            {
+                // Find the corresponding sequence data
+                if let Some(sequence) = video_current_sequences_data
+                    .iter()
+                    .find(|s| s.id == ts.sequence_id)
+                {
+                    // Calculate local time within this sequence
+                    let sequence_local_time = (current_time_ms - ts.start_time_ms) as f32 / 1000.0;
+                    if let Some(current_sequence) = &self.current_sequence_data {
+                        // need to somehow efficiently restore polygons for the sequence
+                        // Check id to avoid unnecessary cloning
+                        // plan is to preload with a hidden attribute or similar
+                        if sequence.id != current_sequence.id {
+                            self.current_sequence_data = Some(sequence.clone());
+                            // set hidden attribute on relevant objects
+                            let current_sequence_id = sequence.id.clone();
 
-                                for polygon in self.polygons.iter_mut() {
-                                    if polygon.current_sequence_id.to_string()
-                                        == current_sequence_id
-                                    {
-                                        polygon.hidden = false;
-                                    } else {
-                                        polygon.hidden = true;
-                                    }
-                                }
-                                for text in self.text_items.iter_mut() {
-                                    if text.current_sequence_id.to_string() == current_sequence_id {
-                                        text.hidden = false;
-                                    } else {
-                                        text.hidden = true;
-                                    }
-                                }
-                                for image in self.image_items.iter_mut() {
-                                    if image.current_sequence_id.to_string() == current_sequence_id
-                                    {
-                                        image.hidden = false;
-                                    } else {
-                                        image.hidden = true;
-                                    }
+                            for polygon in self.polygons.iter_mut() {
+                                if polygon.current_sequence_id.to_string() == current_sequence_id {
+                                    polygon.hidden = false;
+                                } else {
+                                    polygon.hidden = true;
                                 }
                             }
-                        } else {
-                            self.current_sequence_data = Some(sequence.clone());
+                            for text in self.text_items.iter_mut() {
+                                if text.current_sequence_id.to_string() == current_sequence_id {
+                                    text.hidden = false;
+                                } else {
+                                    text.hidden = true;
+                                }
+                            }
+                            for image in self.image_items.iter_mut() {
+                                if image.current_sequence_id.to_string() == current_sequence_id {
+                                    image.hidden = false;
+                                } else {
+                                    image.hidden = true;
+                                }
+                            }
                         }
+                    } else {
+                        self.current_sequence_data = Some(sequence.clone());
                     }
                 }
             }
