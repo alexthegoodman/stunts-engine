@@ -1179,6 +1179,7 @@ impl Editor {
                 let camera = self.camera.expect("Couldn't get camera");
                 let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
 
+                // triangle handle
                 let mut handle = create_path_handle(
                     &camera.window_size,
                     &gpu_resources.device,
@@ -1190,10 +1191,14 @@ impl Editor {
                     &self.camera.expect("No camera"),
                     start_point,
                     end_point,
-                    10.0, // width and height
+                    15.0, // width and height
                     sequence.id.clone(),
                     path_fill,
                 );
+
+                // TODO: calculate angle
+                let angle = angle_between_points(start_point, end_point);
+                handle.transform.rotate(angle);
 
                 handle.source_polygon_id = Some(polygon_id);
                 handle.source_keyframe_id = Some(end_kf_id);
@@ -2513,13 +2518,13 @@ fn create_path_handle(
         vec![
             Point { x: 0.0, y: 0.0 },
             Point { x: 1.0, y: 0.0 },
-            Point { x: 1.0, y: 1.0 },
-            Point { x: 0.0, y: 1.0 },
+            Point { x: 0.5, y: 1.0 },
+            // Point { x: 0.0, y: 1.0 },
         ],
         (size, size), // width = length of segment, height = thickness
         end,
         0.0,
-        15.0,
+        0.0,
         // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
         fill,
         Stroke {
@@ -2622,6 +2627,7 @@ use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
 use crate::timelines::{SavedTimelineStateConfig, TrackType};
+use crate::transform::angle_between_points;
 
 pub fn visualize_ray_intersection(
     // device: &wgpu::Device,

@@ -17,7 +17,7 @@ use std::f32::consts::PI;
 use cgmath::{Deg, Matrix3, Matrix4, Rad, Vector2, Vector3};
 use wgpu::util::DeviceExt;
 
-use crate::editor::WindowSize;
+use crate::editor::{Point, WindowSize};
 
 pub struct Transform {
     pub position: Vector2<f32>,
@@ -137,6 +137,25 @@ pub fn matrix4_to_raw_array(matrix: &Matrix4<f32>) -> [[f32; 4]; 4] {
         }
     }
     array
+}
+
+pub fn angle_between_points(p1: Point, p2: Point) -> f32 {
+    let dx = p2.x - p1.x;
+    let dy = p2.y - p1.y;
+
+    // Calculate the angle in radians using atan2
+    let angle_rad = dy.atan2(dx);
+
+    angle_rad
+}
+
+pub fn degrees_between_points(p1: Point, p2: Point) -> f32 {
+    let angle_rad = angle_between_points(p1, p2);
+
+    // Convert radians to degrees if needed
+    let angle_deg = angle_rad * 180.0 / PI;
+
+    angle_deg
 }
 
 // UPCOMING: perspective illusion with side scaling (each object has 4 sides in transform)
