@@ -32,6 +32,8 @@ use winit::window::CursorIcon;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+const NUM_INFERENCE_FEATURES: usize = 7;
+
 #[derive(Debug, Clone, Copy)]
 pub struct WindowSize {
     pub width: u32,
@@ -544,6 +546,8 @@ impl Editor {
                 prompt.push_str(", ");
                 prompt.push_str(&(y.round() as i32).to_string());
                 prompt.push_str(", ");
+                prompt.push_str("0.000"); // direction
+                prompt.push_str(", ");
                 prompt.push_str("\n");
                 total = total + 1;
             }
@@ -572,6 +576,8 @@ impl Editor {
                 prompt.push_str(", ");
                 prompt.push_str(&(y.round() as i32).to_string());
                 prompt.push_str(", ");
+                prompt.push_str("0.000"); // direction
+                prompt.push_str(", ");
                 prompt.push_str("\n");
                 total = total + 1;
             }
@@ -599,6 +605,8 @@ impl Editor {
                 prompt.push_str(", ");
                 prompt.push_str(&(y.round() as i32).to_string());
                 prompt.push_str(", ");
+                prompt.push_str("0.000"); // direction
+                prompt.push_str(", ");
                 prompt.push_str("\n");
                 total = total + 1;
             }
@@ -617,7 +625,7 @@ impl Editor {
 
         // predictions are 6 rows per line in the prompt, with each row containing: `object_index, time, width, height, x, y`
         for (i, predicted) in predictions.clone().into_iter().enumerate() {
-            if i % 6 == 0 {
+            if i % NUM_INFERENCE_FEATURES == 0 {
                 println!();
             }
             print!("{}, ", predicted);
@@ -634,7 +642,7 @@ impl Editor {
         predictions: Vec<f32>,
     ) -> Vec<AnimationData> {
         let mut animation_data_vec = Vec::new();
-        let values_per_prediction = 6; // object_index, time, width, height, x, y
+        let values_per_prediction = NUM_INFERENCE_FEATURES; // object_index, time, width, height, x, y
         let keyframes_per_object = 6; // number of keyframes per object
         let timestamps = vec![0, 2500, 5000, 15000, 17500, 20000];
 
@@ -830,6 +838,9 @@ impl Editor {
             None => return,
         };
 
+        let mut elapsed = 0;
+        let mut current_found = false;
+
         // Iterate through timeline sequences in order
         for ts in &sequence_timeline.timeline_sequences {
             // Skip audio tracks as we're only handling video
@@ -837,50 +848,66 @@ impl Editor {
                 continue;
             }
 
-            // Check if this sequence should be playing at the current time
-            if current_time_ms >= ts.start_time_ms
-                && current_time_ms < (ts.start_time_ms + ts.duration_ms)
-            {
-                // Find the corresponding sequence data
-                if let Some(sequence) = video_current_sequences_data
-                    .iter()
-                    .find(|s| s.id == ts.sequence_id)
-                {
-                    // Calculate local time within this sequence
-                    let sequence_local_time = (current_time_ms - ts.start_time_ms) as f32 / 1000.0;
-                    if let Some(current_sequence) = &self.current_sequence_data {
-                        // need to somehow efficiently restore polygons for the sequence
-                        // Check id to avoid unnecessary cloning
-                        // plan is to preload with a hidden attribute or similar
-                        if sequence.id != current_sequence.id {
-                            self.current_sequence_data = Some(sequence.clone());
-                            // set hidden attribute on relevant objects
-                            let current_sequence_id = sequence.id.clone();
+            // dynamic start times
+            if let Some(current_sequence) = &self.current_sequence_data {
+                if !current_found {
+                    elapsed = elapsed + ts.duration_ms;
+                }
 
-                            for polygon in self.polygons.iter_mut() {
-                                if polygon.current_sequence_id.to_string() == current_sequence_id {
-                                    polygon.hidden = false;
-                                } else {
-                                    polygon.hidden = true;
+                if current_sequence.id == ts.sequence_id {
+                    current_found = true;
+                }
+            } else {
+                current_found = true;
+            }
+
+            // Check if this sequence should be playing at the current time
+            if current_found {
+                if current_time_ms >= elapsed && current_time_ms < (elapsed + ts.duration_ms) {
+                    // Find the corresponding sequence data
+                    if let Some(sequence) = video_current_sequences_data
+                        .iter()
+                        .find(|s| s.id == ts.sequence_id)
+                    {
+                        // Calculate local time within this sequence
+                        let sequence_local_time = (current_time_ms - elapsed) as f32 / 1000.0;
+                        if let Some(current_sequence) = &self.current_sequence_data {
+                            // need to somehow efficiently restore polygons for the sequence
+                            // Check id to avoid unnecessary cloning
+                            // plan is to preload with a hidden attribute or similar
+                            if sequence.id != current_sequence.id {
+                                self.current_sequence_data = Some(sequence.clone());
+                                // set hidden attribute on relevant objects
+                                let current_sequence_id = sequence.id.clone();
+
+                                for polygon in self.polygons.iter_mut() {
+                                    if polygon.current_sequence_id.to_string()
+                                        == current_sequence_id
+                                    {
+                                        polygon.hidden = false;
+                                    } else {
+                                        polygon.hidden = true;
+                                    }
+                                }
+                                for text in self.text_items.iter_mut() {
+                                    if text.current_sequence_id.to_string() == current_sequence_id {
+                                        text.hidden = false;
+                                    } else {
+                                        text.hidden = true;
+                                    }
+                                }
+                                for image in self.image_items.iter_mut() {
+                                    if image.current_sequence_id.to_string() == current_sequence_id
+                                    {
+                                        image.hidden = false;
+                                    } else {
+                                        image.hidden = true;
+                                    }
                                 }
                             }
-                            for text in self.text_items.iter_mut() {
-                                if text.current_sequence_id.to_string() == current_sequence_id {
-                                    text.hidden = false;
-                                } else {
-                                    text.hidden = true;
-                                }
-                            }
-                            for image in self.image_items.iter_mut() {
-                                if image.current_sequence_id.to_string() == current_sequence_id {
-                                    image.hidden = false;
-                                } else {
-                                    image.hidden = true;
-                                }
-                            }
+                        } else {
+                            self.current_sequence_data = Some(sequence.clone());
                         }
-                    } else {
-                        self.current_sequence_data = Some(sequence.clone());
                     }
                 }
             }
