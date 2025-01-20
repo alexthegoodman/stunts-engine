@@ -17,6 +17,7 @@ pub enum ObjectType {
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct Sequence {
     pub id: String,
+    pub name: String,
     pub active_polygons: Vec<SavedPolygonConfig>, // used for dimensions, etc
     pub polygon_motion_paths: Vec<AnimationData>,
     pub active_text_items: Vec<SavedTextRendererConfig>,
@@ -32,6 +33,8 @@ pub struct AnimationData {
     pub polygon_id: String,
     /// Total duration of the animation
     pub duration: Duration,
+    /// Start time within sequence
+    pub start_time_ms: i32,
     /// Hierarchical property structure for UI
     pub properties: Vec<AnimationProperty>,
 }

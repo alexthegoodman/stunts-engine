@@ -746,6 +746,7 @@ impl Editor {
                     object_type: object_type.unwrap_or(ObjectType::Polygon),
                     polygon_id: item_id.unwrap(),
                     duration: Duration::from_secs(20),
+                    start_time_ms: 0,
                     properties,
                 });
             }
