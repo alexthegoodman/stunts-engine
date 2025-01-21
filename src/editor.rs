@@ -1174,14 +1174,14 @@ impl Editor {
                 // Create intermediate points for curved paths if using non-linear easing
                 let num_segments = match start_kf.easing {
                     EasingType::Linear => 1,
-                    _ => 10, // More segments for curved paths
+                    _ => 3, // More segments for curved paths?
                 };
 
                 let camera = self.camera.expect("Couldn't get camera");
                 let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
 
                 if pairs_done == 0 {
-                    // triangle handle for first keyframe in path
+                    // handle for first keyframe in path
                     let mut handle = create_path_handle(
                         &camera.window_size,
                         &gpu_resources.device,
@@ -1192,14 +1192,16 @@ impl Editor {
                             .expect("No bind group layout"),
                         &self.camera.expect("No camera"),
                         start_point,
-                        15.0, // width and height
+                        12.0, // width and height
                         sequence.id.clone(),
                         path_fill,
                     );
 
-                    // calculate angle so triangle handle points in correct direction
-                    let angle = angle_between_points(start_point, end_point);
-                    handle.transform.rotate(angle);
+                    // // calculate angle so triangle handle points in correct direction
+                    // // let angle = angle_between_points(start_point, end_point);
+                    // // handle.transform.rotate(angle);
+                    // let angle = degrees_between_points(start_point, end_point);
+                    // handle.transform.rotate_degrees(angle);
 
                     handle.source_polygon_id = Some(polygon_id);
                     handle.source_keyframe_id = Some(start_kf_id);
@@ -1207,7 +1209,7 @@ impl Editor {
                     self.static_polygons.push(handle);
                 }
 
-                // triangle handles for remaining keyframes
+                // handles for remaining keyframes
                 let mut handle = create_path_handle(
                     &camera.window_size,
                     &gpu_resources.device,
@@ -1218,14 +1220,16 @@ impl Editor {
                         .expect("No bind group layout"),
                     &self.camera.expect("No camera"),
                     end_point,
-                    15.0, // width and height
+                    12.0, // width and height
                     sequence.id.clone(),
                     path_fill,
                 );
 
-                // calculate angle so triangle handle points in correct direction
-                let angle = angle_between_points(start_point, end_point);
-                handle.transform.rotate(angle);
+                // // calculate angle so triangle handle points in correct direction
+                // // let angle = angle_between_points(start_point, end_point);
+                // // handle.transform.rotate(angle);
+                // let angle = degrees_between_points(start_point, end_point);
+                // handle.transform.rotate_degrees(angle);
 
                 handle.source_polygon_id = Some(polygon_id);
                 handle.source_keyframe_id = Some(end_kf_id);
@@ -1243,6 +1247,24 @@ impl Editor {
 
                     let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
 
+                    let path_start = Point {
+                        x: pos1[0] as f32,
+                        y: pos1[1] as f32,
+                    };
+
+                    let path_end = Point {
+                        x: pos2[0] as f32,
+                        y: pos2[1] as f32,
+                    };
+
+                    // Calculate rotation angle from start to end point
+                    let dx = path_end.x - path_start.x;
+                    let dy = path_end.y - path_start.y;
+                    let rotation = dy.atan2(dx);
+
+                    // Calculate length of the segment
+                    let length = (dx * dx + dy * dy).sqrt();
+
                     let mut segment = create_path_segment(
                         &camera.window_size,
                         &gpu_resources.device,
@@ -1252,24 +1274,39 @@ impl Editor {
                             .as_ref()
                             .expect("No bind group layout"),
                         &self.camera.expect("No camera"),
-                        Point {
-                            x: pos1[0] as f32,
-                            y: pos1[1] as f32,
-                        },
-                        Point {
-                            x: pos2[0] as f32,
-                            y: pos2[1] as f32,
-                        },
+                        path_start,
+                        path_end,
                         2.0, // thickness of the path
                         sequence.id.clone(),
                         path_fill,
+                        rotation,
+                        length,
                     );
 
                     // segment.source_polygon_id = Some(polygon_id);
                     // segment.source_keyframe_id =
                     // Some(end_kf_id);
 
+                    // arrow for indicating direction of motion
+                    let arrow_orientation_offset = -std::f32::consts::FRAC_PI_2; // for upward-facing arrow
+                    let mut arrow = create_path_arrow(
+                        &camera.window_size,
+                        &gpu_resources.device,
+                        &gpu_resources.queue,
+                        &self
+                            .model_bind_group_layout
+                            .as_ref()
+                            .expect("No bind group layout"),
+                        &self.camera.expect("No camera"),
+                        path_end,
+                        15.0, // width and height
+                        sequence.id.clone(),
+                        path_fill,
+                        rotation + arrow_orientation_offset,
+                    );
+
                     self.static_polygons.push(segment);
+                    self.static_polygons.push(arrow);
                 }
 
                 pairs_done = pairs_done + 1;
@@ -2498,15 +2535,9 @@ fn create_path_segment(
     thickness: f32,
     selected_sequence_id: String,
     fill: [f32; 4],
+    rotation: f32,
+    length: f32,
 ) -> Polygon {
-    // Calculate rotation angle from start to end point
-    let dx = end.x - start.x;
-    let dy = end.y - start.y;
-    let rotation = dy.atan2(dx);
-
-    // Calculate length of the segment
-    let length = (dx * dx + dy * dy).sqrt();
-
     // Calculate segment midpoint for position
     let position = Point {
         x: (start.x + end.x) / 2.0,
@@ -2563,16 +2594,10 @@ fn create_path_handle(
         model_bind_group_layout,
         camera,
         vec![
-            // rightside up
             Point { x: 0.0, y: 0.0 },
-            Point { x: 0.5, y: 0.6 },
             Point { x: 1.0, y: 0.0 },
-            Point { x: 0.5, y: 1.0 },
-            // upside down
-            // Point { x: 1.0, y: 1.0 },
-            // Point { x: 0.5, y: 0.4 },
-            // Point { x: 0.0, y: 1.0 },
-            // Point { x: 0.5, y: 0.0 },
+            Point { x: 1.0, y: 1.0 },
+            Point { x: 0.0, y: 1.0 },
         ],
         (size, size), // width = length of segment, height = thickness
         end,
@@ -2587,6 +2612,55 @@ fn create_path_handle(
         -1.0,
         -2,
         String::from("motion_path_handle"),
+        Uuid::new_v4(),
+        Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
+    )
+}
+
+/// Creates arrow for showing direction
+fn create_path_arrow(
+    window_size: &WindowSize,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+    camera: &Camera,
+    end: Point,
+    size: f32,
+    selected_sequence_id: String,
+    fill: [f32; 4],
+    rotation: f32,
+) -> Polygon {
+    Polygon::new(
+        window_size,
+        device,
+        queue,
+        model_bind_group_layout,
+        camera,
+        vec![
+            // rightside up
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 0.5, y: 0.6 },
+            Point { x: 1.0, y: 0.0 },
+            Point { x: 0.5, y: 1.0 },
+            // upside down
+            // Point { x: 1.0, y: 1.0 },
+            // Point { x: 0.5, y: 0.4 },
+            // Point { x: 0.0, y: 1.0 },
+            // Point { x: 0.5, y: 0.0 },
+        ],
+        (size, size), // width = length of segment, height = thickness
+        end,
+        rotation,
+        0.0,
+        // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
+        fill,
+        Stroke {
+            thickness: 0.0,
+            fill: rgb_to_wgpu(0, 0, 0, 1.0),
+        },
+        -1.0,
+        -2,
+        String::from("motion_path_arrow"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
     )
@@ -2775,7 +2849,7 @@ use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
 use crate::timelines::{SavedTimelineStateConfig, TrackType};
-use crate::transform::angle_between_points;
+use crate::transform::{angle_between_points, degrees_between_points};
 
 // old
 // pub fn visualize_ray_intersection(
