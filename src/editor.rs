@@ -949,6 +949,7 @@ impl Editor {
     }
 
     /// Steps the currently selected sequence unless one is provided
+    /// TODO: make more efficient
     pub fn step_animate_sequence(
         &mut self,
         // chosen_sequence: Option<&Sequence>,
@@ -1119,7 +1120,7 @@ impl Editor {
     }
 
     /// Create motion path visualization for a polygon
-    /// // TODO: make for curves? already creates segments for the purpose
+    /// // TODO: make for curves. already creates segments for the purpose
     pub fn create_motion_path_visualization(
         &mut self,
         sequence: &Sequence,
@@ -1143,23 +1144,19 @@ impl Editor {
         let mut keyframes = position_property.keyframes.clone();
         keyframes.sort_by_key(|k| k.time);
 
-        // let mut rng = rand::thread_rng();
-
-        // let random_number_r = rng.gen_range(1..=250);
-        // let random_number_g = rng.gen_range(1..=250);
-        // let random_number_b = rng.gen_range(1..=250);
-
         let (fill_r, fill_g, fill_b) = get_full_color(color_index);
-
         let path_fill = rgb_to_wgpu(fill_r as u8, fill_g as u8, fill_b as u8, 1.0);
 
         let polygon_id = Uuid::from_str(polygon_id).expect("Couldn't convert string to uuid");
 
         // Create path segments between consecutive keyframes
+        let mut pairs_done = 0;
         for window in keyframes.windows(2) {
             let start_kf = &window[0];
             let end_kf = &window[1];
 
+            let start_kf_id =
+                Uuid::from_str(&start_kf.id).expect("Couldn't convert string to uuid");
             let end_kf_id = Uuid::from_str(&end_kf.id).expect("Couldn't convert string to uuid");
 
             if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
@@ -1183,7 +1180,34 @@ impl Editor {
                 let camera = self.camera.expect("Couldn't get camera");
                 let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
 
-                // triangle handle
+                if pairs_done == 0 {
+                    // triangle handle for first keyframe in path
+                    let mut handle = create_path_handle(
+                        &camera.window_size,
+                        &gpu_resources.device,
+                        &gpu_resources.queue,
+                        &self
+                            .model_bind_group_layout
+                            .as_ref()
+                            .expect("No bind group layout"),
+                        &self.camera.expect("No camera"),
+                        start_point,
+                        15.0, // width and height
+                        sequence.id.clone(),
+                        path_fill,
+                    );
+
+                    // calculate angle so triangle handle points in correct direction
+                    let angle = angle_between_points(start_point, end_point);
+                    handle.transform.rotate(angle);
+
+                    handle.source_polygon_id = Some(polygon_id);
+                    handle.source_keyframe_id = Some(start_kf_id);
+
+                    self.static_polygons.push(handle);
+                }
+
+                // triangle handles for remaining keyframes
                 let mut handle = create_path_handle(
                     &camera.window_size,
                     &gpu_resources.device,
@@ -1193,14 +1217,13 @@ impl Editor {
                         .as_ref()
                         .expect("No bind group layout"),
                     &self.camera.expect("No camera"),
-                    start_point,
                     end_point,
                     15.0, // width and height
                     sequence.id.clone(),
                     path_fill,
                 );
 
-                // TODO: calculate angle
+                // calculate angle so triangle handle points in correct direction
                 let angle = angle_between_points(start_point, end_point);
                 handle.transform.rotate(angle);
 
@@ -1248,6 +1271,8 @@ impl Editor {
 
                     self.static_polygons.push(segment);
                 }
+
+                pairs_done = pairs_done + 1;
             }
         }
     }
@@ -1837,10 +1862,6 @@ impl Editor {
         device: &wgpu::Device,
     ) -> Option<PolygonEditConfig> {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
-        // let x = self.ds_ndc_pos.x;
-        // let y = self.ds_ndc_pos.y;
-        // let mouse_pos = Point { x, y };
-        // let world_pos = camera.screen_to_world(mouse_pos);
 
         if (self.last_screen.x < self.interactive_bounds.min.x
             || self.last_screen.x > self.interactive_bounds.max.x
@@ -1850,14 +1871,6 @@ impl Editor {
             return None;
         }
 
-        // self.update_cursor();
-
-        // match self.control_mode {
-        //     ControlMode::Point => self.handle_mouse_down_point_mode(mouse_pos, window_size, device),
-        //     ControlMode::Edge => self.handle_mouse_down_edge_mode(mouse_pos, window_size, device),
-        //     ControlMode::Brush => self.handle_mouse_down_brush_mode(mouse_pos, window_size, device),
-        // }
-
         if self.control_mode == ControlMode::Pan {
             self.is_panning = true;
             self.drag_start = Some(self.last_top_left);
@@ -1865,7 +1878,174 @@ impl Editor {
             return None;
         }
 
-        // Check if we're clicking on a polygon to drag
+        let mut intersecting_objects: Vec<(i32, InteractionTarget)> = Vec::new();
+
+        // Collect intersecting polygons
+        for (poly_index, polygon) in self.polygons.iter_mut().enumerate() {
+            if polygon.hidden {
+                continue;
+            }
+
+            if polygon.contains_point(&self.last_top_left, &camera) {
+                intersecting_objects.push((polygon.layer, InteractionTarget::Polygon(poly_index)));
+            }
+        }
+
+        // Collect intersecting text items
+        for (text_index, text_item) in self.text_items.iter_mut().enumerate() {
+            if text_item.hidden {
+                continue;
+            }
+
+            if text_item.contains_point(&self.last_top_left, &camera) {
+                intersecting_objects.push((text_item.layer, InteractionTarget::Text(text_index)));
+            }
+        }
+
+        // Collect intersecting image items
+        for (image_index, image_item) in self.image_items.iter_mut().enumerate() {
+            if image_item.hidden {
+                continue;
+            }
+
+            if image_item.contains_point(&self.last_top_left, &camera) {
+                intersecting_objects
+                    .push((image_item.layer, InteractionTarget::Image(image_index)));
+            }
+        }
+
+        // Sort intersecting objects by layer in descending order (highest layer first)
+        // intersecting_objects.sort_by(|a, b| b.0.cmp(&a.0));
+
+        // sort by lowest layer first, for this system
+        intersecting_objects.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Return the topmost intersecting object, if any
+        let target = intersecting_objects
+            .into_iter()
+            .next()
+            .map(|(_, target)| target);
+
+        if let Some(target) = target {
+            match target {
+                InteractionTarget::Polygon(index) => {
+                    let polygon = &mut self.polygons[index];
+
+                    self.dragging_polygon = Some(polygon.id);
+                    self.drag_start = Some(self.last_top_left);
+
+                    // TODO: make DRY with below
+                    if (self.handle_polygon_click.is_some()) {
+                        let handler_creator = self
+                            .handle_polygon_click
+                            .as_ref()
+                            .expect("Couldn't get handler");
+                        let mut handle_click = handler_creator().expect("Couldn't get handler");
+                        handle_click(
+                            polygon.id,
+                            PolygonConfig {
+                                id: polygon.id,
+                                name: polygon.name.clone(),
+                                points: polygon.points.clone(),
+                                dimensions: polygon.dimensions,
+                                position: Point {
+                                    x: polygon.transform.position.x,
+                                    y: polygon.transform.position.y,
+                                },
+                                border_radius: polygon.border_radius,
+                                fill: polygon.fill,
+                                stroke: polygon.stroke,
+                                layer: polygon.layer,
+                            },
+                        );
+                        self.selected_polygon_id = polygon.id;
+                        polygon.old_points = Some(polygon.points.clone());
+                    }
+
+                    return None; // nothing to add to undo stack
+                }
+                InteractionTarget::Text(index) => {
+                    let text_item = &mut self.text_items[index];
+
+                    self.dragging_text = Some(text_item.id);
+                    self.drag_start = Some(self.last_top_left);
+
+                    // TODO: make DRY with below
+                    if (self.handle_text_click.is_some()) {
+                        let handler_creator = self
+                            .handle_text_click
+                            .as_ref()
+                            .expect("Couldn't get handler");
+                        let mut handle_click = handler_creator().expect("Couldn't get handler");
+                        handle_click(
+                            text_item.id,
+                            TextRendererConfig {
+                                id: text_item.id,
+                                name: text_item.name.clone(),
+                                text: text_item.text.clone(),
+                                font_family: text_item.font_family.clone(),
+                                // points: polygon.points.clone(),
+                                dimensions: text_item.dimensions,
+                                position: Point {
+                                    x: text_item.transform.position.x,
+                                    y: text_item.transform.position.y,
+                                },
+                                layer: text_item.layer,
+                                color: text_item.color,
+                                font_size: text_item.font_size, // border_radius: polygon.border_radius,
+                                                                // fill: polygon.fill,
+                                                                // stroke: polygon.stroke,
+                            },
+                        );
+                        self.selected_polygon_id = text_item.id; // TODO: separate property for each object type?
+                                                                 // polygon.old_points = Some(polygon.points.clone());
+                    }
+
+                    return None; // nothing to add to undo stack
+                }
+                InteractionTarget::Image(index) => {
+                    let image_item = &mut self.image_items[index];
+
+                    self.dragging_image =
+                        Some(Uuid::from_str(&image_item.id).expect("Couldn't convert to uuid"));
+                    self.drag_start = Some(self.last_top_left);
+
+                    // TODO: make DRY with below
+                    if (self.handle_image_click.is_some()) {
+                        let handler_creator = self
+                            .handle_image_click
+                            .as_ref()
+                            .expect("Couldn't get handler");
+                        let mut handle_click = handler_creator().expect("Couldn't get handler");
+                        let uuid = Uuid::from_str(&image_item.id.clone())
+                            .expect("Couldn't convert string to uuid");
+                        handle_click(
+                            uuid,
+                            StImageConfig {
+                                id: image_item.id.clone(),
+                                name: image_item.name.clone(),
+                                path: image_item.path.clone(),
+                                // points: polygon.points.clone(),
+                                dimensions: image_item.dimensions,
+                                position: Point {
+                                    x: image_item.transform.position.x,
+                                    y: image_item.transform.position.y,
+                                },
+                                layer: image_item.layer, // border_radius: polygon.border_radius,
+                                                         // fill: polygon.fill,
+                                                         // stroke: polygon.stroke,
+                            },
+                        );
+                        self.selected_polygon_id = uuid; // TODO: separate property for each object type?
+                                                         // polygon.old_points = Some(polygon.points.clone());
+                    }
+
+                    return None; // nothing to add to undo stack
+                }
+            }
+        }
+
+        // Now, with no objects in the way, check if we're clicking on a motion path handle to drag
         for (poly_index, polygon) in self.static_polygons.iter_mut().enumerate() {
             if polygon.name != "motion_path_handle".to_string() {
                 continue;
@@ -1876,138 +2056,6 @@ impl Editor {
                 self.dragging_path_object = polygon.source_polygon_id;
                 self.dragging_path_keyframe = polygon.source_keyframe_id;
                 self.drag_start = Some(self.last_top_left);
-
-                return None; // nothing to add to undo stack
-            }
-        }
-
-        // Check if we're clicking on a polygon to drag
-        for (poly_index, polygon) in self.polygons.iter_mut().enumerate() {
-            if polygon.hidden {
-                continue;
-            }
-
-            if polygon.contains_point(&self.last_top_left, &camera) {
-                self.dragging_polygon = Some(polygon.id);
-                self.drag_start = Some(self.last_top_left);
-
-                // TODO: make DRY with below
-                if (self.handle_polygon_click.is_some()) {
-                    let handler_creator = self
-                        .handle_polygon_click
-                        .as_ref()
-                        .expect("Couldn't get handler");
-                    let mut handle_click = handler_creator().expect("Couldn't get handler");
-                    handle_click(
-                        polygon.id,
-                        PolygonConfig {
-                            id: polygon.id,
-                            name: polygon.name.clone(),
-                            points: polygon.points.clone(),
-                            dimensions: polygon.dimensions,
-                            position: Point {
-                                x: polygon.transform.position.x,
-                                y: polygon.transform.position.y,
-                            },
-                            border_radius: polygon.border_radius,
-                            fill: polygon.fill,
-                            stroke: polygon.stroke,
-                            layer: polygon.layer,
-                        },
-                    );
-                    self.selected_polygon_id = polygon.id;
-                    polygon.old_points = Some(polygon.points.clone());
-                }
-
-                return None; // nothing to add to undo stack
-            }
-        }
-
-        // Check if we're clicking on a text item to drag
-        for (text_index, text_item) in self.text_items.iter_mut().enumerate() {
-            if text_item.hidden {
-                continue;
-            }
-
-            if text_item.contains_point(&self.last_top_left, &camera) {
-                self.dragging_text = Some(text_item.id);
-                self.drag_start = Some(self.last_top_left);
-
-                // TODO: make DRY with below
-                if (self.handle_text_click.is_some()) {
-                    let handler_creator = self
-                        .handle_text_click
-                        .as_ref()
-                        .expect("Couldn't get handler");
-                    let mut handle_click = handler_creator().expect("Couldn't get handler");
-                    handle_click(
-                        text_item.id,
-                        TextRendererConfig {
-                            id: text_item.id,
-                            name: text_item.name.clone(),
-                            text: text_item.text.clone(),
-                            font_family: text_item.font_family.clone(),
-                            // points: polygon.points.clone(),
-                            dimensions: text_item.dimensions,
-                            position: Point {
-                                x: text_item.transform.position.x,
-                                y: text_item.transform.position.y,
-                            },
-                            layer: text_item.layer,
-                            color: text_item.color,
-                            font_size: text_item.font_size, // border_radius: polygon.border_radius,
-                                                            // fill: polygon.fill,
-                                                            // stroke: polygon.stroke,
-                        },
-                    );
-                    self.selected_polygon_id = text_item.id; // TODO: separate property for each object type?
-                                                             // polygon.old_points = Some(polygon.points.clone());
-                }
-
-                return None; // nothing to add to undo stack
-            }
-        }
-
-        // Check if we're clicking on a image item to drag
-        for (image_index, image_item) in self.image_items.iter_mut().enumerate() {
-            if image_item.hidden {
-                continue;
-            }
-
-            if image_item.contains_point(&self.last_top_left, &camera) {
-                self.dragging_image =
-                    Some(Uuid::from_str(&image_item.id).expect("Couldn't convert to uuid"));
-                self.drag_start = Some(self.last_top_left);
-
-                // TODO: make DRY with below
-                if (self.handle_image_click.is_some()) {
-                    let handler_creator = self
-                        .handle_image_click
-                        .as_ref()
-                        .expect("Couldn't get handler");
-                    let mut handle_click = handler_creator().expect("Couldn't get handler");
-                    let uuid = Uuid::from_str(&image_item.id.clone())
-                        .expect("Couldn't convert string to uuid");
-                    handle_click(
-                        uuid,
-                        StImageConfig {
-                            id: image_item.id.clone(),
-                            name: image_item.name.clone(),
-                            path: image_item.path.clone(),
-                            // points: polygon.points.clone(),
-                            dimensions: image_item.dimensions,
-                            position: Point {
-                                x: image_item.transform.position.x,
-                                y: image_item.transform.position.y,
-                            },
-                            layer: image_item.layer, // border_radius: polygon.border_radius,
-                                                     // fill: polygon.fill,
-                                                     // stroke: polygon.stroke,
-                        },
-                    );
-                    self.selected_polygon_id = uuid; // TODO: separate property for each object type?
-                                                     // polygon.old_points = Some(polygon.points.clone());
-                }
 
                 return None; // nothing to add to undo stack
             }
@@ -2496,20 +2544,18 @@ fn create_path_segment(
     )
 }
 
-/// Creates a path segment using a rotated square
+/// Creates a path handle for dragging and showing direction
 fn create_path_handle(
     window_size: &WindowSize,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
     camera: &Camera,
-    start: Point,
     end: Point,
     size: f32,
     selected_sequence_id: String,
     fill: [f32; 4],
 ) -> Polygon {
-    // Create polygon using default square points
     Polygon::new(
         window_size,
         device,
@@ -2517,10 +2563,16 @@ fn create_path_handle(
         model_bind_group_layout,
         camera,
         vec![
+            // rightside up
             Point { x: 0.0, y: 0.0 },
+            Point { x: 0.5, y: 0.6 },
             Point { x: 1.0, y: 0.0 },
             Point { x: 0.5, y: 1.0 },
+            // upside down
+            // Point { x: 1.0, y: 1.0 },
+            // Point { x: 0.5, y: 0.4 },
             // Point { x: 0.0, y: 1.0 },
+            // Point { x: 0.5, y: 0.0 },
         ],
         (size, size), // width = length of segment, height = thickness
         end,
@@ -2593,6 +2645,101 @@ fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: Duration) ->
         panic!("Expected position keyframes")
     }
 }
+
+// curves attempt
+// #[derive(Clone, Debug)]
+// pub struct ControlPoint {
+//     pub x: f32,
+//     pub y: f32,
+// }
+
+// #[derive(Clone, Debug)]
+// pub struct CurveData {
+//     pub control_point1: Option<ControlPoint>,
+//     pub control_point2: Option<ControlPoint>,
+// }
+
+// #[derive(Clone, Debug)]
+// pub enum PathType {
+//     Linear,
+//     Bezier(CurveData),
+// }
+
+// impl Default for PathType {
+//     fn default() -> Self {
+//         PathType::Linear
+//     }
+// }
+
+// /// Get interpolated position using cubic Bézier curves
+// fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: Duration) -> [i32; 2] {
+//     if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
+//         (&start.value, &end.value)
+//     {
+//         let progress = {
+//             let total_time = (end.time - start.time).as_secs_f32();
+//             let current_time = (time - start.time).as_secs_f32();
+//             let t = current_time / total_time;
+
+//             match start.easing {
+//                 EasingType::Linear => t,
+//                 EasingType::EaseIn => t * t,
+//                 EasingType::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
+//                 EasingType::EaseInOut => {
+//                     if t < 0.5 {
+//                         2.0 * t * t
+//                     } else {
+//                         1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+//                     }
+//                 }
+//             }
+//         };
+
+//         // Get curve data from the keyframe (you'll need to add this to your UIKeyframe struct)
+//         // let path_type = start.path_type.as_ref().unwrap_or(&PathType::Linear);
+//         let path_type = PathType::Bezier(CurveData {
+//             control_point1: None,
+//             control_point2: None,
+//         });
+
+//         match path_type {
+//             PathType::Linear => [
+//                 (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * progress) as i32,
+//                 (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * progress) as i32,
+//             ],
+//             PathType::Bezier(curve_data) => {
+//                 let p0 = (start_pos[0] as f32, start_pos[1] as f32);
+//                 let p3 = (end_pos[0] as f32, end_pos[1] as f32);
+
+//                 // Use control points if available, otherwise generate default ones
+//                 let p1 = curve_data.control_point1.as_ref().map_or_else(
+//                     || (p0.0 + (p3.0 - p0.0) * 0.33, p0.1 + (p3.1 - p0.1) * 0.33),
+//                     |cp| (cp.x, cp.y),
+//                 );
+
+//                 let p2 = curve_data.control_point2.as_ref().map_or_else(
+//                     || (p0.0 + (p3.0 - p0.0) * 0.66, p0.1 + (p3.1 - p0.1) * 0.66),
+//                     |cp| (cp.x, cp.y),
+//                 );
+
+//                 // Cubic Bezier curve formula
+//                 let t = progress;
+//                 let t2 = t * t;
+//                 let t3 = t2 * t;
+//                 let mt = 1.0 - t;
+//                 let mt2 = mt * mt;
+//                 let mt3 = mt2 * mt;
+
+//                 let x = p0.0 * mt3 + 3.0 * p1.0 * mt2 * t + 3.0 * p2.0 * mt * t2 + p3.0 * t3;
+//                 let y = p0.1 * mt3 + 3.0 * p1.1 * mt2 * t + 3.0 * p2.1 * mt * t2 + p3.1 * t3;
+
+//                 [x as i32, y as i32]
+//             }
+//         }
+//     } else {
+//         panic!("Expected position keyframes")
+//     }
+// }
 
 use cgmath::InnerSpace;
 
@@ -2758,6 +2905,13 @@ pub fn visualize_ray_intersection(
     };
 
     Ray { top_left }
+}
+
+// Define an enum to represent interaction targets
+pub enum InteractionTarget {
+    Polygon(usize),
+    Text(usize),
+    Image(usize),
 }
 
 fn get_color(color_index: u32) -> u32 {
