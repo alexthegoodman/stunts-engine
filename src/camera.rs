@@ -78,14 +78,14 @@ impl Camera {
     // }
 
     // And its inverse if you need it
-    pub fn normalized_to_ndc(&self, norm_x: f32, norm_y: f32) -> (f32, f32) {
-        // Convert from [0, 1] to [-1, 1]
-        let ndc_x = (norm_x * 2.0) - 1.0;
-        // Convert from [0, 1] to [-1, 1] and flip Y
-        let ndc_y = -((norm_y * 2.0) - 1.0);
+    // pub fn normalized_to_ndc(&self, norm_x: f32, norm_y: f32) -> (f32, f32) {
+    //     // Convert from [0, 1] to [-1, 1]
+    //     let ndc_x = (norm_x * 2.0) - 1.0;
+    //     // Convert from [0, 1] to [-1, 1] and flip Y
+    //     let ndc_y = -((norm_y * 2.0) - 1.0);
 
-        (ndc_x, ndc_y)
-    }
+    //     (ndc_x, ndc_y)
+    // }
 
     pub fn get_view_projection_matrix(&self) -> Matrix4<f32> {
         let projection = self.get_projection();
@@ -101,17 +101,53 @@ impl Camera {
         let zoom_factor = self.zoom;
         let aspect_ratio = self.window_size.width as f32 / self.window_size.height as f32;
 
+        let left = -1.0;
+        let right = 1.0;
+        let top = 1.0;
+        let bottom = -1.0;
+        let dx = (right - left) / (2.0 * zoom_factor);
+        let dy = (top - bottom) / (2.0 * zoom_factor);
+        let cx = (right + left) / 2.0;
+        let cy = (top + bottom) / 2.0;
+
+        let left = cx - dx;
+        let right = cx + dx;
+        let top = cy + dy;
+        let bottom = cy - dy;
+
+        // cgmath::ortho(
+        //     -(zoom_factor * aspect_ratio) / 2.0, // left
+        //     (zoom_factor * aspect_ratio) / 2.0,  // right
+        //     -zoom_factor,                        // bottom
+        //     zoom_factor,                         // top
+        //     -100.0,                              // near
+        //     100.0,                               // far
+        // )
         cgmath::ortho(
-            -(zoom_factor * aspect_ratio) / 2.0, // left
-            (zoom_factor * aspect_ratio) / 2.0,  // right
-            -zoom_factor,                        // bottom
-            zoom_factor,                         // top
-            -100.0,                              // near
-            100.0,                               // far
+            left,   // left
+            right,  // right
+            bottom, // bottom
+            top,    // top
+            -100.0, // near
+            100.0,  // far
         )
     }
 
+    // pub fn get_projection(&self) -> Matrix4<f32> {
+    //     let zoom_factor = self.zoom;
+    //     let aspect_ratio = self.window_size.width as f32 / self.window_size.height as f32;
+
+    //     // Projection matrix now only scales to scene bounds, not NDC
+    //     Matrix4::from_nonuniform_scale(zoom_factor * aspect_ratio, zoom_factor, 1.0)
+    // }
+
     pub fn get_view(&self) -> Matrix4<f32> {
+        // | 1  0  0  0 |
+        // | 0  1  0  0 |
+        // | 0  0  1  0 |
+        // |-x -y  0  1 |
+
+        // creates illusion of camera movement by shifting matrix based on position (default test_norm is 0,0)
         let test_norm = size_to_normal(&self.window_size, self.position.x, self.position.y);
         let view = Matrix4::new(
             // self.zoom,

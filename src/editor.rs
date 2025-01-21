@@ -2026,9 +2026,10 @@ impl Editor {
     ) {
         let camera = self.camera.as_mut().expect("Couldn't get camera");
         let mouse_pos = Point { x, y };
-        let ray = visualize_ray_intersection(window_size, x, y, &camera);
-        let top_left = ray.top_left;
+        // let ray = visualize_ray_intersection(window_size, x, y, &camera);
+        // let top_left = ray.top_left;
         // let top_left = camera.screen_to_world(x, y);
+        let top_left = mouse_pos;
 
         self.global_top_left = top_left;
         self.last_screen = Point { x, y };
