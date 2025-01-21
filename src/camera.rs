@@ -178,26 +178,31 @@ impl Camera {
         self.position += delta;
     }
 
-    pub fn zoom(&mut self, factor: f32, center: Point) {
-        // let world_center = self.screen_to_world(center);
-        let world_center = center;
+    // pub fn zoom(&mut self, factor: f32, center: Point) {
+    //     // let world_center = self.screen_to_world(center);
+    //     let world_center = center;
 
-        // For zoom in/out to be reversible, we need multiplicative inverses
-        // e.g., zooming by 0.9 then by 1/0.9 should restore original state
-        let zoom_factor = if factor > 0.0 {
-            1.0 + factor
-        } else {
-            1.0 / (1.0 - factor)
-        };
+    //     // For zoom in/out to be reversible, we need multiplicative inverses
+    //     // e.g., zooming by 0.9 then by 1/0.9 should restore original state
+    //     let zoom_factor = if factor > 0.0 {
+    //         1.0 + factor
+    //     } else {
+    //         1.0 / (1.0 - factor)
+    //     };
 
-        println!("zoom {:?} {:?}", self.zoom, zoom_factor);
+    //     println!("zoom {:?} {:?}", self.zoom, zoom_factor);
 
-        let old_zoom = self.zoom;
-        self.zoom = (self.zoom * zoom_factor).clamp(-10.0, 10.0);
+    //     let old_zoom = self.zoom;
+    //     self.zoom = (self.zoom * zoom_factor).clamp(-10.0, 10.0);
 
-        // Keep the point under cursor stationary
-        // let world_pos = Vector2::new(world_center.x, world_center.y);
-        // self.position = world_pos + (self.position - world_pos) * (old_zoom / self.zoom);
+    //     // Keep the point under cursor stationary
+    //     // let world_pos = Vector2::new(world_center.x, world_center.y);
+    //     // self.position = world_pos + (self.position - world_pos) * (old_zoom / self.zoom);
+    // }
+
+    pub fn zoom(&mut self, delta: f32, center: Point) {
+        self.zoom = self.zoom + delta;
+        println!("new zoom: {:?} delta: {:?}", self.zoom, delta);
     }
 }
 

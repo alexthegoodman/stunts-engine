@@ -2026,10 +2026,10 @@ impl Editor {
     ) {
         let camera = self.camera.as_mut().expect("Couldn't get camera");
         let mouse_pos = Point { x, y };
-        // let ray = visualize_ray_intersection(window_size, x, y, &camera);
-        // let top_left = ray.top_left;
+        let ray = visualize_ray_intersection(window_size, x, y, &camera);
+        let top_left = ray.top_left;
         // let top_left = camera.screen_to_world(x, y);
-        let top_left = mouse_pos;
+        // let top_left = mouse_pos;
 
         self.global_top_left = top_left;
         self.last_screen = Point { x, y };
@@ -2630,61 +2630,131 @@ use crate::text_due::{TextRenderer, TextRendererConfig};
 use crate::timelines::{SavedTimelineStateConfig, TrackType};
 use crate::transform::angle_between_points;
 
+// old
+// pub fn visualize_ray_intersection(
+//     // device: &wgpu::Device,
+//     window_size: &WindowSize,
+//     screen_x: f32,
+//     screen_y: f32,
+//     camera: &Camera,
+// ) -> Ray {
+//     // only a small adjustment in aspect ratio when going full screen
+//     // let aspect_ratio = window_size.width as f32 / window_size.height as f32; // ~1.5
+//     // let aspect_ratio_rev = window_size.height as f32 / window_size.width as f32; // ~0.5
+
+//     // // println!("Aspect Ratio: {:?} vs {:?}", aspect_ratio, aspect_ratio_rev);
+
+//     // let norm_x = screen_x / camera.window_size.width as f32;
+//     // let norm_y = screen_y / camera.window_size.height as f32;
+
+//     // // put camera pos in view_pos instead?
+//     // // let view_pos = Vector3::new(0.0, 0.0, 0.0);
+//     // // let model_view = Matrix4::from_translation(view_pos);
+
+//     // // defaults to 1.0
+//     let scale_factor = camera.zoom;
+
+//     // // the plane size, normalized
+//     // let plane_size_normal = Vector3::new(
+//     //     (1.0 * aspect_ratio * scale_factor) / 2.0,
+//     //     (1.0 * 2.0 * scale_factor) / 2.0,
+//     //     0.0,
+//     // );
+
+//     // // Transform norm point to view space
+//     // let view_point_normal = Point3::new(
+//     //     (norm_x * plane_size_normal.x),
+//     //     (norm_y * plane_size_normal.y),
+//     //     0.0,
+//     // );
+//     // // let world_point_normal = model_view
+//     // //     .invert()
+//     // //     .unwrap()
+//     // //     .transform_point(view_point_normal);
+
+//     // // NOTE: offset only applied if scale_factor (camera zoom) is adjusted from 1.0
+//     // let offset_x = (scale_factor - 1.0) * (400.0 * aspect_ratio);
+//     // let offset_y = (scale_factor - 1.0) * 400.0;
+
+//     // // NOTE: camera position is 0,0 be default
+//     // let top_left: Point = Point {
+//     //     x: (view_point_normal.x * window_size.width as f32) + (camera.position.x * 0.5) + 70.0
+//     //         - offset_x,
+//     //     y: (view_point_normal.y * window_size.height as f32) - (camera.position.y * 0.5) - offset_y,
+//     // };
+
+//     let pan_offset_x = camera.position.x * 0.5;
+//     let pan_offset_y = camera.position.y * 0.5;
+
+//     // let zoom_offset_x = (scale_factor - 1.0) * (window_size.width as f32 / 2.0);
+//     // let zoom_offset_y = (scale_factor - 1.0) * (window_size.height as f32 / 2.0);
+
+//     let top_left: Point = Point {
+//         x: screen_x + pan_offset_x,
+//         y: screen_y - pan_offset_y,
+//     };
+
+//     Ray { top_left }
+// }
+
+// new
+// pub fn visualize_ray_intersection(
+//     window_size: &WindowSize,
+//     screen_x: f32,
+//     screen_y: f32,
+//     camera: &Camera,
+// ) -> Ray {
+//     let aspect_ratio = window_size.width as f32 / window_size.height as f32; // ~1.5
+//     let scale_factor = camera.zoom;
+//     let pan_offset_x = camera.position.x * 0.5;
+//     let pan_offset_y = camera.position.y * 0.5;
+
+//     // let zoom_offset_x = (scale_factor - 1.0) * (400.0);
+//     // let zoom_offset_y = (scale_factor - 1.0) * (400.0);
+
+//     // Apply zoom to screen coordinates
+//     let zoomed_screen_x = screen_x / scale_factor;
+//     let zoomed_screen_y = screen_y / scale_factor;
+
+//     let zoom_offset_x = (scale_factor - 1.0) * 500.0;
+//     let zoom_offset_y = (scale_factor - 1.0) * 300.0;
+
+//     let top_left: Point = Point {
+//         x: zoomed_screen_x + zoom_offset_x + pan_offset_x,
+//         y: zoomed_screen_y + zoom_offset_y - pan_offset_y,
+//     };
+
+//     Ray { top_left }
+// }
+
 pub fn visualize_ray_intersection(
-    // device: &wgpu::Device,
     window_size: &WindowSize,
     screen_x: f32,
     screen_y: f32,
     camera: &Camera,
 ) -> Ray {
-    // only a small adjustment in aspect ratio when going full screen
-    let aspect_ratio = window_size.width as f32 / window_size.height as f32; // ~1.5
-                                                                             // let aspect_ratio_rev = window_size.height as f32 / window_size.width as f32; // ~0.5
+    let scale_factor = camera.zoom;
+    let zoom_center_x = window_size.width as f32 / 2.0;
+    let zoom_center_y = window_size.height as f32 / 2.0;
 
-    // // println!("Aspect Ratio: {:?} vs {:?}", aspect_ratio, aspect_ratio_rev);
+    // 1. Translate screen coordinates to zoom center
+    let translated_screen_x = screen_x - zoom_center_x;
+    let translated_screen_y = screen_y - zoom_center_y;
 
-    // let norm_x = screen_x / camera.window_size.width as f32;
-    // let norm_y = screen_y / camera.window_size.height as f32;
+    // 2. Apply zoom
+    let zoomed_screen_x = translated_screen_x / scale_factor;
+    let zoomed_screen_y = translated_screen_y / scale_factor;
 
-    // // put camera pos in view_pos instead?
-    // // let view_pos = Vector3::new(0.0, 0.0, 0.0);
-    // // let model_view = Matrix4::from_translation(view_pos);
+    // 3. Translate back to original screen space
+    let scaled_screen_x = zoomed_screen_x + zoom_center_x;
+    let scaled_screen_y = zoomed_screen_y + zoom_center_y;
 
-    // // defaults to 1.0
-    // let scale_factor = camera.zoom;
-
-    // // the plane size, normalized
-    // let plane_size_normal = Vector3::new(
-    //     (1.0 * aspect_ratio * scale_factor) / 2.0,
-    //     (1.0 * 2.0 * scale_factor) / 2.0,
-    //     0.0,
-    // );
-
-    // // Transform norm point to view space
-    // let view_point_normal = Point3::new(
-    //     (norm_x * plane_size_normal.x),
-    //     (norm_y * plane_size_normal.y),
-    //     0.0,
-    // );
-    // // let world_point_normal = model_view
-    // //     .invert()
-    // //     .unwrap()
-    // //     .transform_point(view_point_normal);
-
-    // // NOTE: offset only applied if scale_factor (camera zoom) is adjusted from 1.0
-    // let offset_x = (scale_factor - 1.0) * (400.0 * aspect_ratio);
-    // let offset_y = (scale_factor - 1.0) * 400.0;
-
-    // // NOTE: camera position is 0,0 be default
-    // let top_left: Point = Point {
-    //     x: (view_point_normal.x * window_size.width as f32) + (camera.position.x * 0.5) + 70.0
-    //         - offset_x,
-    //     y: (view_point_normal.y * window_size.height as f32) - (camera.position.y * 0.5) - offset_y,
-    // };
+    let pan_offset_x = camera.position.x * 0.5;
+    let pan_offset_y = camera.position.y * 0.5;
 
     let top_left: Point = Point {
-        x: (screen_x * (aspect_ratio / 2.0)) + 70.0,
-        y: screen_y,
+        x: scaled_screen_x + pan_offset_x,
+        y: scaled_screen_y - pan_offset_y,
     };
 
     Ray { top_left }
