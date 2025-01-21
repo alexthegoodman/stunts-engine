@@ -4,7 +4,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera::{self, Camera},
-    editor::{size_to_ndc, Point, WindowSize},
+    editor::{Point, WindowSize},
     transform::{matrix4_to_raw_array, Transform},
     vertex::{get_z_layer, Vertex},
 };

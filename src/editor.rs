@@ -89,7 +89,7 @@ impl Viewport {
     }
 }
 
-pub fn size_to_ndc(window_size: &WindowSize, x: f32, y: f32) -> (f32, f32) {
+pub fn size_to_normal(window_size: &WindowSize, x: f32, y: f32) -> (f32, f32) {
     let ndc_x = x / window_size.width as f32;
     let ndc_y = y / window_size.height as f32;
 
@@ -230,7 +230,9 @@ pub struct Editor {
     pub camera: Option<Camera>,
     pub camera_binding: Option<CameraBinding>,
     pub model_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
+    pub window_size_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
     pub window_size_bind_group: Option<wgpu::BindGroup>,
+    pub window_size_buffer: Option<Arc<wgpu::Buffer>>,
     pub on_mouse_up: Option<Arc<OnMouseUp>>,
     pub on_handle_mouse_up: Option<Arc<OnHandleMouseUp>>,
     pub current_view: String,
@@ -320,7 +322,9 @@ impl Editor {
             last_frame_time: None,
             start_playing_time: None,
             model_bind_group_layout: None,
+            window_size_bind_group_layout: None,
             window_size_bind_group: None,
+            window_size_buffer: None,
             static_polygons: Vec::new(),
             on_mouse_up: None,
             current_view: "manage_projects".to_string(),
@@ -1833,9 +1837,9 @@ impl Editor {
         device: &wgpu::Device,
     ) -> Option<PolygonEditConfig> {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
-        let x = self.ds_ndc_pos.x;
-        let y = self.ds_ndc_pos.y;
-        let mouse_pos = Point { x, y };
+        // let x = self.ds_ndc_pos.x;
+        // let y = self.ds_ndc_pos.y;
+        // let mouse_pos = Point { x, y };
         // let world_pos = camera.screen_to_world(mouse_pos);
 
         if (self.last_screen.x < self.interactive_bounds.min.x
@@ -2022,13 +2026,9 @@ impl Editor {
     ) {
         let camera = self.camera.as_mut().expect("Couldn't get camera");
         let mouse_pos = Point { x, y };
-        let ds_ndc = visualize_ray_intersection(window_size, x, y, &camera);
-        let ds_ndc_pos = ds_ndc.origin;
-        let ds_ndc_pos = Point {
-            x: ds_ndc_pos.x,
-            y: ds_ndc_pos.y,
-        };
-        let top_left = ds_ndc.top_left;
+        let ray = visualize_ray_intersection(window_size, x, y, &camera);
+        let top_left = ray.top_left;
+        // let top_left = camera.screen_to_world(x, y);
 
         self.global_top_left = top_left;
         self.last_screen = Point { x, y };
@@ -2044,10 +2044,10 @@ impl Editor {
         }
 
         self.last_top_left = top_left;
-        self.ds_ndc_pos = ds_ndc_pos;
-        self.ndc = ds_ndc.ndc;
+        // self.ds_ndc_pos = ds_ndc_pos;
+        // self.ndc = ds_ndc.ndc;
 
-        self.last_world = camera.screen_to_world(mouse_pos);
+        // self.last_world = camera.screen_to_world(mouse_pos);
 
         // self.update_cursor();
 
@@ -2597,18 +2597,18 @@ use cgmath::InnerSpace;
 
 #[derive(Debug)]
 pub struct Ray {
-    pub origin: Point3<f32>,
-    pub direction: Vector3<f32>,
-    pub ndc: Point,
+    // pub origin: Point3<f32>,
+    // pub direction: Vector3<f32>,
+    // pub ndc: Point,
     pub top_left: Point,
 }
 
 impl Ray {
     pub fn new(origin: Point3<f32>, direction: Vector3<f32>) -> Self {
         Ray {
-            origin,
-            direction: direction.normalize(),
-            ndc: Point { x: 0.0, y: 0.0 },
+            // origin,
+            // direction: direction.normalize(),
+            // ndc: Point { x: 0.0, y: 0.0 },
             top_left: Point { x: 0.0, y: 0.0 },
         }
     }
@@ -2636,87 +2636,57 @@ pub fn visualize_ray_intersection(
     screen_y: f32,
     camera: &Camera,
 ) -> Ray {
-    let aspect_ratio = window_size.width as f32 / window_size.height as f32;
+    // only a small adjustment in aspect ratio when going full screen
+    let aspect_ratio = window_size.width as f32 / window_size.height as f32; // ~1.5
+                                                                             // let aspect_ratio_rev = window_size.height as f32 / window_size.width as f32; // ~0.5
 
-    let ndc_x = screen_x / camera.window_size.width as f32;
-    let ndc_y = (screen_y / camera.window_size.height as f32);
+    // // println!("Aspect Ratio: {:?} vs {:?}", aspect_ratio, aspect_ratio_rev);
 
-    let view_pos = Vector3::new(0.0, 0.0, 0.0);
-    let model_view = Matrix4::from_translation(view_pos);
+    // let norm_x = screen_x / camera.window_size.width as f32;
+    // let norm_y = screen_y / camera.window_size.height as f32;
 
-    let scale_factor = camera.zoom;
+    // // put camera pos in view_pos instead?
+    // // let view_pos = Vector3::new(0.0, 0.0, 0.0);
+    // // let model_view = Matrix4::from_translation(view_pos);
 
-    let plane_size_normal = Vector3::new(
-        (1.0 * aspect_ratio * scale_factor) / 2.0,
-        (1.0 * 2.0 * scale_factor) / 2.0,
-        0.0,
-    );
+    // // defaults to 1.0
+    // let scale_factor = camera.zoom;
 
-    // Transform NDC point to view space
-    let view_point_normal = Point3::new(
-        (ndc_x * plane_size_normal.x),
-        (ndc_y * plane_size_normal.y),
-        0.0,
-    );
-    let world_point_normal = model_view
-        .invert()
-        .unwrap()
-        .transform_point(view_point_normal);
+    // // the plane size, normalized
+    // let plane_size_normal = Vector3::new(
+    //     (1.0 * aspect_ratio * scale_factor) / 2.0,
+    //     (1.0 * 2.0 * scale_factor) / 2.0,
+    //     0.0,
+    // );
 
-    // println!("normal {:?}", world_point_normal);
+    // // Transform norm point to view space
+    // let view_point_normal = Point3::new(
+    //     (norm_x * plane_size_normal.x),
+    //     (norm_y * plane_size_normal.y),
+    //     0.0,
+    // );
+    // // let world_point_normal = model_view
+    // //     .invert()
+    // //     .unwrap()
+    // //     .transform_point(view_point_normal);
 
-    // Create a plane in view space
-    let plane_center = Point3::new(
-        -(camera.window_size.width as f32) * scale_factor,
-        -(camera.window_size.height as f32) * scale_factor,
-        0.0,
-    );
+    // // NOTE: offset only applied if scale_factor (camera zoom) is adjusted from 1.0
+    // let offset_x = (scale_factor - 1.0) * (400.0 * aspect_ratio);
+    // let offset_y = (scale_factor - 1.0) * 400.0;
 
-    let plane_size = Vector3::new(
-        (camera.window_size.width as f32 * scale_factor) * aspect_ratio,
-        (camera.window_size.height as f32 * scale_factor) * 2.0,
-        0.0,
-    );
-
-    // Transform NDC point to view space, accounting for center offset
-    let view_point = Point3::new(
-        ndc_x * plane_size.x + plane_center.x,
-        ndc_y * plane_size.y + plane_center.y,
-        0.0,
-    );
-
-    // Transform to world space
-    let world_point = model_view.invert().unwrap().transform_point(view_point);
-
-    // Create ray from camera position to point (in 3D space)
-    let camera_pos_3d = Point3::new(camera.position.x, camera.position.y, 0.0);
-    let direction = (world_point - camera_pos_3d).normalize();
-
-    let origin = Point3 {
-        x: world_point.x + camera.position.x + 140.0,
-        y: -(world_point.y) + camera.position.y,
-        z: world_point.z,
-    };
-
-    let ndc = camera.normalized_to_ndc(world_point_normal.x, world_point_normal.y);
-
-    let offset_x = (scale_factor - 1.0) * (400.0 * aspect_ratio);
-    let offset_y = (scale_factor - 1.0) * 400.0;
+    // // NOTE: camera position is 0,0 be default
+    // let top_left: Point = Point {
+    //     x: (view_point_normal.x * window_size.width as f32) + (camera.position.x * 0.5) + 70.0
+    //         - offset_x,
+    //     y: (view_point_normal.y * window_size.height as f32) - (camera.position.y * 0.5) - offset_y,
+    // };
 
     let top_left: Point = Point {
-        x: (world_point_normal.x * window_size.width as f32) + (camera.position.x * 0.5) + 70.0
-            - offset_x,
-        y: (world_point_normal.y * window_size.height as f32)
-            - (camera.position.y * 0.5)
-            - offset_y,
+        x: (screen_x * (aspect_ratio / 2.0)) + 70.0,
+        y: screen_y,
     };
 
-    Ray {
-        direction,
-        origin,
-        ndc: Point { x: ndc.0, y: ndc.1 },
-        top_left,
-    }
+    Ray { top_left }
 }
 
 fn get_color(color_index: u32) -> u32 {

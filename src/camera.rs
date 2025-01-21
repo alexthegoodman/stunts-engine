@@ -1,10 +1,6 @@
 use cgmath::{Matrix4, Point2, Point3, Vector2, Vector3, Vector4};
 
-use crate::{
-    editor::point_to_ndc,
-    editor::size_to_ndc,
-    editor::{Point, WindowSize},
-};
+use crate::editor::{point_to_ndc, size_to_normal, Point, WindowSize};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Camera {
@@ -34,52 +30,52 @@ impl Camera {
         }
     }
 
-    pub fn screen_to_world(&self, screen_pos: Point) -> Point {
-        Point {
-            x: (screen_pos.x + self.position.x),
-            y: (screen_pos.y + self.position.y),
-        }
-    }
+    // pub fn screen_to_world(&self, screen_pos: Point) -> Point {
+    //     Point {
+    //         x: (screen_pos.x + self.position.x),
+    //         y: (screen_pos.y + self.position.y),
+    //     }
+    // }
 
-    pub fn world_to_screen(&self, world_pos: Point) -> Point {
-        Point {
-            x: (world_pos.x - self.position.x),
-            y: (world_pos.y - self.position.y),
-        }
-    }
+    // pub fn world_to_screen(&self, world_pos: Point) -> Point {
+    //     Point {
+    //         x: (world_pos.x - self.position.x),
+    //         y: (world_pos.y - self.position.y),
+    //     }
+    // }
 
-    pub fn ds_ndc_to_top_left(&self, ds_ndc_pos: Point) -> Point {
-        let aspect_ratio = self.window_size.width as f32 / self.window_size.height as f32;
-        let pos_x = ds_ndc_pos.x / self.window_size.width as f32;
-        let pos_y = ds_ndc_pos.y / self.window_size.height as f32;
+    // pub fn ds_ndc_to_top_left(&self, ds_ndc_pos: Point) -> Point {
+    //     let aspect_ratio = self.window_size.width as f32 / self.window_size.height as f32;
+    //     let pos_x = ds_ndc_pos.x / self.window_size.width as f32;
+    //     let pos_y = ds_ndc_pos.y / self.window_size.height as f32;
 
-        let (x, y) = self.ndc_to_normalized(pos_x, pos_y);
+    //     let (x, y) = self.ndc_to_normalized(pos_x, pos_y);
 
-        let x = (x * self.window_size.width as f32) + 65.0;
-        let y = y * self.window_size.height as f32;
+    //     let x = (x * self.window_size.width as f32) + 65.0;
+    //     let y = y * self.window_size.height as f32;
 
-        Point { x, y }
-    }
+    //     Point { x, y }
+    // }
 
-    pub fn ndc_to_top_left(&self, ds_ndc_pos: Point) -> Point {
-        let aspect_ratio = self.window_size.width as f32 / self.window_size.height as f32;
+    // pub fn ndc_to_top_left(&self, ds_ndc_pos: Point) -> Point {
+    //     let aspect_ratio = self.window_size.width as f32 / self.window_size.height as f32;
 
-        let (x, y) = self.ndc_to_normalized(ds_ndc_pos.x, ds_ndc_pos.y);
+    //     let (x, y) = self.ndc_to_normalized(ds_ndc_pos.x, ds_ndc_pos.y);
 
-        let x = (x * self.window_size.width as f32);
-        let y = y * self.window_size.height as f32;
+    //     let x = (x * self.window_size.width as f32);
+    //     let y = y * self.window_size.height as f32;
 
-        Point { x, y }
-    }
+    //     Point { x, y }
+    // }
 
-    pub fn ndc_to_normalized(&self, ndc_x: f32, ndc_y: f32) -> (f32, f32) {
-        // Convert from [-1, 1] to [0, 1]
-        let norm_x = (ndc_x + 1.0) / 2.0;
-        // Flip Y and convert from [-1, 1] to [0, 1]
-        let norm_y = (-ndc_y + 1.0) / 2.0;
+    // pub fn ndc_to_normalized(&self, ndc_x: f32, ndc_y: f32) -> (f32, f32) {
+    //     // Convert from [-1, 1] to [0, 1]
+    //     let norm_x = (ndc_x + 1.0) / 2.0;
+    //     // Flip Y and convert from [-1, 1] to [0, 1]
+    //     let norm_y = (-ndc_y + 1.0) / 2.0;
 
-        (norm_x, norm_y)
-    }
+    //     (norm_x, norm_y)
+    // }
 
     // And its inverse if you need it
     pub fn normalized_to_ndc(&self, norm_x: f32, norm_y: f32) -> (f32, f32) {
@@ -116,7 +112,7 @@ impl Camera {
     }
 
     pub fn get_view(&self) -> Matrix4<f32> {
-        let test_ndc = size_to_ndc(&self.window_size, self.position.x, self.position.y);
+        let test_norm = size_to_normal(&self.window_size, self.position.x, self.position.y);
         let view = Matrix4::new(
             // self.zoom,
             1.0,
@@ -132,8 +128,8 @@ impl Camera {
             0.0,
             1.0,
             0.0,
-            -test_ndc.0,
-            -test_ndc.1,
+            -test_norm.0,
+            -test_norm.1,
             0.0,
             1.0,
         );

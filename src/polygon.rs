@@ -10,9 +10,7 @@ use crate::{
     dot::{
         closest_point_on_line_segment, closest_point_on_line_segment_with_info, distance, EdgePoint,
     },
-    editor::{
-        rgb_to_wgpu, size_to_ndc, visualize_ray_intersection, BoundingBox, Point, Shape, WindowSize,
-    },
+    editor::{rgb_to_wgpu, visualize_ray_intersection, BoundingBox, Point, Shape, WindowSize},
     transform::{self, matrix4_to_raw_array, Transform as SnTransform},
     vertex::{get_z_layer, Vertex},
 };
