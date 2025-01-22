@@ -857,8 +857,8 @@ impl Polygon {
             fill: self.fill,
             dimensions: self.dimensions,
             position: Point {
-                x: self.transform.position.x,
-                y: self.transform.position.y,
+                x: self.transform.position.x - 600.0,
+                y: self.transform.position.y - 50.0,
             },
             border_radius: self.border_radius,
             stroke: self.stroke,
