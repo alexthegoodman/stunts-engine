@@ -13,6 +13,7 @@ use floem_renderer::gpu_resources::{self, GpuResources};
 use floem_winit::keyboard::ModifiersState;
 use floem_winit::window::Window;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use uuid::Uuid;
 use winit::window::CursorIcon;
@@ -684,6 +685,7 @@ impl Editor {
                     time: Duration::from_millis(timestamps[keyframe_idx] as u64),
                     value: KeyframeValue::Position([predicted_x, predicted_y]),
                     easing: EasingType::EaseInOut,
+                    path_type: PathType::Linear,
                 });
             }
 
@@ -710,6 +712,7 @@ impl Editor {
                                 time: Duration::from_millis(t as u64),
                                 value: KeyframeValue::Rotation(0),
                                 easing: EasingType::EaseInOut,
+                                path_type: PathType::Linear,
                             })
                             .collect(),
                         depth: 0,
@@ -725,6 +728,7 @@ impl Editor {
                                 time: Duration::from_millis(t as u64),
                                 value: KeyframeValue::Scale(100),
                                 easing: EasingType::EaseInOut,
+                                path_type: PathType::Linear,
                             })
                             .collect(),
                         depth: 0,
@@ -740,6 +744,7 @@ impl Editor {
                                 time: Duration::from_millis(t as u64),
                                 value: KeyframeValue::Opacity(100),
                                 easing: EasingType::EaseInOut,
+                                path_type: PathType::Linear,
                             })
                             .collect(),
                         depth: 0,
@@ -2885,6 +2890,7 @@ fn create_default_property(
             time: Duration::from_millis(time as u64),
             value: value.clone(),
             easing: EasingType::EaseInOut,
+            path_type: PathType::Linear,
         })
         .collect();
 
@@ -2926,19 +2932,19 @@ fn create_default_property(
 // }
 
 // curves attempt
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct ControlPoint {
-    pub x: f32,
-    pub y: f32,
+    pub x: i32,
+    pub y: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct CurveData {
     pub control_point1: Option<ControlPoint>,
     pub control_point2: Option<ControlPoint>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum PathType {
     Linear,
     Bezier(CurveData),
@@ -2976,22 +2982,22 @@ fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: f32) -> [i32
         };
 
         // Get curve data from the keyframe
-        // let path_type = start.path_type.as_ref().unwrap_or(&PathType::Linear);
+        let path_type = start.path_type.clone();
         // let path_type = PathType::Bezier(CurveData {
         //     control_point1: None,
         //     control_point2: None,
         // });
-        let test_offset = 50.0;
-        let path_type = PathType::Bezier(CurveData {
-            control_point1: Some(ControlPoint {
-                x: (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * 0.2) + test_offset,
-                y: (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * 0.2) + test_offset,
-            }),
-            control_point2: Some(ControlPoint {
-                x: (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * 0.8) + test_offset,
-                y: (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * 0.8) + test_offset,
-            }),
-        });
+        // let test_offset = 50.0;
+        // let path_type = PathType::Bezier(CurveData {
+        //     control_point1: Some(ControlPoint {
+        //         x: (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * 0.2) + test_offset,
+        //         y: (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * 0.2) + test_offset,
+        //     }),
+        //     control_point2: Some(ControlPoint {
+        //         x: (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * 0.8) + test_offset,
+        //         y: (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * 0.8) + test_offset,
+        //     }),
+        // });
         // let path_type = PathType::Bezier(CurveData {
         //     control_point1: Some(ControlPoint { x: 500.0, y: 300.0 }),
         //     control_point2: Some(ControlPoint { x: 700.0, y: 400.0 }),
@@ -3009,12 +3015,12 @@ fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: f32) -> [i32
                 // Use control points if available, otherwise generate default ones
                 let p1 = curve_data.control_point1.as_ref().map_or_else(
                     || (p0.0 + (p3.0 - p0.0) * 0.33, p0.1 + (p3.1 - p0.1) * 0.33),
-                    |cp| (cp.x, cp.y),
+                    |cp| (cp.x as f32, cp.y as f32),
                 );
 
                 let p2 = curve_data.control_point2.as_ref().map_or_else(
                     || (p0.0 + (p3.0 - p0.0) * 0.66, p0.1 + (p3.1 - p0.1) * 0.66),
-                    |cp| (cp.x, cp.y),
+                    |cp| (cp.x as f32, cp.y as f32),
                 );
 
                 // Cubic Bezier curve formula

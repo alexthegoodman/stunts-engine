@@ -4,7 +4,8 @@ use uuid::Uuid;
 use std::time::Duration;
 
 use crate::{
-    polygon::SavedPolygonConfig, st_image::SavedStImageConfig, text_due::SavedTextRendererConfig,
+    editor::PathType, polygon::SavedPolygonConfig, st_image::SavedStImageConfig,
+    text_due::SavedTextRendererConfig,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -74,6 +75,8 @@ pub struct UIKeyframe {
     pub value: KeyframeValue,
     /// Type of interpolation to next keyframe
     pub easing: EasingType,
+    // Whether a curve (bezier) or straight (linear) path
+    pub path_type: PathType,
 }
 
 /// Possible values for keyframes
