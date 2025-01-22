@@ -400,6 +400,18 @@ impl TextRenderer {
         self.indices = indices;
     }
 
+    pub fn update_data_from_dimensions(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        dimensions: (f32, f32),
+        camera: &Camera,
+    ) {
+        self.dimensions = dimensions;
+    }
+
     // pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
     //     let local_point = self.to_local_space(*point, camera);
 

@@ -80,9 +80,9 @@ impl StImage {
         let original_dimensions = img.dimensions();
         let dimensions = image_config.dimensions;
 
-        // Calculate scale factors to maintain aspect ratio
-        let scale_x = dimensions.0 as f32 / original_dimensions.0 as f32;
-        let scale_y = dimensions.1 as f32 / original_dimensions.1 as f32;
+        // // Calculate scale factors to maintain aspect ratio
+        // let scale_x = dimensions.0 as f32 / original_dimensions.0 as f32;
+        // let scale_y = dimensions.1 as f32 / original_dimensions.1 as f32;
 
         // Option 1: Resize image data before creating texture
         let img = if (feature == "high_quality_resize") {
@@ -279,6 +279,19 @@ impl StImage {
             hidden: false,
             layer: image_config.layer,
         }
+    }
+
+    pub fn update_data_from_dimensions(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        dimensions: (f32, f32),
+        camera: &Camera,
+    ) {
+        // for "low" quality resize
+        self.transform.update_scale([dimensions.0, dimensions.1]);
     }
 
     pub fn update_layer(&mut self, layer_index: i32) {

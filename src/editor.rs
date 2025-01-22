@@ -157,7 +157,7 @@ pub fn string_to_f32(s: &str) -> Result<f32, std::num::ParseFloatError> {
 
 // Define all possible edit operations
 #[derive(Debug)]
-pub enum PolygonProperty {
+pub enum ObjectProperty {
     Width(f32),
     Height(f32),
     Red(f32),
@@ -172,11 +172,12 @@ pub enum PolygonProperty {
 }
 
 #[derive(Debug)]
-pub struct PolygonEditConfig {
-    pub polygon_id: Uuid,
+pub struct ObjectEditConfig {
+    pub object_id: Uuid,
+    pub object_type: ObjectType,
     pub field_name: String,
-    pub old_value: PolygonProperty,
-    pub new_value: PolygonProperty,
+    pub old_value: ObjectProperty,
+    pub new_value: ObjectProperty,
     // pub signal: RwSignal<String>,
 }
 
@@ -1707,28 +1708,213 @@ impl Editor {
         }
     }
 
-    pub fn get_polygon_width(&self, selected_id: Uuid) -> f32 {
-        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+    pub fn update_text(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
+        // First iteration: find the index of the selected polygon
+        let text_index = self.text_items.iter().position(|p| p.id == selected_id);
 
-        if let Some(index) = polygon_index {
-            if let Some(selected_polygon) = self.polygons.get(index) {
-                return selected_polygon.dimensions.0;
-            } else {
-                return 0.0;
+        if let Some(index) = text_index {
+            println!("Found selected text with ID: {}", selected_id);
+
+            let camera = self.camera.expect("Couldn't get camera");
+
+            // Get the necessary data from editor
+            let viewport_width = camera.window_size.width;
+            let viewport_height = camera.window_size.height;
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get gpu resources");
+            let device = &gpu_resources.device;
+            let queue = &gpu_resources.queue;
+
+            let window_size = WindowSize {
+                width: viewport_width as u32,
+                height: viewport_height as u32,
+            };
+
+            // Second iteration: update the selected polygon
+            if let Some(selected_text) = self.text_items.get_mut(index) {
+                match new_value {
+                    InputValue::Text(s) => match key {
+                        _ => println!("No match on input"),
+                    },
+                    InputValue::Number(n) => match key {
+                        "width" => selected_text.update_data_from_dimensions(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            (n, selected_text.dimensions.1),
+                            &camera,
+                        ),
+                        "height" => selected_text.update_data_from_dimensions(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            (selected_text.dimensions.0, n),
+                            &camera,
+                        ),
+                        _ => println!("No match on input"),
+                    },
+                }
+            }
+        } else {
+            println!("No text found with the selected ID: {}", selected_id);
+        }
+    }
+
+    pub fn update_image(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
+        // First iteration: find the index of the selected polygon
+        let image_index = self
+            .image_items
+            .iter()
+            .position(|p| p.id == selected_id.to_string());
+
+        if let Some(index) = image_index {
+            println!("Found selected image with ID: {}", selected_id);
+
+            let camera = self.camera.expect("Couldn't get camera");
+
+            // Get the necessary data from editor
+            let viewport_width = camera.window_size.width;
+            let viewport_height = camera.window_size.height;
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get gpu resources");
+            let device = &gpu_resources.device;
+            let queue = &gpu_resources.queue;
+
+            let window_size = WindowSize {
+                width: viewport_width as u32,
+                height: viewport_height as u32,
+            };
+
+            // Second iteration: update the selected polygon
+            if let Some(selected_image) = self.image_items.get_mut(index) {
+                match new_value {
+                    InputValue::Text(s) => match key {
+                        _ => println!("No match on input"),
+                    },
+                    InputValue::Number(n) => match key {
+                        "width" => selected_image.update_data_from_dimensions(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            (n as f32, selected_image.dimensions.1 as f32),
+                            &camera,
+                        ),
+                        "height" => selected_image.update_data_from_dimensions(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            (selected_image.dimensions.0 as f32, n as f32),
+                            &camera,
+                        ),
+                        _ => println!("No match on input"),
+                    },
+                }
+            }
+        } else {
+            println!("No image found with the selected ID: {}", selected_id);
+        }
+    }
+
+    pub fn get_object_width(&self, selected_id: Uuid, object_type: ObjectType) -> f32 {
+        match object_type {
+            ObjectType::Polygon => {
+                let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+
+                if let Some(index) = polygon_index {
+                    if let Some(selected_polygon) = self.polygons.get(index) {
+                        return selected_polygon.dimensions.0;
+                    } else {
+                        return 0.0;
+                    }
+                }
+            }
+            ObjectType::TextItem => {
+                let polygon_index = self.text_items.iter().position(|p| p.id == selected_id);
+
+                if let Some(index) = polygon_index {
+                    if let Some(selected_polygon) = self.text_items.get(index) {
+                        return selected_polygon.dimensions.0;
+                    } else {
+                        return 0.0;
+                    }
+                }
+            }
+            ObjectType::ImageItem => {
+                let polygon_index = self
+                    .image_items
+                    .iter()
+                    .position(|p| p.id == selected_id.to_string());
+
+                if let Some(index) = polygon_index {
+                    if let Some(selected_polygon) = self.image_items.get(index) {
+                        return selected_polygon.dimensions.0 as f32;
+                    } else {
+                        return 0.0;
+                    }
+                }
             }
         }
 
         0.0
     }
 
-    pub fn get_polygon_height(&self, selected_id: Uuid) -> f32 {
-        let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
+    pub fn get_object_height(&self, selected_id: Uuid, object_type: ObjectType) -> f32 {
+        match object_type {
+            ObjectType::Polygon => {
+                let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
 
-        if let Some(index) = polygon_index {
-            if let Some(selected_polygon) = self.polygons.get(index) {
-                return selected_polygon.dimensions.1;
-            } else {
-                return 0.0;
+                if let Some(index) = polygon_index {
+                    if let Some(selected_polygon) = self.polygons.get(index) {
+                        return selected_polygon.dimensions.1;
+                    } else {
+                        return 0.0;
+                    }
+                }
+            }
+            ObjectType::TextItem => {
+                let polygon_index = self.text_items.iter().position(|p| p.id == selected_id);
+
+                if let Some(index) = polygon_index {
+                    if let Some(selected_polygon) = self.text_items.get(index) {
+                        return selected_polygon.dimensions.1;
+                    } else {
+                        return 0.0;
+                    }
+                }
+            }
+            ObjectType::ImageItem => {
+                let polygon_index = self
+                    .image_items
+                    .iter()
+                    .position(|p| p.id == selected_id.to_string());
+
+                if let Some(index) = polygon_index {
+                    if let Some(selected_polygon) = self.image_items.get(index) {
+                        return selected_polygon.dimensions.1 as f32;
+                    } else {
+                        return 0.0;
+                    }
+                }
             }
         }
 
@@ -1916,7 +2102,7 @@ impl Editor {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
-    ) -> Option<PolygonEditConfig> {
+    ) -> Option<ObjectEditConfig> {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
 
         if (self.last_screen.x < self.interactive_bounds.min.x
@@ -2213,7 +2399,7 @@ impl Editor {
         self.previous_top_left = self.last_top_left;
     }
 
-    pub fn handle_mouse_up(&mut self) -> Option<PolygonEditConfig> {
+    pub fn handle_mouse_up(&mut self) -> Option<ObjectEditConfig> {
         let mut action_edit = None;
 
         let camera = self.camera.expect("Couldn't get camera");
