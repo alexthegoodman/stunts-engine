@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use cgmath::{Matrix4, Point3, Vector2, Vector3};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
 
@@ -863,6 +864,42 @@ impl Polygon {
             stroke: self.stroke,
             layer: self.layer,
         }
+    }
+
+    pub fn from_config(
+        config: &PolygonConfig,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+        camera: &Camera,
+        selected_sequence_id: String,
+    ) -> Polygon {
+        Polygon::new(
+            window_size,
+            device,
+            queue,
+            model_bind_group_layout,
+            camera,
+            vec![
+                Point { x: 0.0, y: 0.0 },
+                Point { x: 1.0, y: 0.0 },
+                Point { x: 1.0, y: 1.0 },
+                Point { x: 0.0, y: 1.0 },
+            ],
+            (config.dimensions.0, config.dimensions.1), // width = length of segment, height = thickness
+            config.position,
+            0.0,
+            config.border_radius,
+            // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
+            config.fill,
+            config.stroke,
+            -2.0,
+            config.layer,
+            config.name.clone(),
+            config.id,
+            Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
+        )
     }
 }
 

@@ -10,6 +10,8 @@ use bytemuck::{Pod, Zeroable};
 use cgmath::SquareMatrix;
 use serde::Deserialize;
 use serde::Serialize;
+use std::str::FromStr;
+use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
 use crate::editor::rgb_to_wgpu;
@@ -467,5 +469,30 @@ impl TextRenderer {
             color: self.color,
             font_size: self.font_size,
         }
+    }
+
+    pub fn from_config(
+        config: &TextRendererConfig,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+        camera: &Camera,
+        selected_sequence_id: String,
+        font_data: &[u8],
+    ) -> TextRenderer {
+        TextRenderer::new(
+            &device,
+            model_bind_group_layout,
+            // self.font_manager
+            //     .get_font_by_name(&config.font_family)
+            //     .expect("Couldn't get font family"),
+            font_data,
+            &window_size,
+            config.text.clone(),
+            config.clone(),
+            config.id,
+            Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
+        )
     }
 }

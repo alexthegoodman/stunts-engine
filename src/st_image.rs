@@ -3,6 +3,8 @@ use cgmath::{Matrix4, Vector2, Vector3};
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::str::FromStr;
+use std::sync::Arc;
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
@@ -358,5 +360,28 @@ impl StImage {
             },
             layer: self.layer,
         }
+    }
+
+    pub fn from_config(
+        config: &StImageConfig,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+        camera: &Camera,
+        selected_sequence_id: String,
+    ) -> StImage {
+        StImage::new(
+            &device,
+            &queue,
+            // string to Path
+            Path::new(&config.path),
+            config.clone(),
+            &window_size,
+            model_bind_group_layout,
+            -2.0,
+            config.id.clone(),
+            Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
+        )
     }
 }
