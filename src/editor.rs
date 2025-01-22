@@ -1317,8 +1317,11 @@ impl Editor {
     /// Update the motion path visualization when keyframes change
     pub fn update_motion_paths(&mut self, sequence: &Sequence) {
         // Remove existing motion path segments
-        self.static_polygons
-            .retain(|p| p.name != "motion_path_segment" && p.name != "motion_path_handle");
+        self.static_polygons.retain(|p| {
+            p.name != "motion_path_segment"
+                && p.name != "motion_path_handle"
+                && p.name != "motion_path_arrow"
+        });
 
         // Recreate motion paths for all polygons
         let mut color_index = 1;
