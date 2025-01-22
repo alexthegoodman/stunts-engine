@@ -291,6 +291,7 @@ impl StImage {
         camera: &Camera,
     ) {
         // for "low" quality resize
+        self.dimensions = (dimensions.0 as u32, dimensions.1 as u32);
         self.transform.update_scale([dimensions.0, dimensions.1]);
     }
 
