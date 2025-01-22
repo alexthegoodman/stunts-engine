@@ -451,6 +451,7 @@ impl Editor {
 
             let mut restored_text = TextRenderer::new(
                 &device,
+                &queue,
                 self.model_bind_group_layout
                     .as_ref()
                     .expect("Couldn't get model bind group layout"),
@@ -1463,6 +1464,7 @@ impl Editor {
         &mut self,
         window_size: &WindowSize,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         text_config: TextRendererConfig,
         text_content: String,
         new_id: Uuid,
@@ -1477,6 +1479,7 @@ impl Editor {
 
         let mut text_item = TextRenderer::new(
             device,
+            queue,
             &self
                 .model_bind_group_layout
                 .as_ref()

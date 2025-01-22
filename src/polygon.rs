@@ -250,6 +250,7 @@ pub fn get_polygon_data(
     );
 
     transform.layer = transform_layer as f32;
+    transform.update_uniform_buffer(&queue, &camera.window_size);
 
     (
         geometry.vertices,

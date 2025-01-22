@@ -216,6 +216,7 @@ impl StImage {
         };
 
         transform.layer = image_config.layer as f32;
+        transform.update_uniform_buffer(&queue, &window_size);
 
         // Rest of the implementation remains the same...
         // let z = get_z_layer(1.0);
@@ -293,6 +294,7 @@ impl StImage {
         // for "low" quality resize
         self.dimensions = (dimensions.0 as u32, dimensions.1 as u32);
         self.transform.update_scale([dimensions.0, dimensions.1]);
+        self.transform.update_uniform_buffer(&queue, &window_size);
     }
 
     pub fn update_layer(&mut self, layer_index: i32) {

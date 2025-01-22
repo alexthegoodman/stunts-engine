@@ -85,7 +85,7 @@ pub struct TextRenderer {
 impl TextRenderer {
     pub fn new(
         device: &Device,
-        // queue: &Queue,
+        queue: &Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
         font_data: &[u8],
         window_size: &WindowSize,
@@ -183,6 +183,7 @@ impl TextRenderer {
         );
 
         transform.layer = text_config.layer as f32;
+        transform.update_uniform_buffer(&queue, &window_size);
 
         Self {
             id,
@@ -410,6 +411,7 @@ impl TextRenderer {
         camera: &Camera,
     ) {
         self.dimensions = dimensions;
+        // self.transform.update_uniform_buffer(&queue, &window_size);
     }
 
     // pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
@@ -495,6 +497,7 @@ impl TextRenderer {
     ) -> TextRenderer {
         TextRenderer::new(
             &device,
+            &queue,
             model_bind_group_layout,
             // self.font_manager
             //     .get_font_by_name(&config.font_family)
