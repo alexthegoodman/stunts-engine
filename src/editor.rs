@@ -1174,7 +1174,7 @@ impl Editor {
                 // Create intermediate points for curved paths if using non-linear easing
                 let num_segments = match start_kf.easing {
                     EasingType::Linear => 1,
-                    _ => 3, // More segments for curved paths?
+                    _ => 9, // More segments for smooth curves
                 };
 
                 let camera = self.camera.expect("Couldn't get camera");
@@ -1236,11 +1236,20 @@ impl Editor {
 
                 self.static_polygons.push(handle);
 
-                for i in 0..num_segments {
-                    let t1 = start_kf.time + (end_kf.time - start_kf.time) * i / num_segments;
-                    let t2 = start_kf.time + (end_kf.time - start_kf.time) * (i + 1) / num_segments;
+                let segment_duration =
+                    (end_kf.time.as_secs_f32() - start_kf.time.as_secs_f32()) / num_segments as f32;
 
+                let mut odd = false;
+                for i in 0..num_segments {
+                    // let t1 = start_kf.time + (end_kf.time - start_kf.time) * i / num_segments;
+                    // let t2 = start_kf.time + (end_kf.time - start_kf.time) * (i + 1) / num_segments;
+
+                    let t1 = start_kf.time.as_secs_f32() + segment_duration * i as f32;
+                    let t2 = start_kf.time.as_secs_f32() + segment_duration * (i + 1) as f32;
+
+                    // println!("pos1");
                     let pos1 = interpolate_position(start_kf, end_kf, t1);
+                    // println!("pos2");
                     let pos2 = interpolate_position(start_kf, end_kf, t2);
 
                     let camera = self.camera.expect("Couldn't get camera");
@@ -1265,6 +1274,8 @@ impl Editor {
                     // Calculate length of the segment
                     let length = (dx * dx + dy * dy).sqrt();
 
+                    // println!("length {:?}", length);
+
                     let mut segment = create_path_segment(
                         &camera.window_size,
                         &gpu_resources.device,
@@ -1287,26 +1298,31 @@ impl Editor {
                     // segment.source_keyframe_id =
                     // Some(end_kf_id);
 
-                    // arrow for indicating direction of motion
-                    let arrow_orientation_offset = -std::f32::consts::FRAC_PI_2; // for upward-facing arrow
-                    let mut arrow = create_path_arrow(
-                        &camera.window_size,
-                        &gpu_resources.device,
-                        &gpu_resources.queue,
-                        &self
-                            .model_bind_group_layout
-                            .as_ref()
-                            .expect("No bind group layout"),
-                        &self.camera.expect("No camera"),
-                        path_end,
-                        15.0, // width and height
-                        sequence.id.clone(),
-                        path_fill,
-                        rotation + arrow_orientation_offset,
-                    );
-
                     self.static_polygons.push(segment);
-                    self.static_polygons.push(arrow);
+
+                    // arrow for indicating direction of motion
+                    if odd {
+                        let arrow_orientation_offset = -std::f32::consts::FRAC_PI_2; // for upward-facing arrow
+                        let mut arrow = create_path_arrow(
+                            &camera.window_size,
+                            &gpu_resources.device,
+                            &gpu_resources.queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("No bind group layout"),
+                            &self.camera.expect("No camera"),
+                            path_end,
+                            15.0, // width and height
+                            sequence.id.clone(),
+                            path_fill,
+                            rotation + arrow_orientation_offset,
+                        );
+
+                        self.static_polygons.push(arrow);
+                    }
+
+                    odd = !odd;
                 }
 
                 pairs_done = pairs_done + 1;
@@ -2695,52 +2711,52 @@ fn create_default_property(
     }
 }
 
-/// Get interpolated position at a specific time
-fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: Duration) -> [i32; 2] {
-    if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
-        (&start.value, &end.value)
-    {
-        let progress = match start.easing {
-            EasingType::Linear => {
-                let total_time = (end.time - start.time).as_secs_f32();
-                let current_time = (time - start.time).as_secs_f32();
-                current_time / total_time
-            }
-            // Add more sophisticated easing calculations here
-            _ => {
-                let total_time = (end.time - start.time).as_secs_f32();
-                let current_time = (time - start.time).as_secs_f32();
-                current_time / total_time
-            }
-        };
+// /// Get interpolated position at a specific time
+// fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: Duration) -> [i32; 2] {
+//     if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
+//         (&start.value, &end.value)
+//     {
+//         let progress = match start.easing {
+//             EasingType::Linear => {
+//                 let total_time = (end.time - start.time).as_secs_f32();
+//                 let current_time = (time - start.time).as_secs_f32();
+//                 current_time / total_time
+//             }
+//             // Add more sophisticated easing calculations here
+//             _ => {
+//                 let total_time = (end.time - start.time).as_secs_f32();
+//                 let current_time = (time - start.time).as_secs_f32();
+//                 current_time / total_time
+//             }
+//         };
 
-        [
-            (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * progress) as i32,
-            (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * progress) as i32,
-        ]
-    } else {
-        panic!("Expected position keyframes")
-    }
-}
+//         [
+//             (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * progress) as i32,
+//             (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * progress) as i32,
+//         ]
+//     } else {
+//         panic!("Expected position keyframes")
+//     }
+// }
 
 // curves attempt
-// #[derive(Clone, Debug)]
-// pub struct ControlPoint {
-//     pub x: f32,
-//     pub y: f32,
-// }
+#[derive(Clone, Debug)]
+pub struct ControlPoint {
+    pub x: f32,
+    pub y: f32,
+}
 
-// #[derive(Clone, Debug)]
-// pub struct CurveData {
-//     pub control_point1: Option<ControlPoint>,
-//     pub control_point2: Option<ControlPoint>,
-// }
+#[derive(Clone, Debug)]
+pub struct CurveData {
+    pub control_point1: Option<ControlPoint>,
+    pub control_point2: Option<ControlPoint>,
+}
 
-// #[derive(Clone, Debug)]
-// pub enum PathType {
-//     Linear,
-//     Bezier(CurveData),
-// }
+#[derive(Clone, Debug)]
+pub enum PathType {
+    Linear,
+    Bezier(CurveData),
+}
 
 // impl Default for PathType {
 //     fn default() -> Self {
@@ -2748,75 +2764,96 @@ fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: Duration) ->
 //     }
 // }
 
-// /// Get interpolated position using cubic Bézier curves
-// fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: Duration) -> [i32; 2] {
-//     if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
-//         (&start.value, &end.value)
-//     {
-//         let progress = {
-//             let total_time = (end.time - start.time).as_secs_f32();
-//             let current_time = (time - start.time).as_secs_f32();
-//             let t = current_time / total_time;
+/// Creates curves in between keyframes, on the same path, rather than sharing a curve with another
+/// but it's better this way, as using a keyframe as a middle point on a curve leads to various problems
+fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: f32) -> [i32; 2] {
+    if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
+        (&start.value, &end.value)
+    {
+        let progress = {
+            let total_time = (end.time - start.time).as_secs_f32();
+            let current_time = time - (start.time).as_secs_f32();
+            let t = current_time / total_time;
 
-//             match start.easing {
-//                 EasingType::Linear => t,
-//                 EasingType::EaseIn => t * t,
-//                 EasingType::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
-//                 EasingType::EaseInOut => {
-//                     if t < 0.5 {
-//                         2.0 * t * t
-//                     } else {
-//                         1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
-//                     }
-//                 }
-//             }
-//         };
+            match start.easing {
+                EasingType::Linear => t,
+                EasingType::EaseIn => t * t,
+                EasingType::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
+                EasingType::EaseInOut => {
+                    if t < 0.5 {
+                        2.0 * t * t
+                    } else {
+                        1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+                    }
+                }
+            }
+        };
 
-//         // Get curve data from the keyframe (you'll need to add this to your UIKeyframe struct)
-//         // let path_type = start.path_type.as_ref().unwrap_or(&PathType::Linear);
-//         let path_type = PathType::Bezier(CurveData {
-//             control_point1: None,
-//             control_point2: None,
-//         });
+        // Get curve data from the keyframe
+        // let path_type = start.path_type.as_ref().unwrap_or(&PathType::Linear);
+        // let path_type = PathType::Bezier(CurveData {
+        //     control_point1: None,
+        //     control_point2: None,
+        // });
+        let test_offset = 50.0;
+        let path_type = PathType::Bezier(CurveData {
+            control_point1: Some(ControlPoint {
+                x: (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * 0.2) + test_offset,
+                y: (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * 0.2) + test_offset,
+            }),
+            control_point2: Some(ControlPoint {
+                x: (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * 0.8) + test_offset,
+                y: (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * 0.8) + test_offset,
+            }),
+        });
+        // let path_type = PathType::Bezier(CurveData {
+        //     control_point1: Some(ControlPoint { x: 500.0, y: 300.0 }),
+        //     control_point2: Some(ControlPoint { x: 700.0, y: 400.0 }),
+        // });
 
-//         match path_type {
-//             PathType::Linear => [
-//                 (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * progress) as i32,
-//                 (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * progress) as i32,
-//             ],
-//             PathType::Bezier(curve_data) => {
-//                 let p0 = (start_pos[0] as f32, start_pos[1] as f32);
-//                 let p3 = (end_pos[0] as f32, end_pos[1] as f32);
+        match path_type {
+            PathType::Linear => [
+                (start_pos[0] as f32 + (end_pos[0] - start_pos[0]) as f32 * progress) as i32,
+                (start_pos[1] as f32 + (end_pos[1] - start_pos[1]) as f32 * progress) as i32,
+            ],
+            PathType::Bezier(curve_data) => {
+                let p0 = (start_pos[0] as f32, start_pos[1] as f32);
+                let p3 = (end_pos[0] as f32, end_pos[1] as f32);
 
-//                 // Use control points if available, otherwise generate default ones
-//                 let p1 = curve_data.control_point1.as_ref().map_or_else(
-//                     || (p0.0 + (p3.0 - p0.0) * 0.33, p0.1 + (p3.1 - p0.1) * 0.33),
-//                     |cp| (cp.x, cp.y),
-//                 );
+                // Use control points if available, otherwise generate default ones
+                let p1 = curve_data.control_point1.as_ref().map_or_else(
+                    || (p0.0 + (p3.0 - p0.0) * 0.33, p0.1 + (p3.1 - p0.1) * 0.33),
+                    |cp| (cp.x, cp.y),
+                );
 
-//                 let p2 = curve_data.control_point2.as_ref().map_or_else(
-//                     || (p0.0 + (p3.0 - p0.0) * 0.66, p0.1 + (p3.1 - p0.1) * 0.66),
-//                     |cp| (cp.x, cp.y),
-//                 );
+                let p2 = curve_data.control_point2.as_ref().map_or_else(
+                    || (p0.0 + (p3.0 - p0.0) * 0.66, p0.1 + (p3.1 - p0.1) * 0.66),
+                    |cp| (cp.x, cp.y),
+                );
 
-//                 // Cubic Bezier curve formula
-//                 let t = progress;
-//                 let t2 = t * t;
-//                 let t3 = t2 * t;
-//                 let mt = 1.0 - t;
-//                 let mt2 = mt * mt;
-//                 let mt3 = mt2 * mt;
+                // Cubic Bezier curve formula
+                let t = progress;
+                let t2 = t * t;
+                let t3 = t2 * t;
+                let mt = 1.0 - t;
+                let mt2 = mt * mt;
+                let mt3 = mt2 * mt;
 
-//                 let x = p0.0 * mt3 + 3.0 * p1.0 * mt2 * t + 3.0 * p2.0 * mt * t2 + p3.0 * t3;
-//                 let y = p0.1 * mt3 + 3.0 * p1.1 * mt2 * t + 3.0 * p2.1 * mt * t2 + p3.1 * t3;
+                let x = p0.0 * mt3 + 3.0 * p1.0 * mt2 * t + 3.0 * p2.0 * mt * t2 + p3.0 * t3;
+                let y = p0.1 * mt3 + 3.0 * p1.1 * mt2 * t + 3.0 * p2.1 * mt * t2 + p3.1 * t3;
 
-//                 [x as i32, y as i32]
-//             }
-//         }
-//     } else {
-//         panic!("Expected position keyframes")
-//     }
-// }
+                // println!(
+                //     "Bezier {:?} and {:?} vs ({:?}, {:?}) at {:?} and {:?}",
+                //     p0, p3, x, y, progress, time
+                // );
+
+                [x as i32, y as i32]
+            }
+        }
+    } else {
+        panic!("Expected position keyframes")
+    }
+}
 
 use cgmath::InnerSpace;
 
