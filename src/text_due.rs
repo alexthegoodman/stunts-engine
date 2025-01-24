@@ -16,6 +16,7 @@ use wgpu::util::DeviceExt;
 
 use crate::editor::rgb_to_wgpu;
 use crate::polygon::SavedPoint;
+use crate::polygon::INTERNAL_LAYER_SPACE;
 use crate::vertex::get_z_layer;
 use crate::{
     camera::Camera,
@@ -182,7 +183,8 @@ impl TextRenderer {
             window_size,
         );
 
-        transform.layer = text_config.layer as f32;
+        // -10.0 to provide 10 spots for internal items on top of objects
+        transform.layer = text_config.layer as f32 - INTERNAL_LAYER_SPACE as f32;
         transform.update_uniform_buffer(&queue, &window_size);
 
         Self {
@@ -206,13 +208,15 @@ impl TextRenderer {
             current_row_height: 0,
             glyph_cache: HashMap::new(),
             hidden: false,
-            layer: text_config.layer,
+            layer: text_config.layer - INTERNAL_LAYER_SPACE,
             color: text_config.color,
             font_size: text_config.font_size,
         }
     }
 
     pub fn update_layer(&mut self, layer_index: i32) {
+        // -10.0 to provide 10 spots for internal items on top of objects
+        let layer_index = layer_index - INTERNAL_LAYER_SPACE;
         self.layer = layer_index;
         self.transform.layer = layer_index as f32;
     }

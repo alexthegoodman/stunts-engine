@@ -11,7 +11,7 @@ use wgpu::{Device, Queue, TextureView};
 
 use crate::camera::Camera;
 use crate::editor::Point;
-use crate::polygon::SavedPoint;
+use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::matrix4_to_raw_array;
 use crate::{
     editor::WindowSize,
@@ -215,7 +215,8 @@ impl StImage {
             )
         };
 
-        transform.layer = image_config.layer as f32;
+        // -10.0 to provide 10 spots for internal items on top of objects
+        transform.layer = image_config.layer as f32 - INTERNAL_LAYER_SPACE as f32;
         transform.update_uniform_buffer(&queue, &window_size);
 
         // Rest of the implementation remains the same...
@@ -278,7 +279,7 @@ impl StImage {
             vertices,
             indices: indices.clone(),
             hidden: false,
-            layer: image_config.layer,
+            layer: image_config.layer - INTERNAL_LAYER_SPACE,
         }
     }
 
@@ -298,6 +299,8 @@ impl StImage {
     }
 
     pub fn update_layer(&mut self, layer_index: i32) {
+        // -10.0 to provide 10 spots for internal items on top of objects
+        let layer_index = layer_index - INTERNAL_LAYER_SPACE;
         self.layer = layer_index;
         self.transform.layer = layer_index as f32;
     }

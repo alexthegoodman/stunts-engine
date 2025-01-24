@@ -2121,6 +2121,7 @@ impl Editor {
             return None;
         }
 
+        // First, check if panning
         if self.control_mode == ControlMode::Pan {
             self.is_panning = true;
             self.drag_start = Some(self.last_top_left);
@@ -2128,6 +2129,23 @@ impl Editor {
             return None;
         }
 
+        // Next, check if we're clicking on a motion path handle to drag
+        for (poly_index, polygon) in self.static_polygons.iter_mut().enumerate() {
+            if polygon.name != "motion_path_handle".to_string() {
+                continue;
+            }
+
+            if polygon.contains_point(&self.last_top_left, &camera) {
+                self.dragging_path_handle = Some(polygon.id);
+                self.dragging_path_object = polygon.source_polygon_id;
+                self.dragging_path_keyframe = polygon.source_keyframe_id;
+                self.drag_start = Some(self.last_top_left);
+
+                return None; // nothing to add to undo stack
+            }
+        }
+
+        // Finally, check for object interation
         let mut intersecting_objects: Vec<(i32, InteractionTarget)> = Vec::new();
 
         // Collect intersecting polygons
@@ -2292,22 +2310,6 @@ impl Editor {
 
                     return None; // nothing to add to undo stack
                 }
-            }
-        }
-
-        // Now, with no objects in the way, check if we're clicking on a motion path handle to drag
-        for (poly_index, polygon) in self.static_polygons.iter_mut().enumerate() {
-            if polygon.name != "motion_path_handle".to_string() {
-                continue;
-            }
-
-            if polygon.contains_point(&self.last_top_left, &camera) {
-                self.dragging_path_handle = Some(polygon.id);
-                self.dragging_path_object = polygon.source_polygon_id;
-                self.dragging_path_keyframe = polygon.source_keyframe_id;
-                self.drag_start = Some(self.last_top_left);
-
-                return None; // nothing to add to undo stack
             }
         }
 
@@ -2784,7 +2786,7 @@ fn create_path_segment(
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         },
         -1.0,
-        -1,
+        1, // positive to use INTERNAL_LAYER_SPACE
         String::from("motion_path_segment"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
@@ -2826,7 +2828,7 @@ fn create_path_handle(
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         },
         -1.0,
-        -1,
+        1, // positive to use INTERNAL_LAYER_SPACE
         String::from("motion_path_handle"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
@@ -2875,7 +2877,7 @@ fn create_path_arrow(
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         },
         -1.0,
-        -1,
+        1, // positive to use INTERNAL_LAYER_SPACE
         String::from("motion_path_arrow"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),

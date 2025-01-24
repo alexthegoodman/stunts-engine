@@ -16,6 +16,8 @@ use crate::{
     vertex::{get_z_layer, Vertex},
 };
 
+pub const INTERNAL_LAYER_SPACE: i32 = 10;
+
 impl Shape for Polygon {
     fn bounding_box(&self) -> BoundingBox {
         let mut min_x = f32::MAX;
@@ -249,7 +251,8 @@ pub fn get_polygon_data(
         window_size,
     );
 
-    transform.layer = transform_layer as f32;
+    // -10.0 to provide 10 spots for internal items on top of objects
+    transform.layer = transform_layer as f32 - INTERNAL_LAYER_SPACE as f32;
     transform.update_uniform_buffer(&queue, &camera.window_size);
 
     (
@@ -387,6 +390,9 @@ impl Polygon {
                 transform_layer,
             );
 
+        // -10.0 to provide 10 spots for internal items on top of objects
+        let transform_layer = transform_layer - INTERNAL_LAYER_SPACE;
+
         Polygon {
             id,
             current_sequence_id,
@@ -411,6 +417,8 @@ impl Polygon {
     }
 
     pub fn update_layer(&mut self, layer_index: i32) {
+        // -10.0 to provide 10 spots for internal items on top of objects
+        let layer_index = layer_index - INTERNAL_LAYER_SPACE;
         self.layer = layer_index;
         self.transform.layer = layer_index as f32;
     }
