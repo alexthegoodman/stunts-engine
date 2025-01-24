@@ -2731,8 +2731,11 @@ impl Editor {
         });
 
         // Remove existing motion path segments
-        self.static_polygons
-            .retain(|p| p.name != "motion_path_segment" && p.name != "motion_path_handle");
+        self.static_polygons.retain(|p| {
+            p.name != "motion_path_segment"
+                && p.name != "motion_path_handle"
+                && p.name != "motion_path_arrow"
+        });
     }
 }
 
@@ -2781,7 +2784,7 @@ fn create_path_segment(
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         },
         -1.0,
-        -2,
+        -1,
         String::from("motion_path_segment"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
@@ -2823,7 +2826,7 @@ fn create_path_handle(
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         },
         -1.0,
-        -2,
+        -1,
         String::from("motion_path_handle"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
@@ -2872,7 +2875,7 @@ fn create_path_arrow(
             fill: rgb_to_wgpu(0, 0, 0, 1.0),
         },
         -1.0,
-        -2,
+        -1,
         String::from("motion_path_arrow"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
