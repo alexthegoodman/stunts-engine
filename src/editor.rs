@@ -34,6 +34,8 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 const NUM_INFERENCE_FEATURES: usize = 7;
+pub const CANVAS_HORIZ_OFFSET: f32 = 600.0;
+pub const CANVAS_VERT_OFFSET: f32 = 50.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct WindowSize {
@@ -531,6 +533,44 @@ impl Editor {
         });
     }
 
+    pub fn reset_sequence_objects(&mut self) {
+        if let Some(current_sequence) = &self.current_sequence_data {
+            // TODO: put all objects back in original positions
+            current_sequence.active_polygons.iter().for_each(|p| {
+                let polygon = self
+                    .polygons
+                    .iter_mut()
+                    .find(|polygon| polygon.id.to_string() == p.id)
+                    .expect("Couldn't find polygon");
+
+                polygon.transform.position.x = p.position.x as f32 + CANVAS_HORIZ_OFFSET;
+                polygon.transform.position.y = p.position.y as f32 + CANVAS_VERT_OFFSET;
+            });
+
+            current_sequence.active_text_items.iter().for_each(|t| {
+                let text = self
+                    .text_items
+                    .iter_mut()
+                    .find(|text| text.id.to_string() == t.id)
+                    .expect("Couldn't find text");
+
+                text.transform.position.x = t.position.x as f32 + CANVAS_HORIZ_OFFSET;
+                text.transform.position.y = t.position.y as f32 + CANVAS_VERT_OFFSET;
+            });
+
+            current_sequence.active_image_items.iter().for_each(|i| {
+                let image = self
+                    .image_items
+                    .iter_mut()
+                    .find(|image| image.id == i.id)
+                    .expect("Couldn't find image");
+
+                image.transform.position.x = i.position.x as f32 + CANVAS_HORIZ_OFFSET;
+                image.transform.position.y = i.position.y as f32 + CANVAS_VERT_OFFSET;
+            });
+        }
+    }
+
     pub fn run_motion_inference(&self) -> Vec<AnimationData> {
         let mut prompt = "".to_string();
         let mut total = 0;
@@ -860,6 +900,7 @@ impl Editor {
                 continue;
             }
 
+            // slow?
             let duration_ms = video_current_sequences_data
                 .iter()
                 .find(|s| s.id == ts.sequence_id)
@@ -963,12 +1004,7 @@ impl Editor {
 
     /// Steps the currently selected sequence unless one is provided
     /// TODO: make more efficient
-    pub fn step_animate_sequence(
-        &mut self,
-        // chosen_sequence: Option<&Sequence>,
-        total_dt: f32,
-        camera: &Camera,
-    ) {
+    pub fn step_animate_sequence(&mut self, total_dt: f32, camera: &Camera) {
         let sequence = self
             .current_sequence_data
             .as_ref()
@@ -976,32 +1012,30 @@ impl Editor {
 
         // Update each animation path
         for animation in &sequence.polygon_motion_paths {
+            // Get current time within animation duration
+            let current_time =
+                Duration::from_secs_f32(total_dt % (sequence.duration_ms / 1000) as f32);
+            let start_time = Duration::from_millis(animation.start_time_ms as u64);
+
+            // Check if the current time is within the animation's active period
+            if current_time < start_time || current_time > start_time + animation.duration {
+                continue;
+            }
+
             // Find the polygon to update
             let object_idx = match animation.object_type {
-                ObjectType::Polygon => {
-                    let polygon_idx = self
-                        .polygons
-                        .iter()
-                        .position(|p| p.id.to_string() == animation.polygon_id);
-
-                    polygon_idx
-                }
-                ObjectType::TextItem => {
-                    let text_idx = self
-                        .text_items
-                        .iter()
-                        .position(|t| t.id.to_string() == animation.polygon_id);
-
-                    text_idx
-                }
-                ObjectType::ImageItem => {
-                    let image_idx = self
-                        .image_items
-                        .iter()
-                        .position(|i| i.id.to_string() == animation.polygon_id);
-
-                    image_idx
-                }
+                ObjectType::Polygon => self
+                    .polygons
+                    .iter()
+                    .position(|p| p.id.to_string() == animation.polygon_id),
+                ObjectType::TextItem => self
+                    .text_items
+                    .iter()
+                    .position(|t| t.id.to_string() == animation.polygon_id),
+                ObjectType::ImageItem => self
+                    .image_items
+                    .iter()
+                    .position(|i| i.id.to_string() == animation.polygon_id),
             };
 
             let Some(object_idx) = object_idx else {
@@ -1014,22 +1048,16 @@ impl Editor {
                     continue;
                 }
 
-                // Get current time within animation duration
-                let current_time =
-                    Duration::from_secs_f32((total_dt % animation.duration.as_secs_f32()));
-
-                // println!("current_time {:?} {:?}", current_time, total_dt);
-
                 // Find the surrounding keyframes
                 let (start_frame, end_frame) =
-                    self.get_surrounding_keyframes(&property.keyframes, current_time);
+                    self.get_surrounding_keyframes(&property.keyframes, current_time - start_time);
                 let Some((start_frame, end_frame)) = start_frame.zip(end_frame) else {
                     continue;
                 };
 
                 // Calculate interpolation progress
-                let duration = (end_frame.time - start_frame.time).as_secs_f32();
-                let elapsed = (current_time - start_frame.time).as_secs_f32();
+                let duration = (end_frame.time - start_frame.time).as_secs_f32(); // duration between keyframes
+                let elapsed = (current_time - start_time - start_frame.time).as_secs_f32(); // elapsed since start keyframe
                 let mut progress = elapsed / duration;
 
                 // Apply easing (EaseInOut)
@@ -1039,11 +1067,7 @@ impl Editor {
                     1.0 - (-2.0 * progress + 2.0).powi(2) / 2.0
                 };
 
-                // println!(
-                //     "Polygon Progress {:?} {:?} {:?}",
-                //     duration, elapsed, progress
-                // );
-
+                // Apply the interpolated value to the object's property
                 // Apply interpolated value based on property type
                 match (&start_frame.value, &end_frame.value) {
                     (KeyframeValue::Position(start), KeyframeValue::Position(end)) => {
@@ -1074,23 +1098,66 @@ impl Editor {
                         }
                     }
                     (KeyframeValue::Rotation(start), KeyframeValue::Rotation(end)) => {
-                        // self.polygons[polygon_idx].rotation = self.lerp(*start, *end, progress);
+                        // TODO: requires testing (radians or degrees for storage?)
+                        // let new_rotation = self.lerp(*start, *end, progress);
+
+                        // match animation.object_type {
+                        //     ObjectType::Polygon => {
+                        //         self.polygons[object_idx]
+                        //             .transform
+                        //             .update_rotation(new_rotation);
+                        //     }
+                        //     ObjectType::TextItem => {
+                        //         self.text_items[object_idx]
+                        //             .transform
+                        //             .update_rotation(new_rotation);
+                        //     }
+                        //     ObjectType::ImageItem => {
+                        //         self.image_items[object_idx]
+                        //             .transform
+                        //             .update_rotation(new_rotation);
+                        //     }
+                        // }
                     }
                     (KeyframeValue::Scale(start), KeyframeValue::Scale(end)) => {
-                        // self.polygons[polygon_idx].scale =
-                        //     self.lerp(*start, *end, progress) as f32 / 100.0;
+                        // TODO: requires testing (verify 100 scale in storage)
+                        // let new_scale = self.lerp(*start, *end, progress) as f32 / 100.0;
+
+                        // match animation.object_type {
+                        //     ObjectType::Polygon => {
+                        //         self.polygons[object_idx]
+                        //             .transform
+                        //             .update_scale([new_scale, new_scale]);
+                        //     }
+                        //     ObjectType::TextItem => {
+                        //         self.text_items[object_idx]
+                        //             .transform
+                        //             .update_scale([new_scale, new_scale]);
+                        //     }
+                        //     ObjectType::ImageItem => {
+                        //         self.image_items[object_idx]
+                        //             .transform
+                        //             .update_scale([new_scale, new_scale]);
+                        //     }
+                        // }
                     }
                     (KeyframeValue::Opacity(start), KeyframeValue::Opacity(end)) => {
-                        // self.polygons[polygon_idx].opacity =
-                        //     self.lerp(*start, *end, progress) as f32 / 100.0;
-
                         match animation.object_type {
                             ObjectType::Polygon => {
-                                self.polygons[object_idx].fill =
-                                    [1.0, 1.0, 1.0, self.lerp(*start, *end, progress) / 100.0];
+                                let current_fill = self.polygons[object_idx].fill;
+                                self.polygons[object_idx].fill = [
+                                    current_fill[0],
+                                    current_fill[1],
+                                    current_fill[2],
+                                    self.lerp(*start, *end, progress) / 100.0,
+                                ];
                             }
-                            ObjectType::TextItem => {}
-                            ObjectType::ImageItem => {}
+                            ObjectType::TextItem => {
+                                // use text color property?
+                            }
+                            ObjectType::ImageItem => {
+                                // set up opacity property?
+                            }
                         }
                     }
                     _ => {}
