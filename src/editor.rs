@@ -860,6 +860,12 @@ impl Editor {
                 continue;
             }
 
+            let duration_ms = video_current_sequences_data
+                .iter()
+                .find(|s| s.id == ts.sequence_id)
+                .map(|s| s.duration_ms)
+                .unwrap_or(0);
+
             // dynamic start times
             // if let Some(current_sequence) = &self.current_sequence_data {
             //     if !current_found {
@@ -876,7 +882,7 @@ impl Editor {
             // if current_found {}
             // Check if this sequence should be playing at the current time
             if current_time_ms >= ts.start_time_ms
-                && current_time_ms < (ts.start_time_ms + ts.duration_ms)
+                && current_time_ms < (ts.start_time_ms + duration_ms)
             {
                 // Find the corresponding sequence data
                 if let Some(sequence) = video_current_sequences_data
@@ -3240,6 +3246,7 @@ fn get_color(color_index: u32) -> u32 {
     155 + (shade_index * 10) // (255 - 25) / 10 ≈ 23 steps
 }
 
+// TODO: create an LayerColor struct for caching colors and reusing, rather than storing that color somewhere on the object?
 fn get_full_color(index: u32) -> (u32, u32, u32) {
     // Normalize the index
     let normalized_index = index % 30;

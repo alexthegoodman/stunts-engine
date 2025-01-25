@@ -19,6 +19,7 @@ pub enum ObjectType {
 pub struct Sequence {
     pub id: String,
     pub name: String,
+    pub duration_ms: i32,                         // in milliseconds
     pub active_polygons: Vec<SavedPolygonConfig>, // used for dimensions, etc
     pub polygon_motion_paths: Vec<AnimationData>,
     pub active_text_items: Vec<SavedTextRendererConfig>,
