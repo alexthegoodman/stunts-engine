@@ -1,7 +1,12 @@
 use std::{borrow::Borrow, collections::HashMap};
 
 use cgmath::{Matrix4, Vector2};
-use fontdue::Font;
+use fontdue::{
+    layout::{
+        CoordinateSystem, GlyphPosition, GlyphRasterConfig, Layout, LayoutSettings, TextStyle,
+    },
+    Font,
+};
 use uuid::Uuid;
 use wgpu::{BindGroup, Buffer, Device, Queue, RenderPipeline, TextureFormat};
 // use allsorts::binary::read::ReadScope;
@@ -76,7 +81,8 @@ pub struct TextRenderer {
     pub atlas_size: (u32, u32),
     pub next_atlas_position: (u32, u32),
     pub current_row_height: u32,
-    pub glyph_cache: HashMap<String, AtlasGlyph>,
+    // pub glyph_cache: HashMap<String, AtlasGlyph>,
+    pub glyph_cache: HashMap<GlyphRasterConfig, AtlasGlyph>,
     pub hidden: bool,
     pub layer: i32,
     pub color: [i32; 4],
@@ -221,8 +227,14 @@ impl TextRenderer {
         self.transform.layer = layer_index as f32;
     }
 
-    fn add_glyph_to_atlas(&mut self, device: &Device, queue: &Queue, c: char) -> AtlasGlyph {
-        let (metrics, bitmap) = self.font.rasterize(c, self.font_size as f32);
+    fn add_glyph_to_atlas(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        raster_config: GlyphRasterConfig,
+    ) -> AtlasGlyph {
+        // let (metrics, bitmap) = self.font.rasterize(c, self.font_size as f32);
+        let (metrics, bitmap) = self.font.rasterize_config(raster_config);
 
         // more efficient way than this could involve shader, perhaps a mode as uniform buffer
         let mut rgba_data = Vec::with_capacity(bitmap.len() * 4);
@@ -308,49 +320,161 @@ impl TextRenderer {
         self.glyph_cache = HashMap::new();
     }
 
-    pub fn render_text<'a>(
-        &'a mut self,
-        device: &Device,
-        queue: &Queue,
-        // render_pass: &mut wgpu::RenderPass<'a>,
-    ) {
+    // pub fn render_text<'a>(
+    //     &'a mut self,
+    //     device: &Device,
+    //     queue: &Queue,
+    //     // render_pass: &mut wgpu::RenderPass<'a>,
+    // ) {
+    //     let mut vertices = Vec::new();
+    //     let mut indices: Vec<u32> = Vec::new();
+    //     let mut current_x = 0.0;
+
+    //     let text = self.text.clone();
+    //     let chars = text.chars();
+
+    //     // First, ensure all glyphs are in the atlas
+    //     for c in chars.clone() {
+    //         let key = c.to_string() + &self.font_size.to_string();
+    //         if !self.glyph_cache.contains_key(&key) {
+    //             let glyph = self.add_glyph_to_atlas(device, queue, c);
+    //             self.glyph_cache.insert(key, glyph);
+    //         }
+    //     }
+
+    //     for c in chars {
+    //         let key = c.to_string() + &self.font_size.to_string();
+    //         let glyph = self.glyph_cache.get(&key).unwrap();
+
+    //         let base_vertex = vertices.len() as u32;
+
+    //         // Calculate vertex positions using metrics and UV coordinates
+    //         let x0 = current_x + glyph.metrics[2];
+    //         let x1 = x0 + glyph.metrics[0];
+    //         let y0 = glyph.metrics[3];
+    //         let y1 = y0 + glyph.metrics[1];
+
+    //         // UV coordinates from atlas
+    //         let u0 = glyph.uv_rect[0];
+    //         let u1 = u0 + glyph.uv_rect[2];
+    //         let v0 = glyph.uv_rect[1];
+    //         let v1 = v0 + glyph.uv_rect[3];
+
+    //         let z = get_z_layer(1.0);
+
+    //         // let test_color = rgb_to_wgpu(20, 200, 20, 1.0);
+    //         let active_color = rgb_to_wgpu(
+    //             self.color[0] as u8,
+    //             self.color[1] as u8,
+    //             self.color[2] as u8,
+    //             1.0,
+    //         );
+
+    //         vertices.extend_from_slice(&[
+    //             Vertex {
+    //                 position: [x0, y0, z],
+    //                 tex_coords: [u0, v0],
+    //                 // color: [1.0, 1.0, 1.0, 1.0],
+    //                 color: active_color,
+    //             },
+    //             Vertex {
+    //                 position: [x1, y0, z],
+    //                 tex_coords: [u1, v0],
+    //                 // color: [1.0, 1.0, 1.0, 1.0],
+    //                 color: active_color,
+    //             },
+    //             Vertex {
+    //                 position: [x1, y1, z],
+    //                 tex_coords: [u1, v1],
+    //                 // color: [1.0, 1.0, 1.0, 1.0],
+    //                 color: active_color,
+    //             },
+    //             Vertex {
+    //                 position: [x0, y1, z],
+    //                 tex_coords: [u0, v1],
+    //                 // color: [1.0, 1.0, 1.0, 1.0],
+    //                 color: active_color,
+    //             },
+    //         ]);
+
+    //         indices.extend_from_slice(&[
+    //             base_vertex,
+    //             base_vertex + 1,
+    //             base_vertex + 2,
+    //             base_vertex,
+    //             base_vertex + 2,
+    //             base_vertex + 3,
+    //         ]);
+
+    //         current_x += glyph.metrics[0];
+    //     }
+
+    //     // Update buffers and draw
+    //     queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+    //     queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&indices));
+
+    //     self.vertices = vertices;
+    //     self.indices = indices;
+    // }
+
+    pub fn render_text<'a>(&'a mut self, device: &Device, queue: &Queue) {
         let mut vertices = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
-        let mut current_x = 0.0;
 
         let text = self.text.clone();
-        let chars = text.chars();
 
-        // First, ensure all glyphs are in the atlas
-        for c in chars.clone() {
-            let key = c.to_string() + &self.font_size.to_string();
+        // Create a layout instance
+        let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
+
+        // Configure layout settings
+        let layout_settings = LayoutSettings {
+            max_width: Some(self.dimensions.0), // Set a maximum width for text wrapping
+            ..LayoutSettings::default()
+        };
+        layout.reset(&layout_settings);
+
+        // Append text to the layout
+        let font = &self.font; // Assuming `self.font` is your `fontdue::Font` instance
+        let style = TextStyle {
+            text: &text,
+            font_index: 0, // Use the first font in the list
+            px: self.font_size as f32,
+            user_data: (),
+        };
+        layout.append(&[font], &style);
+
+        // Get the laid out glyphs
+        let glyphs = layout.glyphs();
+
+        for glyph in glyphs {
+            // let key = glyph.key.font_hash.to_string() + &self.font_size.to_string();
+            let key: GlyphRasterConfig = glyph.key; // hashable key
+
+            // Ensure the glyph is in the atlas
             if !self.glyph_cache.contains_key(&key) {
-                let glyph = self.add_glyph_to_atlas(device, queue, c);
-                self.glyph_cache.insert(key, glyph);
+                // let glyph_char = char::from_u32(glyph.key.glyph_index).unwrap(); // Convert glyph key to char
+                let atlas_glyph = self.add_glyph_to_atlas(device, queue, glyph.key);
+                self.glyph_cache.insert(key.clone(), atlas_glyph);
             }
-        }
 
-        for c in chars {
-            let key = c.to_string() + &self.font_size.to_string();
-            let glyph = self.glyph_cache.get(&key).unwrap();
+            let atlas_glyph = self.glyph_cache.get(&key).unwrap();
 
             let base_vertex = vertices.len() as u32;
 
-            // Calculate vertex positions using metrics and UV coordinates
-            let x0 = current_x + glyph.metrics[2];
-            let x1 = x0 + glyph.metrics[0];
-            let y0 = glyph.metrics[3];
-            let y1 = y0 + glyph.metrics[1];
+            // Calculate vertex positions using the glyph's position and metrics
+            let x0 = glyph.x;
+            let x1 = x0 + atlas_glyph.metrics[0];
+            let y0 = glyph.y;
+            let y1 = y0 + atlas_glyph.metrics[1];
 
             // UV coordinates from atlas
-            let u0 = glyph.uv_rect[0];
-            let u1 = u0 + glyph.uv_rect[2];
-            let v0 = glyph.uv_rect[1];
-            let v1 = v0 + glyph.uv_rect[3];
+            let u0 = atlas_glyph.uv_rect[0];
+            let u1 = u0 + atlas_glyph.uv_rect[2];
+            let v0 = atlas_glyph.uv_rect[1];
+            let v1 = v0 + atlas_glyph.uv_rect[3];
 
             let z = get_z_layer(1.0);
 
-            // let test_color = rgb_to_wgpu(20, 200, 20, 1.0);
             let active_color = rgb_to_wgpu(
                 self.color[0] as u8,
                 self.color[1] as u8,
@@ -362,25 +486,21 @@ impl TextRenderer {
                 Vertex {
                     position: [x0, y0, z],
                     tex_coords: [u0, v0],
-                    // color: [1.0, 1.0, 1.0, 1.0],
                     color: active_color,
                 },
                 Vertex {
                     position: [x1, y0, z],
                     tex_coords: [u1, v0],
-                    // color: [1.0, 1.0, 1.0, 1.0],
                     color: active_color,
                 },
                 Vertex {
                     position: [x1, y1, z],
                     tex_coords: [u1, v1],
-                    // color: [1.0, 1.0, 1.0, 1.0],
                     color: active_color,
                 },
                 Vertex {
                     position: [x0, y1, z],
                     tex_coords: [u0, v1],
-                    // color: [1.0, 1.0, 1.0, 1.0],
                     color: active_color,
                 },
             ]);
@@ -393,8 +513,6 @@ impl TextRenderer {
                 base_vertex + 2,
                 base_vertex + 3,
             ]);
-
-            current_x += glyph.metrics[0];
         }
 
         // Update buffers and draw
@@ -415,6 +533,8 @@ impl TextRenderer {
         camera: &Camera,
     ) {
         self.dimensions = dimensions;
+        // rerender text to assure wrapping
+        self.render_text(device, queue);
         // self.transform.update_uniform_buffer(&queue, &window_size);
     }
 
