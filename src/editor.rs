@@ -535,7 +535,13 @@ impl Editor {
 
     pub fn reset_sequence_objects(&mut self) {
         if let Some(current_sequence) = &self.current_sequence_data {
-            // TODO: put all objects back in original positions
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get GPU Resources");
+            let camera = self.camera.as_ref().expect("Couldn't get camera");
+
+            // put all objects back in original positions
             current_sequence.active_polygons.iter().for_each(|p| {
                 let polygon = self
                     .polygons
@@ -545,6 +551,9 @@ impl Editor {
 
                 polygon.transform.position.x = p.position.x as f32 + CANVAS_HORIZ_OFFSET;
                 polygon.transform.position.y = p.position.y as f32 + CANVAS_VERT_OFFSET;
+                polygon
+                    .transform
+                    .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
             });
 
             current_sequence.active_text_items.iter().for_each(|t| {
@@ -556,6 +565,8 @@ impl Editor {
 
                 text.transform.position.x = t.position.x as f32 + CANVAS_HORIZ_OFFSET;
                 text.transform.position.y = t.position.y as f32 + CANVAS_VERT_OFFSET;
+                text.transform
+                    .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
             });
 
             current_sequence.active_image_items.iter().for_each(|i| {
@@ -567,6 +578,9 @@ impl Editor {
 
                 image.transform.position.x = i.position.x as f32 + CANVAS_HORIZ_OFFSET;
                 image.transform.position.y = i.position.y as f32 + CANVAS_VERT_OFFSET;
+                image
+                    .transform
+                    .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
             });
         }
     }
