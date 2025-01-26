@@ -32,6 +32,7 @@ pub struct StVideo {
     pub path: String,
     pub source_duration: i64,
     pub source_dimensions: (u32, u32),
+    pub source_frame_rate: f64,
     pub texture: wgpu::Texture,
     pub texture_view: wgpu::TextureView,
     pub transform: Transform,
@@ -87,6 +88,23 @@ impl StVideo {
             let mut size_attr = media_type.GetUINT64(&MF_MT_FRAME_SIZE)?;
             source_width = (size_attr >> 32) as u32;
             source_height = (size_attr & 0xFFFFFFFF) as u32;
+        }
+
+        // Get source frame rate
+        let mut source_frame_rate = 0.0;
+        unsafe {
+            let mut media_type = source_reader
+                .GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, 0)
+                .expect("Failed to get media type");
+
+            let mut frame_rate_attr = media_type
+                .GetUINT64(&MF_MT_FRAME_RATE)
+                .expect("Failed to get frame rate");
+
+            let frame_rate = (frame_rate_attr >> 32) as f64; // Numerator
+            let frame_rate_base = (frame_rate_attr & 0xFFFFFFFF) as f64; // Denominator
+
+            source_frame_rate = frame_rate / frame_rate_base;
         }
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -219,6 +237,7 @@ impl StVideo {
                 .to_string(),
             source_duration: duration,
             source_dimensions: (source_width, source_height),
+            source_frame_rate,
             texture,
             texture_view,
             transform,
@@ -272,7 +291,7 @@ impl StVideo {
     fn draw_video_frame(&self, device: &Device, queue: &Queue) -> windows::core::Result<()> {
         unsafe {
             let mut flags: u32 = 0;
-            let mut timestamp: i64 = 0;
+            let mut timestamp: i64 = 0; // store timestamp for later use?
             let mut sample: *mut Option<IMFSample> = std::ptr::null_mut();
             let mut actual_stream_index: &mut u32 = &mut 0;
 
