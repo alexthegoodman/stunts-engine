@@ -184,22 +184,18 @@ pub struct ObjectEditConfig {
     // pub signal: RwSignal<String>,
 }
 
-pub type PolygonClickHandler =
-    dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig) + Send>> + Send + Sync;
+pub type PolygonClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, PolygonConfig)>>;
 
-pub type TextItemClickHandler =
-    dyn Fn() -> Option<Box<dyn FnMut(Uuid, TextRendererConfig) + Send>> + Send + Sync;
+pub type TextItemClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, TextRendererConfig)>>;
 
-pub type ImageItemClickHandler =
-    dyn Fn() -> Option<Box<dyn FnMut(Uuid, StImageConfig) + Send>> + Send + Sync;
+pub type ImageItemClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, StImageConfig)>>;
 
-pub type OnMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence, Vec<UIKeyframe>) + Send>>
-    + Send
-    + Sync;
+pub type VideoItemClickHandler = dyn Fn() -> Option<Box<dyn FnMut(Uuid, StVideoConfig)>>;
 
-pub type OnHandleMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Uuid, Point) -> (Sequence, Vec<UIKeyframe>) + Send>>
-    + Send
-    + Sync;
+pub type OnMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence, Vec<UIKeyframe>)>>;
+
+pub type OnHandleMouseUp =
+    dyn Fn() -> Option<Box<dyn FnMut(Uuid, Uuid, Point) -> (Sequence, Vec<UIKeyframe>)>>;
 
 #[derive(Eq, PartialEq, Clone, Copy, EnumIter, Debug)]
 pub enum ControlMode {
@@ -223,12 +219,15 @@ pub struct Editor {
     pub dragging_path_object: Option<Uuid>,
     pub dragging_path_keyframe: Option<Uuid>,
     pub cursor_dot: Option<RingDot>,
+    pub video_items: Vec<StVideo>,
+    pub dragging_video: Option<Uuid>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
     pub handle_polygon_click: Option<Arc<PolygonClickHandler>>,
     pub handle_text_click: Option<Arc<TextItemClickHandler>>,
     pub handle_image_click: Option<Arc<ImageItemClickHandler>>,
+    pub handle_video_click: Option<Arc<VideoItemClickHandler>>,
     pub gpu_resources: Option<Arc<GpuResources>>,
     pub window: Option<Arc<Window>>,
     pub camera: Option<Camera>,
@@ -309,6 +308,7 @@ impl Editor {
             handle_polygon_click: None,
             handle_text_click: None,
             handle_image_click: None,
+            handle_video_click: None,
             gpu_resources: None,
             window: None,
             camera: None,
@@ -348,6 +348,8 @@ impl Editor {
             cursor_dot: None,
             control_mode: ControlMode::Select,
             is_panning: false,
+            video_items: Vec::new(),
+            dragging_video: None,
             // TODO: update interactive bounds on window resize?
             interactive_bounds: BoundingBox {
                 min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
@@ -531,6 +533,51 @@ impl Editor {
 
             println!("Image restored...");
         });
+
+        saved_sequence.active_video_items.iter().for_each(|i| {
+            // let gpu_resources = self
+            //     .gpu_resources
+            //     .as_ref()
+            //     .expect("Couldn't get GPU Resources");
+
+            let position = Point {
+                x: 600.0 + i.position.x as f32,
+                y: 50.0 + i.position.y as f32,
+            };
+
+            let video_config = StVideoConfig {
+                id: i.id.clone(),
+                name: i.name.clone(),
+                dimensions: i.dimensions.clone(),
+                path: i.path.clone(),
+                position,
+                layer: i.layer.clone(),
+            };
+
+            let mut restored_video = StVideo::new(
+                &device,
+                &queue,
+                // string to Path
+                Path::new(&i.path),
+                video_config,
+                &window_size,
+                self.model_bind_group_layout
+                    .as_ref()
+                    .expect("Couldn't get model bind group layout"),
+                -2.0,
+                i.id.clone(),
+                Uuid::from_str(&saved_sequence.id.clone())
+                    .expect("Couldn't convert string to uuid"),
+            )
+            .expect("Couldn't restore video");
+
+            restored_video.hidden = hidden;
+
+            // editor.add_polygon(restored_polygon);
+            self.video_items.push(restored_video);
+
+            println!("Video restored...");
+        });
     }
 
     pub fn reset_sequence_objects(&mut self) {
@@ -579,6 +626,20 @@ impl Editor {
                 image.transform.position.x = i.position.x as f32 + CANVAS_HORIZ_OFFSET;
                 image.transform.position.y = i.position.y as f32 + CANVAS_VERT_OFFSET;
                 image
+                    .transform
+                    .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+            });
+
+            current_sequence.active_video_items.iter().for_each(|i| {
+                let video = self
+                    .video_items
+                    .iter_mut()
+                    .find(|video| video.id == i.id)
+                    .expect("Couldn't find image");
+
+                video.transform.position.x = i.position.x as f32 + CANVAS_HORIZ_OFFSET;
+                video.transform.position.y = i.position.y as f32 + CANVAS_VERT_OFFSET;
+                video
                     .transform
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
             });
@@ -661,6 +722,36 @@ impl Editor {
                 prompt.push_str(&image.dimensions.0.to_string());
                 prompt.push_str(", ");
                 prompt.push_str(&image.dimensions.1.to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&(x.round() as i32).to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&(y.round() as i32).to_string());
+                prompt.push_str(", ");
+                prompt.push_str("0.000"); // direction
+                prompt.push_str(", ");
+                prompt.push_str("\n");
+                total = total + 1;
+            }
+
+            if (total > 6) {
+                break;
+            }
+        }
+
+        for (i, video) in self.video_items.iter().enumerate() {
+            if !video.hidden {
+                let x = video.transform.position.x - 600.0;
+                let x = (x / 800.0) * 100.0; // testing percentage based training
+                let y = video.transform.position.y - 50.0;
+                let y = (y / 450.0) * 100.0;
+
+                prompt.push_str(&total.to_string());
+                prompt.push_str(", ");
+                prompt.push_str("5");
+                prompt.push_str(", ");
+                prompt.push_str(&video.dimensions.0.to_string());
+                prompt.push_str(", ");
+                prompt.push_str(&video.dimensions.1.to_string());
                 prompt.push_str(", ");
                 prompt.push_str(&(x.round() as i32).to_string());
                 prompt.push_str(", ");
@@ -828,9 +919,11 @@ impl Editor {
         let visible_texts: Vec<&TextRenderer> =
             self.text_items.iter().filter(|t| !t.hidden).collect();
         let visible_images: Vec<&StImage> = self.image_items.iter().filter(|i| !i.hidden).collect();
+        let visible_videos: Vec<&StVideo> = self.video_items.iter().filter(|v| !v.hidden).collect();
 
         let polygon_count = self.polygons.iter().filter(|p| !p.hidden).count();
         let text_count = self.text_items.iter().filter(|t| !t.hidden).count();
+        let image_count = self.image_items.iter().filter(|i| !i.hidden).count();
 
         match object_idx {
             idx if idx < polygon_count => Some(visible_polygons[idx].id.clone().to_string()),
@@ -842,6 +935,15 @@ impl Editor {
                     .id
                     .clone(),
             ),
+            idx if idx
+                < polygon_count + text_count + visible_images.len() + visible_videos.len() =>
+            {
+                Some(
+                    visible_videos[idx - (polygon_count + text_count + visible_images.len())]
+                        .id
+                        .clone(),
+                )
+            }
             _ => None,
         }
     }
@@ -854,11 +956,15 @@ impl Editor {
         let polygon_count = self.polygons.iter().filter(|p| !p.hidden).count();
         let text_count = self.text_items.iter().filter(|t| !t.hidden).count();
         let image_count = self.image_items.iter().filter(|i| !i.hidden).count();
+        let video_count = self.video_items.iter().filter(|i| !i.hidden).count();
 
         match object_idx {
             idx if idx < polygon_count => Some(ObjectType::Polygon),
             idx if idx < polygon_count + text_count => Some(ObjectType::TextItem),
             idx if idx < polygon_count + text_count + image_count => Some(ObjectType::ImageItem),
+            idx if idx < polygon_count + text_count + image_count + video_count => {
+                Some(ObjectType::VideoItem)
+            }
             _ => None,
         }
     }
@@ -976,6 +1082,13 @@ impl Editor {
                                     image.hidden = true;
                                 }
                             }
+                            for video in self.video_items.iter_mut() {
+                                if video.current_sequence_id.to_string() == current_sequence_id {
+                                    video.hidden = false;
+                                } else {
+                                    video.hidden = true;
+                                }
+                            }
                         }
                     } else {
                         self.current_sequence_data = Some(sequence.clone());
@@ -1050,6 +1163,10 @@ impl Editor {
                     .image_items
                     .iter()
                     .position(|i| i.id.to_string() == animation.polygon_id),
+                ObjectType::VideoItem => self
+                    .video_items
+                    .iter()
+                    .position(|i| i.id.to_string() == animation.polygon_id),
             };
 
             let Some(object_idx) = object_idx else {
@@ -1106,6 +1223,11 @@ impl Editor {
                             }
                             ObjectType::ImageItem => {
                                 self.image_items[object_idx]
+                                    .transform
+                                    .update_position([position.x, position.y], &camera.window_size);
+                            }
+                            ObjectType::VideoItem => {
+                                self.video_items[object_idx]
                                     .transform
                                     .update_position([position.x, position.y], &camera.window_size);
                             }
@@ -1170,6 +1292,9 @@ impl Editor {
                                 // use text color property?
                             }
                             ObjectType::ImageItem => {
+                                // set up opacity property?
+                            }
+                            ObjectType::VideoItem => {
                                 // set up opacity property?
                             }
                         }
@@ -1449,6 +1574,11 @@ impl Editor {
             self.create_motion_path_visualization(sequence, &image_config.id, color_index);
             color_index = color_index + 1;
         }
+        // Recreate motion paths for all videos
+        for video_config in &sequence.active_video_items {
+            self.create_motion_path_visualization(sequence, &video_config.id, color_index);
+            color_index = color_index + 1;
+        }
     }
 
     pub fn update_camera_binding(&mut self) {
@@ -1597,7 +1727,7 @@ impl Editor {
             device,
             queue,
             path,
-            image_config, // load font data ahead of time
+            image_config,
             window_size,
             &self
                 .model_bind_group_layout
@@ -1609,6 +1739,41 @@ impl Editor {
         );
 
         self.image_items.push(image_item);
+    }
+
+    pub fn add_video_item(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        video_config: StVideoConfig,
+        path: &Path,
+        new_id: Uuid,
+        selected_sequence_id: String,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let mut video_item = StVideo::new(
+            device,
+            queue,
+            path,
+            video_config,
+            window_size,
+            &self
+                .model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get model bind group layout"),
+            0.0,
+            new_id.to_string(),
+            Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
+        )
+        .expect("Couldn't create video item");
+
+        // render 1 frame to provide preview image
+        video_item
+            .draw_video_frame(device, queue)
+            .expect("Couldn't draw video frame");
+
+        self.video_items.push(video_item);
     }
 
     pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
@@ -1930,6 +2095,71 @@ impl Editor {
         }
     }
 
+    pub fn update_video(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
+        // First iteration: find the index of the selected polygon
+        let video_index = self
+            .video_items
+            .iter()
+            .position(|p| p.id == selected_id.to_string());
+
+        if let Some(index) = video_index {
+            println!("Found selected video with ID: {}", selected_id);
+
+            let camera = self.camera.expect("Couldn't get camera");
+
+            // Get the necessary data from editor
+            let viewport_width = camera.window_size.width;
+            let viewport_height = camera.window_size.height;
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get gpu resources");
+            let device = &gpu_resources.device;
+            let queue = &gpu_resources.queue;
+
+            let window_size = WindowSize {
+                width: viewport_width as u32,
+                height: viewport_height as u32,
+            };
+
+            // Second iteration: update the selected polygon
+            if let Some(selected_video) = self.video_items.get_mut(index) {
+                match new_value {
+                    InputValue::Text(s) => match key {
+                        _ => println!("No match on input"),
+                    },
+                    InputValue::Number(n) => match key {
+                        "width" => selected_video.update_data_from_dimensions(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            (n as f32, selected_video.dimensions.1 as f32),
+                            &camera,
+                        ),
+                        "height" => selected_video.update_data_from_dimensions(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            (selected_video.dimensions.0 as f32, n as f32),
+                            &camera,
+                        ),
+                        _ => println!("No match on input"),
+                    },
+                }
+            }
+        } else {
+            println!("No image found with the selected ID: {}", selected_id);
+        }
+    }
+
     pub fn get_object_width(&self, selected_id: Uuid, object_type: ObjectType) -> f32 {
         match object_type {
             ObjectType::Polygon => {
@@ -1962,6 +2192,20 @@ impl Editor {
 
                 if let Some(index) = polygon_index {
                     if let Some(selected_polygon) = self.image_items.get(index) {
+                        return selected_polygon.dimensions.0 as f32;
+                    } else {
+                        return 0.0;
+                    }
+                }
+            }
+            ObjectType::VideoItem => {
+                let polygon_index = self
+                    .video_items
+                    .iter()
+                    .position(|p| p.id == selected_id.to_string());
+
+                if let Some(index) = polygon_index {
+                    if let Some(selected_polygon) = self.video_items.get(index) {
                         return selected_polygon.dimensions.0 as f32;
                     } else {
                         return 0.0;
@@ -2005,6 +2249,20 @@ impl Editor {
 
                 if let Some(index) = polygon_index {
                     if let Some(selected_polygon) = self.image_items.get(index) {
+                        return selected_polygon.dimensions.1 as f32;
+                    } else {
+                        return 0.0;
+                    }
+                }
+            }
+            ObjectType::VideoItem => {
+                let polygon_index = self
+                    .video_items
+                    .iter()
+                    .position(|p| p.id == selected_id.to_string());
+
+                if let Some(index) = polygon_index {
+                    if let Some(selected_polygon) = self.video_items.get(index) {
                         return selected_polygon.dimensions.1 as f32;
                     } else {
                         return 0.0;
@@ -2818,6 +3076,9 @@ impl Editor {
         self.image_items.iter_mut().for_each(|i| {
             i.hidden = true;
         });
+        self.video_items.iter_mut().for_each(|v| {
+            v.hidden = true;
+        });
 
         // Remove existing motion path segments
         self.static_polygons.retain(|p| {
@@ -3174,6 +3435,7 @@ use crate::dot::RingDot;
 use crate::fonts::FontManager;
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};
+use crate::st_video::{StVideo, StVideoConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
 use crate::timelines::{SavedTimelineStateConfig, TrackType};
 use crate::transform::{angle_between_points, degrees_between_points};

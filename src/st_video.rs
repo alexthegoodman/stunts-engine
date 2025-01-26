@@ -2,6 +2,7 @@ use std::path::Path;
 
 use cgmath::SquareMatrix;
 use cgmath::{Matrix4, Vector2};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue};
@@ -10,10 +11,21 @@ use windows::Win32::Media::MediaFoundation::*;
 use windows::Win32::System::Com::StructuredStorage::PropVariantToInt64;
 use windows_core::PCWSTR;
 
+use crate::camera::Camera;
 use crate::editor::{Point, WindowSize};
-use crate::polygon::INTERNAL_LAYER_SPACE;
+use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{matrix4_to_raw_array, Transform};
 use crate::vertex::Vertex;
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub struct SavedStVideoConfig {
+    pub id: String,
+    pub name: String,
+    pub dimensions: (u32, u32),
+    pub path: String,
+    pub position: SavedPoint,
+    pub layer: i32,
+}
 
 #[derive(Clone)]
 pub struct StVideoConfig {
@@ -65,7 +77,8 @@ impl StVideo {
         }
 
         let source_reader =
-            StVideo::create_source_reader(&path.to_str().expect("Couldn't get path string"))?;
+            StVideo::create_source_reader(&path.to_str().expect("Couldn't get path string"))
+                .expect("Couldn't create source reader");
 
         // Get source duration
         let mut duration = 0;
@@ -108,7 +121,7 @@ impl StVideo {
         }
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Image Texture"),
+            label: Some("Video Texture"),
             size: wgpu::Extent3d {
                 // TODO: should be source video dimensions
                 width: source_width,
@@ -126,7 +139,9 @@ impl StVideo {
             // Valid view formats for chrominance are TextureFormat::Rg8Unorm.
             // Width and height must be even.
             // Features::TEXTURE_FORMAT_NV12 must be enabled to use this texture format.
-            format: wgpu::TextureFormat::NV12,
+            // format: wgpu::TextureFormat::NV12,
+            // use rgb for now
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb], // TODO: check if this is correct
         });
@@ -267,7 +282,8 @@ impl StVideo {
             let mut attributes = attributes
                 .as_ref()
                 .expect("Couldn't get video decoder attributes");
-            // attributes.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1)?; // not necessary, can use nv12 which is YUV
+            attributes.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1)?; // not necessary, can use nv12 which is YUV
+            attributes.SetUINT32(&MF_READWRITE_DISABLE_CONVERTERS, 0)?; // not necessary, can use nv12 which is YUV
 
             // the only source reader needed for video
             let mut source_reader =
@@ -278,6 +294,7 @@ impl StVideo {
             let mut media_type = MFCreateMediaType()?;
             media_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
             media_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_RGB32)?;
+            // media_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)?;
             source_reader.SetCurrentMediaType(
                 MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32,
                 None,
@@ -288,40 +305,43 @@ impl StVideo {
         }
     }
 
-    fn draw_video_frame(&self, device: &Device, queue: &Queue) -> windows::core::Result<()> {
+    pub fn draw_video_frame(&self, device: &Device, queue: &Queue) -> windows::core::Result<()> {
         unsafe {
+            // println!("Drawing video frame");
             let mut flags: u32 = 0;
             let mut timestamp: i64 = 0; // store timestamp for later use?
-            let mut sample: *mut Option<IMFSample> = std::ptr::null_mut();
+            let mut sample: Option<IMFSample> = None;
             let mut actual_stream_index: &mut u32 = &mut 0;
 
+            // println!("Reading sample");
             self.source_reader.ReadSample(
                 MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32,
                 0,
                 Some(actual_stream_index),
                 Some(&mut flags),
                 Some(&mut timestamp),
-                Some(sample),
+                Some(&mut sample),
             )?;
 
-            let mut sample = sample
-                .as_ref()
-                .expect("Couldn't get sample container")
-                .as_ref()
-                .expect("Couldn't get sample");
+            // println!("Convert to buffer");
+            let mut sample = sample.as_ref().expect("Couldn't get sample container");
             let mut buffer = sample.ConvertToContiguousBuffer()?;
 
+            // println!("Lock buffer");
             let mut data_ptr: *mut u8 = std::ptr::null_mut();
             let mut data_len: u32 = 0;
             let mut max_length = 0;
             buffer.Lock(&mut data_ptr, Some(&mut max_length), Some(&mut data_len))?;
 
+            // println!("Copy data");
             let mut frame_data = Vec::with_capacity(data_len as usize);
             std::ptr::copy_nonoverlapping(data_ptr, frame_data.as_mut_ptr(), data_len as usize);
             frame_data.set_len(data_len as usize);
 
+            // println!("Unlock buffer");
             buffer.Unlock()?;
 
+            // println!("Write texture");
             // Write texture data
             // need to write nv12 / YUV data to texture with proper bytes per row
             queue.write_texture(
@@ -334,7 +354,7 @@ impl StVideo {
                 &frame_data,
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(self.source_dimensions.0),
+                    bytes_per_row: Some(4 * self.source_dimensions.0),
                     rows_per_image: Some(self.source_dimensions.1),
                 },
                 wgpu::Extent3d {
@@ -346,6 +366,20 @@ impl StVideo {
 
             Ok(())
         }
+    }
+
+    pub fn update_data_from_dimensions(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        dimensions: (f32, f32),
+        camera: &Camera,
+    ) {
+        self.dimensions = (dimensions.0 as u32, dimensions.1 as u32);
+        self.transform.update_scale([dimensions.0, dimensions.1]);
+        self.transform.update_uniform_buffer(&queue, &window_size);
     }
 }
 

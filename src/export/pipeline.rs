@@ -481,6 +481,22 @@ impl ExportPipeline {
                 }
             }
 
+            // draw video items
+            for (video_index, st_video) in editor.video_items.iter().enumerate() {
+                if !st_video.hidden {
+                    st_video
+                        .transform
+                        .update_uniform_buffer(&queue, &camera.window_size);
+                    render_pass.set_bind_group(1, &st_video.bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, st_video.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(
+                        st_video.index_buffer.slice(..),
+                        wgpu::IndexFormat::Uint32,
+                    );
+                    render_pass.draw_indexed(0..st_video.indices.len() as u32, 0, 0..1);
+                }
+            }
+
             // Drop the render pass before doing texture copies
             drop(render_pass);
 

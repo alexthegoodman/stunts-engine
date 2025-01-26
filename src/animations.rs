@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::{
     editor::PathType, polygon::SavedPolygonConfig, st_image::SavedStImageConfig,
-    text_due::SavedTextRendererConfig,
+    st_video::SavedStVideoConfig, text_due::SavedTextRendererConfig,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -13,6 +13,7 @@ pub enum ObjectType {
     Polygon,
     TextItem,
     ImageItem,
+    VideoItem,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -24,6 +25,7 @@ pub struct Sequence {
     pub polygon_motion_paths: Vec<AnimationData>,
     pub active_text_items: Vec<SavedTextRendererConfig>,
     pub active_image_items: Vec<SavedStImageConfig>,
+    pub active_video_items: Vec<SavedStVideoConfig>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
