@@ -6,6 +6,7 @@ mod export;
 mod fonts;
 mod polygon;
 mod st_image;
+mod st_video;
 mod text;
 mod text_due;
 mod timelines;

@@ -6,6 +6,7 @@ pub mod export;
 pub mod fonts;
 pub mod polygon;
 pub mod st_image;
+pub mod st_video;
 pub mod text;
 pub mod text_due;
 pub mod timelines;
