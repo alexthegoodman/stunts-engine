@@ -141,7 +141,7 @@ impl StVideo {
             // Features::TEXTURE_FORMAT_NV12 must be enabled to use this texture format.
             // format: wgpu::TextureFormat::NV12,
             // use rgb for now
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb], // TODO: check if this is correct
         });
@@ -341,7 +341,7 @@ impl StVideo {
             // println!("Unlock buffer");
             buffer.Unlock()?;
 
-            // println!("Write texture");
+            // println!("Write texture {:?}", frame_data.len());
             // Write texture data
             // need to write nv12 / YUV data to texture with proper bytes per row
             queue.write_texture(

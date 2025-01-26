@@ -573,6 +573,11 @@ impl Editor {
 
             restored_video.hidden = hidden;
 
+            // render 1 frame to provide preview image
+            restored_video
+                .draw_video_frame(device, queue)
+                .expect("Couldn't draw video frame");
+
             // editor.add_polygon(restored_polygon);
             self.video_items.push(restored_video);
 
@@ -1708,6 +1713,8 @@ impl Editor {
             new_id,
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
         );
+
+        text_item.render_text(&device, &queue);
 
         self.text_items.push(text_item);
     }
