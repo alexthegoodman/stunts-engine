@@ -1137,6 +1137,10 @@ impl Editor {
     /// Steps the currently selected sequence unless one is provided
     /// TODO: make more efficient
     pub fn step_animate_sequence(&mut self, total_dt: f32, camera: &Camera) {
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get GPU Resources");
         let sequence = self
             .current_sequence_data
             .as_ref()
@@ -1177,6 +1181,32 @@ impl Editor {
             let Some(object_idx) = object_idx else {
                 continue;
             };
+
+            // Determine whether to draw the video frame based on the frame rate and current time
+            // step rate is throttled to 60FPS
+            // if video frame rate is 60FPS, then call draw on each frame
+            // if video frame rate is 30FPS, then call draw on every other frame
+            if animation.object_type == ObjectType::VideoItem {
+                let frame_rate = self.video_items[object_idx].source_frame_rate;
+                let frame_interval = Duration::from_secs_f32(1.0 / frame_rate as f32);
+
+                // Calculate the number of frames that should have been displayed by now
+                let elapsed_time = current_time - start_time;
+                let expected_frames =
+                    (elapsed_time.as_secs_f32() / frame_interval.as_secs_f32()).floor() as u32;
+
+                // Calculate the time at which the current frame should be displayed
+                let current_frame_time = start_time + frame_interval * expected_frames;
+
+                // Only draw the frame if the current time is within the frame's display interval
+                if current_time >= current_frame_time
+                    && current_time < current_frame_time + frame_interval
+                {
+                    self.video_items[object_idx]
+                        .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
+                        .expect("Couldn't draw video frame");
+                }
+            }
 
             // Go through each property
             for property in &animation.properties {
