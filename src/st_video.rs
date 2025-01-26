@@ -7,6 +7,7 @@ use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue};
 use windows::Win32::Foundation::*;
 use windows::Win32::Media::MediaFoundation::*;
+use windows::Win32::System::Com::StructuredStorage::PropVariantToInt64;
 use windows_core::PCWSTR;
 
 use crate::editor::{Point, WindowSize};
@@ -29,7 +30,7 @@ pub struct StVideo {
     pub current_sequence_id: Uuid,
     pub name: String,
     pub path: String,
-    pub source_duration: u64,
+    pub source_duration: i64,
     pub source_dimensions: (u32, u32),
     pub texture: wgpu::Texture,
     pub texture_view: wgpu::TextureView,
@@ -65,14 +66,35 @@ impl StVideo {
         let source_reader =
             StVideo::create_source_reader(&path.to_str().expect("Couldn't get path string"))?;
 
-        // TODO: get source duration and dimensions
+        // Get source duration
+        let mut duration = 0;
+        unsafe {
+            let presentation_duration = source_reader
+                .GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE.0 as u32, &MF_PD_DURATION)
+                .expect("Couldn't get presentation duration");
+            let ns_100_duration =
+                PropVariantToInt64(&presentation_duration).expect("Couldn't get duration");
+            duration = ns_100_duration / 10_000_000; // convert to seconds
+        }
+
+        // Get source dimensions
+        let mut source_width = 0;
+        let mut source_height = 0;
+        unsafe {
+            let mut media_type = source_reader
+                .GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, 0)?;
+
+            let mut size_attr = media_type.GetUINT64(&MF_MT_FRAME_SIZE)?;
+            source_width = (size_attr >> 32) as u32;
+            source_height = (size_attr & 0xFFFFFFFF) as u32;
+        }
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Image Texture"),
             size: wgpu::Extent3d {
                 // TODO: should be source video dimensions
-                width: video_config.dimensions.0,
-                height: video_config.dimensions.1,
+                width: source_width,
+                height: source_height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -195,8 +217,8 @@ impl StVideo {
                 .to_str()
                 .expect("Couldn't convert to string")
                 .to_string(),
-            source_duration: 0,        // TODO
-            source_dimensions: (0, 0), // TODO
+            source_duration: duration,
+            source_dimensions: (source_width, source_height),
             texture,
             texture_view,
             transform,
@@ -282,7 +304,7 @@ impl StVideo {
             buffer.Unlock()?;
 
             // Write texture data
-            // TODO: need to write nv12 / YUV data to texture with propert bytes per row
+            // need to write nv12 / YUV data to texture with proper bytes per row
             queue.write_texture(
                 wgpu::ImageCopyTexture {
                     texture: &self.texture,
@@ -293,7 +315,7 @@ impl StVideo {
                 &frame_data,
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(4 * self.source_dimensions.0),
+                    bytes_per_row: Some(self.source_dimensions.0),
                     rows_per_image: Some(self.source_dimensions.1),
                 },
                 wgpu::Extent3d {
