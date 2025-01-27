@@ -2477,6 +2477,22 @@ impl Editor {
         text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
     }
 
+    pub fn update_text_content(&mut self, selected_text_id: Uuid, content: String) {
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get gpu resources");
+
+        let text_item = self
+            .text_items
+            .iter_mut()
+            .find(|t| t.id == selected_text_id)
+            .expect("Couldn't find text item");
+
+        text_item.text = content;
+        text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
+    }
+
     // pub fn update_date_from_window_resize(
     //     &mut self,
     //     window_size: &WindowSize,
