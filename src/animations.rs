@@ -80,6 +80,8 @@ pub struct UIKeyframe {
     pub easing: EasingType,
     // Whether a curve (bezier) or straight (linear) path
     pub path_type: PathType,
+    /// Type of keyframe (frame or range)
+    pub key_type: KeyType,
 }
 
 /// Possible values for keyframes
@@ -92,4 +94,15 @@ pub enum KeyframeValue {
     PerspectiveY(i32),
     Opacity(i32), // also out of 100
     Custom(Vec<i32>),
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub struct RangeData {
+    pub end_time: Duration,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub enum KeyType {
+    Frame,
+    Range(RangeData),
 }

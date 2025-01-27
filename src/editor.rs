@@ -940,16 +940,42 @@ impl Editor {
                     value: KeyframeValue::Position([predicted_x, predicted_y]),
                     easing: EasingType::EaseInOut,
                     path_type: PathType::Linear,
+                    // set the KeyType to Frame as default, with Range in place of 3rd and 4th keyframes next
+                    key_type: KeyType::Frame,
                 });
             }
 
-            // Ensure the 4th keyframe matches the 3rd keyframe
-            if position_keyframes.len() >= 4 {
-                let third_keyframe = &position_keyframes.clone()[2]; // 3rd keyframe (index 2)
-                let fourth_keyframe = &mut position_keyframes[3]; // 4th keyframe (index 3)
+            // handle 6 keyframes
+            if position_keyframes.len() == 6 {
+                // Ensure the 4th keyframe matches the 3rd keyframe
+                // let third_keyframe = &position_keyframes.clone()[2]; // 3rd keyframe (index 2)
+                // let fourth_keyframe = &mut position_keyframes[3]; // 4th keyframe (index 3)
 
-                // Set the 4th keyframe's position to match the 3rd keyframe's position
-                fourth_keyframe.value = third_keyframe.value.clone();
+                // // Set the 4th keyframe's position to match the 3rd keyframe's position
+                // fourth_keyframe.value = third_keyframe.value.clone();
+
+                // set Range
+                let forth_keyframe = &position_keyframes.clone()[3];
+                let third_keyframe = &mut position_keyframes[2];
+
+                third_keyframe.key_type = KeyType::Range(RangeData {
+                    end_time: forth_keyframe.time,
+                });
+
+                position_keyframes.remove(3);
+            }
+
+            // handle 4 keyframes
+            if position_keyframes.len() == 4 {
+                // set Range
+                let mid2_keyframe = &position_keyframes.clone()[2];
+                let mid_keyframe = &mut position_keyframes[1];
+
+                mid_keyframe.key_type = KeyType::Range(RangeData {
+                    end_time: mid2_keyframe.time,
+                });
+
+                position_keyframes.remove(2);
             }
 
             // Get the item ID based on the object index
@@ -982,6 +1008,8 @@ impl Editor {
                                 value: KeyframeValue::Rotation(0),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
+                                // should be same as position? or safe to be independent?
+                                key_type: KeyType::Frame,
                             })
                             .collect(),
                         depth: 0,
@@ -998,6 +1026,8 @@ impl Editor {
                                 value: KeyframeValue::Scale(100),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
+                                // should be same as position? or safe to be independent?
+                                key_type: KeyType::Frame,
                             })
                             .collect(),
                         depth: 0,
@@ -1014,6 +1044,8 @@ impl Editor {
                                 value: KeyframeValue::Opacity(100),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
+                                // should be same as position? or safe to be independent?
+                                key_type: KeyType::Frame,
                             })
                             .collect(),
                         depth: 0,
@@ -1458,21 +1490,89 @@ impl Editor {
         }
     }
 
+    // pub fn get_surrounding_keyframes<'a>(
+    //     &self,
+    //     keyframes: &'a [UIKeyframe],
+    //     current_time: Duration,
+    // ) -> (Option<&'a UIKeyframe>, Option<&'a UIKeyframe>) {
+    //     let mut prev_frame = None;
+    //     let mut next_frame = None;
+
+    //     for (i, frame) in keyframes.iter().enumerate() {
+    //         if frame.time > current_time {
+    //             next_frame = Some(frame);
+    //             prev_frame = if i > 0 {
+    //                 Some(&keyframes[i - 1])
+    //             } else {
+    //                 Some(&keyframes[keyframes.len() - 1])
+    //             };
+    //             break;
+    //         }
+    //     }
+
+    //     // Handle wrap-around case
+    //     if next_frame.is_none() {
+    //         prev_frame = keyframes.last();
+    //         next_frame = keyframes.first();
+    //     }
+
+    //     (prev_frame, next_frame)
+    // }
+
+    /// Returns a "virtual" keyframe for the end keyframe in case of a Range type
     pub fn get_surrounding_keyframes<'a>(
         &self,
         keyframes: &'a [UIKeyframe],
         current_time: Duration,
-    ) -> (Option<&'a UIKeyframe>, Option<&'a UIKeyframe>) {
+    ) -> (Option<UIKeyframe>, Option<UIKeyframe>) {
         let mut prev_frame = None;
         let mut next_frame = None;
 
         for (i, frame) in keyframes.iter().enumerate() {
             if frame.time > current_time {
-                next_frame = Some(frame);
+                // Check if the previous frame is a range
+                if i > 0 {
+                    if let KeyType::Range(range_data) = &keyframes[i - 1].key_type {
+                        // Case 1: Current time is within the range
+                        if current_time >= keyframes[i - 1].time
+                            && current_time < range_data.end_time
+                        {
+                            // Current time is within a range
+                            prev_frame = Some(keyframes[i - 1].clone());
+                            next_frame = Some(UIKeyframe {
+                                id: "virtual".to_string(),
+                                time: range_data.end_time,
+                                value: keyframes[i - 1].value.clone(),
+                                easing: EasingType::Linear, // Doesn't matter for static ranges
+                                path_type: PathType::Linear, // Doesn't matter for static ranges
+                                key_type: KeyType::Frame, // Virtual keyframe is treated as a frame
+                            });
+                            return (prev_frame, next_frame);
+                        }
+
+                        // Case 2: Current time is after the range but before the next keyframe
+                        if current_time >= range_data.end_time && current_time < frame.time {
+                            prev_frame = Some(UIKeyframe {
+                                id: "virtual".to_string(),
+                                time: range_data.end_time, // End of the range
+                                value: keyframes[i - 1].value.clone(), // Same value as start
+                                easing: EasingType::Linear, // Doesn't matter for static ranges
+                                path_type: PathType::Linear, // Doesn't matter for static ranges
+                                key_type: KeyType::Frame,  // Virtual keyframe is treated as a frame
+                            });
+                            next_frame = Some(frame.clone()); // Next actual keyframe
+                            return (prev_frame, next_frame);
+                        }
+                    }
+                }
+
+                // Regular keyframe logic
+                // TODO: Too many clones?
+                next_frame = Some(frame.clone());
                 prev_frame = if i > 0 {
-                    Some(&keyframes[i - 1])
+                    Some(keyframes[i - 1].clone())
                 } else {
-                    Some(&keyframes[keyframes.len() - 1])
+                    Some(keyframes[keyframes.len() - 1].clone())
                 };
                 break;
             }
@@ -1480,8 +1580,8 @@ impl Editor {
 
         // Handle wrap-around case
         if next_frame.is_none() {
-            prev_frame = keyframes.last();
-            next_frame = keyframes.first();
+            prev_frame = keyframes.last().cloned();
+            next_frame = keyframes.first().cloned();
         }
 
         (prev_frame, next_frame)
@@ -1567,6 +1667,7 @@ impl Editor {
                         12.0, // width and height
                         sequence.id.clone(),
                         path_fill,
+                        0.0,
                     );
 
                     // // calculate angle so triangle handle points in correct direction
@@ -1582,20 +1683,39 @@ impl Editor {
                 }
 
                 // handles for remaining keyframes
-                let mut handle = create_path_handle(
-                    &camera.window_size,
-                    &gpu_resources.device,
-                    &gpu_resources.queue,
-                    &self
-                        .model_bind_group_layout
-                        .as_ref()
-                        .expect("No bind group layout"),
-                    &self.camera.expect("No camera"),
-                    end_point,
-                    12.0, // width and height
-                    sequence.id.clone(),
-                    path_fill,
-                );
+
+                let mut handle = match &end_kf.key_type {
+                    KeyType::Frame => create_path_handle(
+                        &camera.window_size,
+                        &gpu_resources.device,
+                        &gpu_resources.queue,
+                        &self
+                            .model_bind_group_layout
+                            .as_ref()
+                            .expect("No bind group layout"),
+                        &self.camera.expect("No camera"),
+                        end_point,
+                        12.0, // width and height
+                        sequence.id.clone(),
+                        path_fill,
+                        0.0,
+                    ),
+                    KeyType::Range(range_data) => create_path_handle(
+                        &camera.window_size,
+                        &gpu_resources.device,
+                        &gpu_resources.queue,
+                        &self
+                            .model_bind_group_layout
+                            .as_ref()
+                            .expect("No bind group layout"),
+                        &self.camera.expect("No camera"),
+                        end_point,
+                        12.0, // width and height
+                        sequence.id.clone(),
+                        path_fill,
+                        45.0,
+                    ),
+                };
 
                 // // calculate angle so triangle handle points in correct direction
                 // // let angle = angle_between_points(start_point, end_point);
@@ -3323,6 +3443,7 @@ fn create_path_handle(
     size: f32,
     selected_sequence_id: String,
     fill: [f32; 4],
+    rotation: f32,
 ) -> Polygon {
     Polygon::new(
         window_size,
@@ -3338,7 +3459,7 @@ fn create_path_handle(
         ],
         (size, size), // width = length of segment, height = thickness
         end,
-        0.0,
+        rotation,
         0.0,
         // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
         fill,
@@ -3418,6 +3539,7 @@ fn create_default_property(
             value: value.clone(),
             easing: EasingType::EaseInOut,
             path_type: PathType::Linear,
+            key_type: KeyType::Frame,
         })
         .collect();
 
@@ -3599,7 +3721,8 @@ use cgmath::SquareMatrix;
 use cgmath::Transform;
 
 use crate::animations::{
-    AnimationData, AnimationProperty, EasingType, KeyframeValue, ObjectType, Sequence, UIKeyframe,
+    AnimationData, AnimationProperty, EasingType, KeyType, KeyframeValue, ObjectType, RangeData,
+    Sequence, UIKeyframe,
 };
 use crate::camera::{Camera, CameraBinding};
 use crate::dot::RingDot;

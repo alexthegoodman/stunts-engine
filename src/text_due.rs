@@ -233,6 +233,11 @@ impl TextRenderer {
         queue: &Queue,
         raster_config: GlyphRasterConfig,
     ) -> AtlasGlyph {
+        println!(
+            "Adding glyph... Atlas Position: {:?}",
+            self.next_atlas_position
+        );
+
         // let (metrics, bitmap) = self.font.rasterize(c, self.font_size as f32);
         let (metrics, bitmap) = self.font.rasterize_config(raster_config);
 
