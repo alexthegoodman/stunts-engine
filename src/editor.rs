@@ -807,38 +807,156 @@ impl Editor {
         let total_predictions = predictions.len();
         let num_objects = total_predictions / (values_per_prediction * keyframes_per_object);
 
+        // Get the current positions of all objects
+        let mut current_positions = Vec::new();
+        for (i, polygon) in self.polygons.iter().enumerate() {
+            if !polygon.hidden {
+                current_positions.push((
+                    i,
+                    polygon.transform.position.x,
+                    polygon.transform.position.y,
+                ));
+            }
+        }
+        for (i, text) in self.text_items.iter().enumerate() {
+            if !text.hidden {
+                current_positions.push((
+                    i + self.polygons.len(),
+                    text.transform.position.x,
+                    text.transform.position.y,
+                ));
+            }
+        }
+        for (i, image) in self.image_items.iter().enumerate() {
+            if !image.hidden {
+                current_positions.push((
+                    i + self.polygons.len() + self.text_items.len(),
+                    image.transform.position.x,
+                    image.transform.position.y,
+                ));
+            }
+        }
+        for (i, video) in self.video_items.iter().enumerate() {
+            if !video.hidden {
+                current_positions.push((
+                    i + self.polygons.len() + self.text_items.len() + self.image_items.len(),
+                    video.transform.position.x,
+                    video.transform.position.y,
+                ));
+            }
+        }
+
+        println!("current_positions length {:?}", current_positions.len());
+
+        // Collect all 3rd keyframes (index 2) from predictions
+        let mut third_keyframes = Vec::new();
         for object_idx in 0..num_objects {
+            let base_idx = object_idx * (values_per_prediction * keyframes_per_object)
+                + 2 * values_per_prediction; // 3rd keyframe (index 2)
+
+            // Skip if out of bounds
+            if base_idx + 5 >= predictions.len() {
+                continue;
+            }
+
+            // percentage based predictions (800 is canvas width, 450 is canvas height)
+            let predicted_x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
+            let predicted_y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
+
+            third_keyframes.push((object_idx, predicted_x, predicted_y));
+        }
+
+        println!("third_keyframes length {:?}", third_keyframes.len());
+
+        // Create distance vector
+        let mut distances = vec![vec![f64::MAX; third_keyframes.len()]; current_positions.len()];
+        for (object_idx, (_, current_x, current_y)) in current_positions.iter().enumerate() {
+            for (mp_object_idx, (_, predicted_x, predicted_y)) in third_keyframes.iter().enumerate()
+            {
+                let dx = *predicted_x as f32 - *current_x;
+                let dy = *predicted_y as f32 - *current_y;
+                let distance = (dx * dx + dy * dy).sqrt();
+                distances[object_idx][mp_object_idx] = distance as f64;
+            }
+        }
+
+        println!("distances length {:?}", distances.len());
+
+        // // Assign motion paths to objects based on the closest 3rd keyframe
+        // let mut assigned_keyframes = vec![false; third_keyframes.len()]; // Track which keyframes have been assigned
+        // let mut motion_path_assignments = Vec::new();
+
+        // for object_idx in 0..current_positions.len() {
+        //     let mut min_distance = f32::MAX;
+        //     let mut best_object_idx = None;
+
+        //     // Find the closest unassigned
+        //     for mp_object_idx in 0..third_keyframes.len() {
+        //         if !assigned_keyframes[mp_object_idx]
+        //             && distances[object_idx][mp_object_idx] < min_distance
+        //         {
+        //             min_distance = distances[object_idx][mp_object_idx];
+        //             best_object_idx = Some(mp_object_idx);
+        //         }
+        //     }
+
+        //     // Assign the closest keyframe to the object
+        //     if let (Some(object_idx)) = (best_object_idx) {
+        //         motion_path_assignments.push(object_idx);
+        //         assigned_keyframes[object_idx] = true; // Mark this keyframe as assigned
+        //     }
+        // }
+
+        let motion_path_assignments = assign_motion_paths_to_objects(distances)
+            .expect("Couldn't assign motion paths to objects");
+
+        println!("motion_path_assignments {:?}", motion_path_assignments); // NOTE: for example, is [0,2,1] but should be [2,0,1]
+                                                                           // println!("assigned_keyframes length {:?}", assigned_keyframes.len());
+
+        // Create motion paths based on assignments
+        for (object_idx, associated_object_idx) in motion_path_assignments.into_iter() {
+            println!("object_idx {:?} {:?}", object_idx, associated_object_idx);
+
             let mut position_keyframes = Vec::new();
 
-            // Get the item ID based on the object index
-            let item_id = self.get_item_id(object_idx);
-            let object_type = self.get_object_type(object_idx);
-
-            // Process keyframes for this object
-            for keyframe_idx in 0..keyframes_per_object {
-                let base_idx = object_idx * (values_per_prediction * keyframes_per_object)
-                    + keyframe_idx * values_per_prediction;
+            // Process keyframes for the assigned motion path
+            for keyframe_time_idx in 0..keyframes_per_object {
+                let base_idx = associated_object_idx
+                    * (values_per_prediction * keyframes_per_object)
+                    + keyframe_time_idx * values_per_prediction;
 
                 // Skip if out of bounds
                 if base_idx + 5 >= predictions.len() {
                     continue;
                 }
 
-                // let predicted_x = predictions[base_idx + 4].round() as i32;
-                // let predicted_y = predictions[base_idx + 5].round() as i32;
-
-                // testing percentage based training
+                // percentage based predictions (800 is canvas width, 450 is canvas height)
                 let predicted_x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
                 let predicted_y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
 
                 position_keyframes.push(UIKeyframe {
                     id: Uuid::new_v4().to_string(),
-                    time: Duration::from_millis(timestamps[keyframe_idx] as u64),
+                    time: Duration::from_millis(timestamps[keyframe_time_idx] as u64),
                     value: KeyframeValue::Position([predicted_x, predicted_y]),
                     easing: EasingType::EaseInOut,
                     path_type: PathType::Linear,
                 });
             }
+
+            // Ensure the 4th keyframe matches the 3rd keyframe
+            if position_keyframes.len() >= 4 {
+                let third_keyframe = &position_keyframes.clone()[2]; // 3rd keyframe (index 2)
+                let fourth_keyframe = &mut position_keyframes[3]; // 4th keyframe (index 3)
+
+                // Set the 4th keyframe's position to match the 3rd keyframe's position
+                fourth_keyframe.value = third_keyframe.value.clone();
+            }
+
+            // Get the item ID based on the object index
+            let item_id = self.get_item_id(object_idx);
+            let object_type = self.get_object_type(object_idx);
+
+            println!("item_id {:?}", item_id);
 
             // Only create animation if we have valid keyframes and item ID
             if !position_keyframes.is_empty() && item_id.is_some() {
@@ -3654,4 +3772,28 @@ fn get_full_color(index: u32) -> (u32, u32, u32) {
         2 => (10, 10, get_color(index)), // Blue
         _ => unreachable!(),
     }
+}
+
+use munkres::{solve_assignment, Error, Position, WeightMatrix};
+
+fn assign_motion_paths_to_objects(
+    cost_matrix: Vec<Vec<f64>>,
+) -> Result<Vec<(usize, usize)>, Error> {
+    // Flatten the 2D cost matrix into a 1D vector
+    let n = cost_matrix.len();
+    let flat_matrix: Vec<f64> = cost_matrix.into_iter().flatten().collect();
+
+    // Create a WeightMatrix from the flattened vector
+    let mut weights = WeightMatrix::from_row_vec(n, flat_matrix);
+
+    // Solve the assignment problem
+    let result = solve_assignment(&mut weights)?;
+
+    // Process the result into (object_index, path_index) pairs
+    let assignments = result
+        .into_iter()
+        .map(|Position { row, column }| (row, column))
+        .collect();
+
+    Ok(assignments)
 }
