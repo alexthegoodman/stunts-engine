@@ -1328,6 +1328,9 @@ impl Editor {
 
         // Update each animation path
         for animation in &sequence.polygon_motion_paths {
+            // Group transform position
+            let path_group_position = animation.position;
+
             // Get current time within animation duration
             let current_time =
                 Duration::from_secs_f32(total_dt % (sequence.duration_ms / 1000) as f32);
@@ -1421,8 +1424,8 @@ impl Editor {
                         let y = self.lerp(start[1], end[1], progress);
 
                         let position = Point {
-                            x: 600.0 + x,
-                            y: 50.0 + y,
+                            x: 600.0 + x + path_group_position[0] as f32,
+                            y: 50.0 + y + path_group_position[1] as f32,
                         };
 
                         match animation.object_type {
@@ -1648,6 +1651,7 @@ impl Editor {
 
         // let new_id = Uuid::new_v4();
         let new_id = Uuid::from_str(&animation_data.id).expect("Couldn't convert string to uuid");
+        let initial_position = animation_data.position;
         let camera = self.camera.as_ref().expect("Couldn't get camera");
         let gpu_resources = self
             .gpu_resources
@@ -1672,6 +1676,7 @@ impl Editor {
             // &mut self.static_polygons,
             color_index,
             polygon_id,
+            initial_position,
         );
 
         self.motion_paths.push(motion_path);

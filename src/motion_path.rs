@@ -49,6 +49,7 @@ impl MotionPath {
         sequence: &Sequence,
         color_index: u32,
         associated_polygon_id: &str,
+        initial_position: [i32; 2],
     ) -> MotionPath {
         let (fill_r, fill_g, fill_b) = get_full_color(color_index);
         let path_fill = rgb_to_wgpu(fill_r as u8, fill_g as u8, fill_b as u8, 1.0);
@@ -245,7 +246,7 @@ impl MotionPath {
         });
 
         let mut group_transform = Transform::new(
-            Vector2::new(0.0, 0.0), // everything can move relative to this
+            Vector2::new(initial_position[0] as f32, initial_position[1] as f32), // everything can move relative to this
             0.0,
             Vector2::new(1.0, 1.0),
             uniform_buffer,
