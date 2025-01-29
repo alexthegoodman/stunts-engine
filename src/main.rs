@@ -4,6 +4,7 @@ mod dot;
 mod editor;
 mod export;
 mod fonts;
+mod motion_path;
 mod polygon;
 mod st_image;
 mod st_video;

@@ -3,6 +3,7 @@ use std::path::Path;
 use cgmath::SquareMatrix;
 use cgmath::{Matrix4, Vector2};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue};
@@ -14,7 +15,7 @@ use windows_core::PCWSTR;
 use crate::camera::Camera;
 use crate::editor::{Point, WindowSize};
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
-use crate::transform::{matrix4_to_raw_array, Transform};
+use crate::transform::{create_empty_group_transform, matrix4_to_raw_array, Transform};
 use crate::vertex::Vertex;
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -57,6 +58,7 @@ pub struct StVideo {
     pub hidden: bool,
     pub layer: i32,
     pub source_reader: IMFSourceReader,
+    pub group_bind_group: wgpu::BindGroup,
 }
 
 impl StVideo {
@@ -67,6 +69,7 @@ impl StVideo {
         video_config: StVideoConfig,
         window_size: &WindowSize,
         bind_group_layout: &wgpu::BindGroupLayout,
+        group_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         z_index: f32,
         new_id: String,
         current_sequence_id: Uuid,
@@ -242,6 +245,9 @@ impl StVideo {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let (tmp_group_bind_group, tmp_group_transform) =
+            create_empty_group_transform(device, group_bind_group_layout, window_size);
+
         Ok(Self {
             id: new_id,
             current_sequence_id,
@@ -265,6 +271,7 @@ impl StVideo {
             hidden: false,
             layer: video_config.layer - INTERNAL_LAYER_SPACE,
             source_reader,
+            group_bind_group: tmp_group_bind_group,
         })
     }
 

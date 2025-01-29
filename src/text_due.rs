@@ -19,7 +19,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
-use crate::editor::rgb_to_wgpu;
 use crate::polygon::SavedPoint;
 use crate::polygon::INTERNAL_LAYER_SPACE;
 use crate::vertex::get_z_layer;
@@ -29,6 +28,7 @@ use crate::{
     transform::{matrix4_to_raw_array, Transform},
     vertex::Vertex,
 };
+use crate::{editor::rgb_to_wgpu, transform::create_empty_group_transform};
 
 pub struct AtlasGlyph {
     pub uv_rect: [f32; 4], // x, y, width, height in UV coordinates
@@ -87,6 +87,7 @@ pub struct TextRenderer {
     pub layer: i32,
     pub color: [i32; 4],
     pub font_size: i32,
+    pub group_bind_group: BindGroup,
 }
 
 impl TextRenderer {
@@ -94,6 +95,7 @@ impl TextRenderer {
         device: &Device,
         queue: &Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
+        group_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         font_data: &[u8],
         window_size: &WindowSize,
         text: String,
@@ -193,6 +195,9 @@ impl TextRenderer {
         transform.layer = text_config.layer as f32 - INTERNAL_LAYER_SPACE as f32;
         transform.update_uniform_buffer(&queue, &window_size);
 
+        let (tmp_group_bind_group, tmp_group_transform) =
+            create_empty_group_transform(device, group_bind_group_layout, window_size);
+
         Self {
             id,
             current_sequence_id,
@@ -217,6 +222,7 @@ impl TextRenderer {
             layer: text_config.layer - INTERNAL_LAYER_SPACE,
             color: text_config.color,
             font_size: text_config.font_size,
+            group_bind_group: tmp_group_bind_group,
         }
     }
 
@@ -620,6 +626,7 @@ impl TextRenderer {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+        group_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         camera: &Camera,
         selected_sequence_id: String,
         font_data: &[u8],
@@ -628,6 +635,7 @@ impl TextRenderer {
             &device,
             &queue,
             model_bind_group_layout,
+            group_bind_group_layout,
             // self.font_manager
             //     .get_font_by_name(&config.font_family)
             //     .expect("Couldn't get font family"),

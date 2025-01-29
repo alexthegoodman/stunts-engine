@@ -197,6 +197,9 @@ pub type OnMouseUp = dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence,
 pub type OnHandleMouseUp =
     dyn Fn() -> Option<Box<dyn FnMut(Uuid, Uuid, Point) -> (Sequence, Vec<UIKeyframe>)>>;
 
+pub type OnPathMouseUp =
+    dyn Fn() -> Option<Box<dyn FnMut(Uuid, Point) -> (Sequence, Vec<UIKeyframe>)>>;
+
 #[derive(Eq, PartialEq, Clone, Copy, EnumIter, Debug)]
 pub enum ControlMode {
     Select,
@@ -215,12 +218,15 @@ pub struct Editor {
     pub image_items: Vec<StImage>,
     pub dragging_image: Option<Uuid>,
     pub font_manager: FontManager,
+    pub dragging_path: Option<Uuid>,
     pub dragging_path_handle: Option<Uuid>,
     pub dragging_path_object: Option<Uuid>,
     pub dragging_path_keyframe: Option<Uuid>,
+    pub dragging_path_assoc_path: Option<Uuid>,
     pub cursor_dot: Option<RingDot>,
     pub video_items: Vec<StVideo>,
     pub dragging_video: Option<Uuid>,
+    pub motion_paths: Vec<MotionPath>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
@@ -233,11 +239,13 @@ pub struct Editor {
     pub camera: Option<Camera>,
     pub camera_binding: Option<CameraBinding>,
     pub model_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
+    pub group_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
     pub window_size_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
     pub window_size_bind_group: Option<wgpu::BindGroup>,
     pub window_size_buffer: Option<Arc<wgpu::Buffer>>,
     pub on_mouse_up: Option<Arc<OnMouseUp>>,
     pub on_handle_mouse_up: Option<Arc<OnHandleMouseUp>>,
+    pub on_path_mouse_up: Option<Arc<OnPathMouseUp>>,
     pub current_view: String,
     pub interactive_bounds: BoundingBox,
 
@@ -303,6 +311,7 @@ impl Editor {
             selected_polygon_id: Uuid::nil(),
             polygons: Vec::new(),
             dragging_polygon: None,
+            dragging_path_assoc_path: None,
             drag_start: None,
             viewport: viewport.clone(),
             handle_polygon_click: None,
@@ -326,6 +335,7 @@ impl Editor {
             last_frame_time: None,
             start_playing_time: None,
             model_bind_group_layout: None,
+            group_bind_group_layout: None,
             window_size_bind_group_layout: None,
             window_size_bind_group: None,
             window_size_buffer: None,
@@ -341,8 +351,10 @@ impl Editor {
             video_start_playing_time: None,
             video_current_sequence_timeline: None,
             video_current_sequences_data: None,
+            dragging_path: None,
             dragging_path_handle: None,
             on_handle_mouse_up: None,
+            on_path_mouse_up: None,
             dragging_path_object: None,
             dragging_path_keyframe: None,
             cursor_dot: None,
@@ -350,6 +362,7 @@ impl Editor {
             is_panning: false,
             video_items: Vec::new(),
             dragging_video: None,
+            motion_paths: Vec::new(),
             // TODO: update interactive bounds on window resize?
             interactive_bounds: BoundingBox {
                 min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
@@ -391,6 +404,10 @@ impl Editor {
                     .model_bind_group_layout
                     .as_ref()
                     .expect("Couldn't get model bind group layout"),
+                &self
+                    .group_bind_group_layout
+                    .as_ref()
+                    .expect("Couldn't get group bind group layout"),
                 &camera,
                 // TODO: restoring triangles or non rectangles?
                 vec![
@@ -459,6 +476,10 @@ impl Editor {
                 self.model_bind_group_layout
                     .as_ref()
                     .expect("Couldn't get model bind group layout"),
+                &self
+                    .group_bind_group_layout
+                    .as_ref()
+                    .expect("Couldn't get group bind group layout"),
                 self.font_manager
                     .get_font_by_name(&t.font_family)
                     .expect("Couldn't get font family"),
@@ -520,6 +541,10 @@ impl Editor {
                 self.model_bind_group_layout
                     .as_ref()
                     .expect("Couldn't get model bind group layout"),
+                &self
+                    .group_bind_group_layout
+                    .as_ref()
+                    .expect("Couldn't get group bind group layout"),
                 -2.0,
                 i.id.clone(),
                 Uuid::from_str(&saved_sequence.id.clone())
@@ -564,6 +589,10 @@ impl Editor {
                 self.model_bind_group_layout
                     .as_ref()
                     .expect("Couldn't get model bind group layout"),
+                &self
+                    .group_bind_group_layout
+                    .as_ref()
+                    .expect("Couldn't get group bind group layout"),
                 -2.0,
                 i.id.clone(),
                 Uuid::from_str(&saved_sequence.id.clone())
@@ -1058,6 +1087,7 @@ impl Editor {
                     polygon_id: item_id.unwrap(),
                     duration: Duration::from_secs(20),
                     start_time_ms: 0,
+                    position: [0, 0],
                     properties,
                 });
             }
@@ -1616,220 +1646,48 @@ impl Editor {
         let mut keyframes = position_property.keyframes.clone();
         keyframes.sort_by_key(|k| k.time);
 
-        let (fill_r, fill_g, fill_b) = get_full_color(color_index);
-        let path_fill = rgb_to_wgpu(fill_r as u8, fill_g as u8, fill_b as u8, 1.0);
+        // let new_id = Uuid::new_v4();
+        let new_id = Uuid::from_str(&animation_data.id).expect("Couldn't convert string to uuid");
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get GPU Resources");
 
-        let polygon_id = Uuid::from_str(polygon_id).expect("Couldn't convert string to uuid");
+        // Create MotionPath
+        let motion_path = MotionPath::new(
+            &gpu_resources.device,
+            &gpu_resources.queue,
+            self.model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get model bind group layout"),
+            self.group_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get model bind group layout"),
+            new_id,
+            &camera.window_size,
+            keyframes,
+            camera,
+            sequence,
+            // &mut self.static_polygons,
+            color_index,
+            polygon_id,
+        );
 
-        // Create path segments between consecutive keyframes
-        let mut pairs_done = 0;
-        for window in keyframes.windows(2) {
-            let start_kf = &window[0];
-            let end_kf = &window[1];
-
-            let start_kf_id =
-                Uuid::from_str(&start_kf.id).expect("Couldn't convert string to uuid");
-            let end_kf_id = Uuid::from_str(&end_kf.id).expect("Couldn't convert string to uuid");
-
-            if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
-                (&start_kf.value, &end_kf.value)
-            {
-                let start_point = Point {
-                    x: start_pos[0] as f32,
-                    y: start_pos[1] as f32,
-                };
-                let end_point = Point {
-                    x: end_pos[0] as f32,
-                    y: end_pos[1] as f32,
-                };
-
-                // Create intermediate points for curved paths if using non-linear easing
-                let num_segments = match start_kf.easing {
-                    EasingType::Linear => 1,
-                    _ => 9, // More segments for smooth curves
-                };
-
-                let camera = self.camera.expect("Couldn't get camera");
-                let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
-
-                if pairs_done == 0 {
-                    // handle for first keyframe in path
-                    let mut handle = create_path_handle(
-                        &camera.window_size,
-                        &gpu_resources.device,
-                        &gpu_resources.queue,
-                        &self
-                            .model_bind_group_layout
-                            .as_ref()
-                            .expect("No bind group layout"),
-                        &self.camera.expect("No camera"),
-                        start_point,
-                        12.0, // width and height
-                        sequence.id.clone(),
-                        path_fill,
-                        0.0,
-                    );
-
-                    // // calculate angle so triangle handle points in correct direction
-                    // // let angle = angle_between_points(start_point, end_point);
-                    // // handle.transform.rotate(angle);
-                    // let angle = degrees_between_points(start_point, end_point);
-                    // handle.transform.rotate_degrees(angle);
-
-                    handle.source_polygon_id = Some(polygon_id);
-                    handle.source_keyframe_id = Some(start_kf_id);
-
-                    self.static_polygons.push(handle);
-                }
-
-                // handles for remaining keyframes
-
-                let mut handle = match &end_kf.key_type {
-                    KeyType::Frame => create_path_handle(
-                        &camera.window_size,
-                        &gpu_resources.device,
-                        &gpu_resources.queue,
-                        &self
-                            .model_bind_group_layout
-                            .as_ref()
-                            .expect("No bind group layout"),
-                        &self.camera.expect("No camera"),
-                        end_point,
-                        12.0, // width and height
-                        sequence.id.clone(),
-                        path_fill,
-                        0.0,
-                    ),
-                    KeyType::Range(range_data) => create_path_handle(
-                        &camera.window_size,
-                        &gpu_resources.device,
-                        &gpu_resources.queue,
-                        &self
-                            .model_bind_group_layout
-                            .as_ref()
-                            .expect("No bind group layout"),
-                        &self.camera.expect("No camera"),
-                        end_point,
-                        12.0, // width and height
-                        sequence.id.clone(),
-                        path_fill,
-                        45.0,
-                    ),
-                };
-
-                // // calculate angle so triangle handle points in correct direction
-                // // let angle = angle_between_points(start_point, end_point);
-                // // handle.transform.rotate(angle);
-                // let angle = degrees_between_points(start_point, end_point);
-                // handle.transform.rotate_degrees(angle);
-
-                handle.source_polygon_id = Some(polygon_id);
-                handle.source_keyframe_id = Some(end_kf_id);
-
-                self.static_polygons.push(handle);
-
-                let segment_duration =
-                    (end_kf.time.as_secs_f32() - start_kf.time.as_secs_f32()) / num_segments as f32;
-
-                let mut odd = false;
-                for i in 0..num_segments {
-                    // let t1 = start_kf.time + (end_kf.time - start_kf.time) * i / num_segments;
-                    // let t2 = start_kf.time + (end_kf.time - start_kf.time) * (i + 1) / num_segments;
-
-                    let t1 = start_kf.time.as_secs_f32() + segment_duration * i as f32;
-                    let t2 = start_kf.time.as_secs_f32() + segment_duration * (i + 1) as f32;
-
-                    // println!("pos1");
-                    let pos1 = interpolate_position(start_kf, end_kf, t1);
-                    // println!("pos2");
-                    let pos2 = interpolate_position(start_kf, end_kf, t2);
-
-                    let camera = self.camera.expect("Couldn't get camera");
-
-                    let gpu_resources = self.gpu_resources.as_ref().expect("No GPU resources");
-
-                    let path_start = Point {
-                        x: pos1[0] as f32,
-                        y: pos1[1] as f32,
-                    };
-
-                    let path_end = Point {
-                        x: pos2[0] as f32,
-                        y: pos2[1] as f32,
-                    };
-
-                    // Calculate rotation angle from start to end point
-                    let dx = path_end.x - path_start.x;
-                    let dy = path_end.y - path_start.y;
-                    let rotation = dy.atan2(dx);
-
-                    // Calculate length of the segment
-                    let length = (dx * dx + dy * dy).sqrt();
-
-                    // println!("length {:?}", length);
-
-                    let mut segment = create_path_segment(
-                        &camera.window_size,
-                        &gpu_resources.device,
-                        &gpu_resources.queue,
-                        &self
-                            .model_bind_group_layout
-                            .as_ref()
-                            .expect("No bind group layout"),
-                        &self.camera.expect("No camera"),
-                        path_start,
-                        path_end,
-                        2.0, // thickness of the path
-                        sequence.id.clone(),
-                        path_fill,
-                        rotation,
-                        length,
-                    );
-
-                    // segment.source_polygon_id = Some(polygon_id);
-                    // segment.source_keyframe_id =
-                    // Some(end_kf_id);
-
-                    self.static_polygons.push(segment);
-
-                    // arrow for indicating direction of motion
-                    if odd {
-                        let arrow_orientation_offset = -std::f32::consts::FRAC_PI_2; // for upward-facing arrow
-                        let mut arrow = create_path_arrow(
-                            &camera.window_size,
-                            &gpu_resources.device,
-                            &gpu_resources.queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("No bind group layout"),
-                            &self.camera.expect("No camera"),
-                            path_end,
-                            15.0, // width and height
-                            sequence.id.clone(),
-                            path_fill,
-                            rotation + arrow_orientation_offset,
-                        );
-
-                        self.static_polygons.push(arrow);
-                    }
-
-                    odd = !odd;
-                }
-
-                pairs_done = pairs_done + 1;
-            }
-        }
+        self.motion_paths.push(motion_path);
     }
 
     /// Update the motion path visualization when keyframes change
     pub fn update_motion_paths(&mut self, sequence: &Sequence) {
         // Remove existing motion path segments
-        self.static_polygons.retain(|p| {
-            p.name != "motion_path_segment"
-                && p.name != "motion_path_handle"
-                && p.name != "motion_path_arrow"
-        });
+        // self.static_polygons.retain(|p| {
+        //     p.name != "motion_path_segment"
+        //         && p.name != "motion_path_handle"
+        //         && p.name != "motion_path_arrow"
+        // });
+
+        // Remove existing motion paths
+        self.motion_paths.clear();
 
         // Recreate motion paths for all polygons
         let mut color_index = 1;
@@ -1916,6 +1774,10 @@ impl Editor {
                 .model_bind_group_layout
                 .as_ref()
                 .expect("Couldn't get model bind group layout"),
+            &self
+                .group_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get group bind group layout"),
             camera,
             polygon_config.points,
             polygon_config.dimensions,
@@ -1974,6 +1836,10 @@ impl Editor {
                 .model_bind_group_layout
                 .as_ref()
                 .expect("Couldn't get model bind group layout"),
+            &self
+                .group_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get group bind group layout"),
             default_font_family, // load font data ahead of time
             window_size,
             text_content.clone(),
@@ -2008,6 +1874,10 @@ impl Editor {
                 .model_bind_group_layout
                 .as_ref()
                 .expect("Couldn't get model bind group layout"),
+            &self
+                .group_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get group bind group layout"),
             0.0,
             new_id.to_string(),
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
@@ -2037,6 +1907,10 @@ impl Editor {
                 .model_bind_group_layout
                 .as_ref()
                 .expect("Couldn't get model bind group layout"),
+            &self
+                .group_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get group bind group layout"),
             0.0,
             new_id.to_string(),
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
@@ -2766,18 +2640,44 @@ impl Editor {
         }
 
         // Next, check if we're clicking on a motion path handle to drag
-        for (poly_index, polygon) in self.static_polygons.iter_mut().enumerate() {
-            if polygon.name != "motion_path_handle".to_string() {
-                continue;
-            }
+        // for (poly_index, polygon) in self.static_polygons.iter_mut().enumerate() {
+        //     if polygon.name != "motion_path_handle".to_string() {
+        //         continue;
+        //     }
 
-            if polygon.contains_point(&self.last_top_left, &camera) {
-                self.dragging_path_handle = Some(polygon.id);
-                self.dragging_path_object = polygon.source_polygon_id;
-                self.dragging_path_keyframe = polygon.source_keyframe_id;
-                self.drag_start = Some(self.last_top_left);
+        //     if polygon.contains_point(&self.last_top_left, &camera) {
+        //         self.dragging_path_handle = Some(polygon.id);
+        //         self.dragging_path_object = polygon.source_polygon_id;
+        //         self.dragging_path_keyframe = polygon.source_keyframe_id;
+        //         self.drag_start = Some(self.last_top_left);
 
-                return None; // nothing to add to undo stack
+        //         return None; // nothing to add to undo stack
+        //     }
+        // }
+
+        for (path_index, path) in self.motion_paths.iter_mut().enumerate() {
+            for (poly_index, polygon) in path.static_polygons.iter_mut().enumerate() {
+                // check if we're clicking on a motion path handle to drag
+                if polygon.name == "motion_path_handle".to_string() {
+                    if polygon.contains_point(&self.last_top_left, &camera) {
+                        self.dragging_path_handle = Some(polygon.id);
+                        self.dragging_path_assoc_path = polygon.source_path_id;
+                        self.dragging_path_object = polygon.source_polygon_id;
+                        self.dragging_path_keyframe = polygon.source_keyframe_id;
+                        self.drag_start = Some(self.last_top_left);
+
+                        return None; // nothing to add to undo stack
+                    }
+                }
+                if polygon.name == "motion_path_segment".to_string() {
+                    if polygon.contains_point(&self.last_top_left, &camera) {
+                        self.dragging_path = Some(path.id);
+                        self.dragging_path_object = polygon.source_polygon_id;
+                        self.drag_start = Some(self.last_top_left);
+
+                        return None; // nothing to add to undo stack
+                    }
+                }
             }
         }
 
@@ -3016,10 +2916,27 @@ impl Editor {
             // }
         }
 
+        // handle dragging paths
+        if let Some(path_id) = self.dragging_path {
+            if let Some(start) = self.drag_start {
+                self.move_path(self.last_top_left, start, path_id, window_size, device);
+            }
+        }
+
         // handle motion path handles
         if let Some(poly_id) = self.dragging_path_handle {
-            if let Some(start) = self.drag_start {
-                self.move_static_polygon(self.last_top_left, start, poly_id, window_size, device);
+            if let Some(path_id) = self.dragging_path_assoc_path {
+                if let Some(start) = self.drag_start {
+                    // self.move_static_polygon(self.last_top_left, start, poly_id, window_size, device);
+                    self.move_path_static_polygon(
+                        self.last_top_left,
+                        start,
+                        poly_id,
+                        path_id,
+                        window_size,
+                        device,
+                    );
+                }
             }
         }
 
@@ -3175,11 +3092,42 @@ impl Editor {
             }
         }
 
+        // handle path mouse up
+        if let Some(path_id) = self.dragging_path {
+            let active_path = self
+                .motion_paths
+                .iter()
+                .find(|p| p.id == path_id)
+                .expect("Couldn't find path");
+            let path_point = Point {
+                x: active_path.transform.position.x,
+                y: active_path.transform.position.y,
+            };
+
+            if let Some(on_mouse_up_creator) = &self.on_path_mouse_up {
+                let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+
+                let (selected_sequence_data, selected_keyframes) = on_up(
+                    path_id,
+                    Point {
+                        x: path_point.x - 600.0,
+                        y: path_point.y - 50.0,
+                    },
+                );
+
+                // always updated when handle is moved
+                // not necessary to update motion paths here? seems redundant
+                // self.update_motion_paths(&selected_sequence_data);
+                // println!("Motion Paths updated!");
+            }
+        }
+
         // reset variables
         self.dragging_polygon = None;
         self.dragging_text = None;
         self.dragging_image = None;
         self.drag_start = None;
+        self.dragging_path = None;
         self.dragging_path_handle = None;
         self.dragging_path_object = None;
         self.dragging_path_keyframe = None;
@@ -3286,6 +3234,90 @@ impl Editor {
         // self.update_guide_lines(poly_index, window_size);
     }
 
+    pub fn move_path_static_polygon(
+        &mut self,
+        mouse_pos: Point,
+        start: Point,
+        poly_id: Uuid,
+        path_id: Uuid,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
+        let dx = mouse_pos.x - start.x;
+        let dy = mouse_pos.y - start.y;
+        let path = self
+            .motion_paths
+            .iter_mut()
+            .find(|p| p.id == path_id)
+            .expect("Couldn't find polygon");
+        let polygon = path
+            .static_polygons
+            .iter_mut()
+            .find(|p| p.id == poly_id)
+            .expect("Couldn't find polygon");
+
+        let new_position = Point {
+            x: polygon.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
+            y: polygon.transform.position.y + dy,
+        };
+
+        println!("move path polygon {:?}", new_position);
+
+        polygon.update_data_from_position(
+            window_size,
+            device,
+            self.model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get bind group layout"),
+            new_position,
+            &camera,
+        );
+
+        self.drag_start = Some(mouse_pos);
+        // self.update_guide_lines(poly_index, window_size);
+    }
+
+    pub fn move_path(
+        &mut self,
+        mouse_pos: Point,
+        start: Point,
+        poly_id: Uuid,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
+        let dx = mouse_pos.x - start.x;
+        let dy = mouse_pos.y - start.y;
+        let path = self
+            .motion_paths
+            .iter_mut()
+            .find(|p| p.id == poly_id)
+            .expect("Couldn't find path");
+
+        let new_position = Point {
+            x: path.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio? probably not needed now
+            y: path.transform.position.y + dy,
+        };
+
+        println!("move_path {:?}", new_position);
+
+        path.update_data_from_position(
+            window_size,
+            device,
+            self.model_bind_group_layout
+                .as_ref()
+                .expect("Couldn't get bind group layout"),
+            new_position,
+            &camera,
+        );
+
+        self.drag_start = Some(mouse_pos);
+        // self.update_guide_lines(poly_index, window_size);
+    }
+
     pub fn move_text(
         &mut self,
         mouse_pos: Point,
@@ -3372,156 +3404,14 @@ impl Editor {
         });
 
         // Remove existing motion path segments
-        self.static_polygons.retain(|p| {
-            p.name != "motion_path_segment"
-                && p.name != "motion_path_handle"
-                && p.name != "motion_path_arrow"
-        });
+        // self.static_polygons.retain(|p| {
+        //     p.name != "motion_path_segment"
+        //         && p.name != "motion_path_handle"
+        //         && p.name != "motion_path_arrow"
+        // });
+        // Remove existing motion paths
+        self.motion_paths.clear();
     }
-}
-
-/// Creates a path segment using a rotated square
-fn create_path_segment(
-    window_size: &WindowSize,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
-    camera: &Camera,
-    start: Point,
-    end: Point,
-    thickness: f32,
-    selected_sequence_id: String,
-    fill: [f32; 4],
-    rotation: f32,
-    length: f32,
-) -> Polygon {
-    // Calculate segment midpoint for position
-    let position = Point {
-        x: (start.x + end.x) / 2.0,
-        y: (start.y + end.y) / 2.0,
-    };
-
-    // Create polygon using default square points
-    Polygon::new(
-        window_size,
-        device,
-        queue,
-        model_bind_group_layout,
-        camera,
-        vec![
-            Point { x: 0.0, y: 0.0 },
-            Point { x: 1.0, y: 0.0 },
-            Point { x: 1.0, y: 1.0 },
-            Point { x: 0.0, y: 1.0 },
-        ],
-        (length, thickness), // width = length of segment, height = thickness
-        position,
-        rotation,
-        0.0,
-        // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
-        fill,
-        Stroke {
-            thickness: 0.0,
-            fill: rgb_to_wgpu(0, 0, 0, 1.0),
-        },
-        -1.0,
-        1, // positive to use INTERNAL_LAYER_SPACE
-        String::from("motion_path_segment"),
-        Uuid::new_v4(),
-        Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
-    )
-}
-
-/// Creates a path handle for dragging and showing direction
-fn create_path_handle(
-    window_size: &WindowSize,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
-    camera: &Camera,
-    end: Point,
-    size: f32,
-    selected_sequence_id: String,
-    fill: [f32; 4],
-    rotation: f32,
-) -> Polygon {
-    Polygon::new(
-        window_size,
-        device,
-        queue,
-        model_bind_group_layout,
-        camera,
-        vec![
-            Point { x: 0.0, y: 0.0 },
-            Point { x: 1.0, y: 0.0 },
-            Point { x: 1.0, y: 1.0 },
-            Point { x: 0.0, y: 1.0 },
-        ],
-        (size, size), // width = length of segment, height = thickness
-        end,
-        rotation,
-        0.0,
-        // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
-        fill,
-        Stroke {
-            thickness: 0.0,
-            fill: rgb_to_wgpu(0, 0, 0, 1.0),
-        },
-        -1.0,
-        1, // positive to use INTERNAL_LAYER_SPACE
-        String::from("motion_path_handle"),
-        Uuid::new_v4(),
-        Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
-    )
-}
-
-/// Creates arrow for showing direction
-fn create_path_arrow(
-    window_size: &WindowSize,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
-    camera: &Camera,
-    end: Point,
-    size: f32,
-    selected_sequence_id: String,
-    fill: [f32; 4],
-    rotation: f32,
-) -> Polygon {
-    Polygon::new(
-        window_size,
-        device,
-        queue,
-        model_bind_group_layout,
-        camera,
-        vec![
-            // rightside up
-            Point { x: 0.0, y: 0.0 },
-            Point { x: 0.5, y: 0.6 },
-            Point { x: 1.0, y: 0.0 },
-            Point { x: 0.5, y: 1.0 },
-            // upside down
-            // Point { x: 1.0, y: 1.0 },
-            // Point { x: 0.5, y: 0.4 },
-            // Point { x: 0.0, y: 1.0 },
-            // Point { x: 0.5, y: 0.0 },
-        ],
-        (size, size), // width = length of segment, height = thickness
-        end,
-        rotation,
-        0.0,
-        // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
-        fill,
-        Stroke {
-            thickness: 0.0,
-            fill: rgb_to_wgpu(0, 0, 0, 1.0),
-        },
-        -1.0,
-        1, // positive to use INTERNAL_LAYER_SPACE
-        String::from("motion_path_arrow"),
-        Uuid::new_v4(),
-        Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
-    )
 }
 
 // Helper function to create default properties with constant values
@@ -3607,7 +3497,7 @@ pub enum PathType {
 
 /// Creates curves in between keyframes, on the same path, rather than sharing a curve with another
 /// but it's better this way, as using a keyframe as a middle point on a curve leads to various problems
-fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: f32) -> [i32; 2] {
+pub fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: f32) -> [i32; 2] {
     if let (KeyframeValue::Position(start_pos), KeyframeValue::Position(end_pos)) =
         (&start.value, &end.value)
     {
@@ -3727,6 +3617,7 @@ use crate::animations::{
 use crate::camera::{Camera, CameraBinding};
 use crate::dot::RingDot;
 use crate::fonts::FontManager;
+use crate::motion_path::{MotionPath, MotionPathConfig};
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};
 use crate::st_video::{StVideo, StVideoConfig};
@@ -3871,7 +3762,7 @@ pub enum InteractionTarget {
     Image(usize),
 }
 
-fn get_color(color_index: u32) -> u32 {
+pub fn get_color(color_index: u32) -> u32 {
     // Normalize the color_index to be within 0-29 range
     let normalized_index = color_index % 30;
 
@@ -3884,7 +3775,7 @@ fn get_color(color_index: u32) -> u32 {
 }
 
 // TODO: create an LayerColor struct for caching colors and reusing, rather than storing that color somewhere on the object?
-fn get_full_color(index: u32) -> (u32, u32, u32) {
+pub fn get_full_color(index: u32) -> (u32, u32, u32) {
     // Normalize the index
     let normalized_index = index % 30;
 
@@ -3899,7 +3790,7 @@ fn get_full_color(index: u32) -> (u32, u32, u32) {
 
 use munkres::{solve_assignment, Error, Position, WeightMatrix};
 
-fn assign_motion_paths_to_objects(
+pub fn assign_motion_paths_to_objects(
     cost_matrix: Vec<Vec<f64>>,
 ) -> Result<Vec<(usize, usize)>, Error> {
     // Flatten the 2D cost matrix into a 1D vector

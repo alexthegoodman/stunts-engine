@@ -41,6 +41,8 @@ pub struct AnimationData {
     pub start_time_ms: i32,
     /// Hierarchical property structure for UI
     pub properties: Vec<AnimationProperty>,
+    /// Relative position
+    pub position: [i32; 2],
 }
 
 /// Represents a property that can be animated in the UI

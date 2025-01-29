@@ -2,6 +2,7 @@ use cgmath::SquareMatrix;
 use cgmath::{Matrix4, Vector2};
 use wgpu::util::DeviceExt;
 
+use crate::transform::create_empty_group_transform;
 use crate::{
     camera::{self, Camera},
     editor::{Point, WindowSize},
@@ -104,6 +105,7 @@ pub struct RingDot {
     pub index_buffer: wgpu::Buffer,
     pub transform: Transform,
     pub bind_group: wgpu::BindGroup,
+    pub group_bind_group: wgpu::BindGroup,
 }
 
 impl RingDot {
@@ -111,6 +113,7 @@ impl RingDot {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
+        group_bind_group_layout: &wgpu::BindGroupLayout,
         window_size: &WindowSize,
         point: Point,
         color: [f32; 4],
@@ -215,6 +218,9 @@ impl RingDot {
 
         transform.layer = -2.0;
 
+        let (tmp_group_bind_group, tmp_group_transform) =
+            create_empty_group_transform(device, group_bind_group_layout, window_size);
+
         return RingDot {
             vertices,
             indices,
@@ -222,6 +228,7 @@ impl RingDot {
             index_buffer,
             transform,
             bind_group,
+            group_bind_group: tmp_group_bind_group,
         };
     }
 }

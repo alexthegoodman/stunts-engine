@@ -1,19 +1,6 @@
-// use crate::editor::Point;
-
-// #[derive(Clone, Copy)]
-// pub struct Transform {
-//     pub position: Point,
-//     // We could add scale and rotation here in the future if needed
-// }
-
-// impl Transform {
-//     pub fn new(position: Point) -> Self {
-//         Self { position }
-//     }
-// }
-
 use std::f32::consts::PI;
 
+use cgmath::SquareMatrix;
 use cgmath::{Deg, Matrix3, Matrix4, Rad, Vector2, Vector3};
 use wgpu::util::DeviceExt;
 
@@ -156,6 +143,43 @@ pub fn degrees_between_points(p1: Point, p2: Point) -> f32 {
     let angle_deg = angle_rad * 180.0 / PI;
 
     angle_deg
+}
+
+/// For creating temporary group bind groups
+/// Later, when real groups are introduced, this will be replaced
+pub fn create_empty_group_transform(
+    device: &wgpu::Device,
+    group_bind_group_layout: &wgpu::BindGroupLayout,
+    window_size: &WindowSize,
+) -> (wgpu::BindGroup, Transform) {
+    let empty_buffer = Matrix4::<f32>::identity();
+    let raw_matrix = matrix4_to_raw_array(&empty_buffer);
+
+    let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Group Uniform Buffer"),
+        contents: bytemuck::cast_slice(&raw_matrix),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    // Now create your bind group with these defaults
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &group_bind_group_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: uniform_buffer.as_entire_binding(),
+        }],
+        label: None,
+    });
+
+    let mut group_transform = Transform::new(
+        Vector2::new(0.0, 0.0),
+        0.0,
+        Vector2::new(1.0, 1.0),
+        uniform_buffer,
+        window_size,
+    );
+
+    (bind_group, group_transform)
 }
 
 // UPCOMING: perspective illusion with side scaling (each object has 4 sides in transform)

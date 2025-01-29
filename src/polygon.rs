@@ -12,7 +12,9 @@ use crate::{
         closest_point_on_line_segment, closest_point_on_line_segment_with_info, distance, EdgePoint,
     },
     editor::{rgb_to_wgpu, visualize_ray_intersection, BoundingBox, Point, Shape, WindowSize},
-    transform::{self, matrix4_to_raw_array, Transform as SnTransform},
+    transform::{
+        self, create_empty_group_transform, matrix4_to_raw_array, Transform as SnTransform,
+    },
     vertex::{get_z_layer, Vertex},
 };
 
@@ -346,6 +348,7 @@ impl Polygon {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+        group_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         camera: &Camera,
         points: Vec<Point>,
         dimensions: (f32, f32),
@@ -393,11 +396,15 @@ impl Polygon {
         // -10.0 to provide 10 spots for internal items on top of objects
         let transform_layer = transform_layer - INTERNAL_LAYER_SPACE;
 
+        let (tmp_group_bind_group, tmp_group_transform) =
+            create_empty_group_transform(device, group_bind_group_layout, window_size);
+
         Polygon {
             id,
             current_sequence_id,
             source_polygon_id: None,
             source_keyframe_id: None,
+            source_path_id: None,
             name,
             points,
             old_points: None,
@@ -413,6 +420,7 @@ impl Polygon {
             bind_group,
             hidden: false,
             layer: transform_layer,
+            group_bind_group: tmp_group_bind_group,
         }
     }
 
@@ -423,72 +431,45 @@ impl Polygon {
         self.transform.layer = layer_index as f32;
     }
 
+    // pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
+    //     // update for centering
+    //     let untranslated = Point {
+    //         x: (world_point.x - self.transform.position.x) + (self.dimensions.0 / 2.0),
+    //         y: (world_point.y - self.transform.position.y) + (self.dimensions.1 / 2.0),
+    //     };
+
+    //     let local_point = Point {
+    //         x: untranslated.x / (self.dimensions.0),
+    //         y: untranslated.y / (self.dimensions.1),
+    //     };
+
+    //     // println!("local_point {:?} {:?}", self.name, local_point);
+
+    //     local_point
+    // }
+
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
-        // update for centering
+        // First untranslate the point relative to polygon's position
         let untranslated = Point {
-            x: (world_point.x - self.transform.position.x) + (self.dimensions.0 / 2.0),
-            y: (world_point.y - self.transform.position.y) + (self.dimensions.1 / 2.0),
+            x: world_point.x - self.transform.position.x,
+            y: world_point.y - self.transform.position.y,
         };
 
+        // Apply inverse rotation
+        let rotation_rad = -self.transform.rotation; // Negative for inverse rotation
+        let rotated = Point {
+            x: untranslated.x * rotation_rad.cos() - untranslated.y * rotation_rad.sin(),
+            y: untranslated.x * rotation_rad.sin() + untranslated.y * rotation_rad.cos(),
+        };
+
+        // Center the point and scale to normalized coordinates
         let local_point = Point {
-            x: untranslated.x / (self.dimensions.0),
-            y: untranslated.y / (self.dimensions.1),
+            x: (rotated.x + (self.dimensions.0 / 2.0)) / self.dimensions.0,
+            y: (rotated.y + (self.dimensions.1 / 2.0)) / self.dimensions.1,
         };
-
-        // println!("local_point {:?} {:?}", self.name, local_point);
 
         local_point
     }
-
-    // pub fn update_data_from_window_size(
-    //     &mut self,
-    //     window_size: &WindowSize,
-    //     device: &wgpu::Device,
-    //     camera: &Camera,
-    // ) {
-    //     let (vertices, indices, vertex_buffer, index_buffer) = get_polygon_data(
-    //         window_size,
-    //         device,
-    //         camera,
-    //         self.points.clone(),
-    //         self.dimensions,
-    //         &self.transform,
-    //         self.border_radius,
-    //         self.fill,
-    //         self.stroke,
-    //     );
-
-    //     self.vertices = vertices;
-    //     self.indices = indices;
-    //     self.vertex_buffer = vertex_buffer;
-    //     self.index_buffer = index_buffer;
-    // }
-
-    // pub fn update_data_from_points(
-    //     &mut self,
-    //     window_size: &WindowSize,
-    //     device: &wgpu::Device,
-    //     points: Vec<Point>,
-    //     camera: &Camera,
-    // ) {
-    //     let (vertices, indices, vertex_buffer, index_buffer) = get_polygon_data(
-    //         window_size,
-    //         device,
-    //         camera,
-    //         points.clone(),
-    //         self.dimensions,
-    //         &self.transform,
-    //         self.border_radius,
-    //         self.fill,
-    //         self.stroke,
-    //     );
-
-    //     self.points = points;
-    //     self.vertices = vertices;
-    //     self.indices = indices;
-    //     self.vertex_buffer = vertex_buffer;
-    //     self.index_buffer = index_buffer;
-    // }
 
     pub fn update_data_from_dimensions(
         &mut self,
@@ -537,41 +518,6 @@ impl Polygon {
         position: Point,
         camera: &Camera,
     ) {
-        // self.transform.position = position;
-
-        // NOTE: should be no need to refetch all vertices when updating position...
-        // let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
-        //     get_polygon_data(
-        //         window_size,
-        //         device,
-        //         bind_group_layout,
-        //         camera,
-        //         self.points.clone(),
-        //         self.dimensions,
-        //         Point {
-        //             x: self.transform.position.x,
-        //             y: self.transform.position.y,
-        //         },
-        //         self.transform.rotation,
-        //         self.border_radius,
-        //         self.fill,
-        //         self.stroke,
-        //         0.0,
-        //     );
-
-        // self.vertices = vertices;
-        // self.indices = indices;
-        // self.vertex_buffer = vertex_buffer;
-        // self.index_buffer = index_buffer;
-        // self.bind_group = bind_group;
-        // self.transform = transform;
-
-        // testing
-        // let position = Point {
-        //     x: 600.0 + position.x,
-        //     y: 50.0 + position.y,
-        // };
-
         self.transform
             .update_position([position.x, position.y], &camera.window_size);
     }
@@ -714,150 +660,6 @@ impl Polygon {
         }
     }
 
-    // pub fn closest_point_on_edge(&self, world_pos: Point, camera: &Camera) -> Option<EdgePoint> {
-    //     let mut closest_point = None;
-    //     let mut min_distance = f32::MAX;
-
-    //     let normalized_mouse_pos = self.to_local_space(world_pos, camera);
-
-    //     for i in 0..self.points.len() {
-    //         let start = self.points[i];
-    //         let end = self.points[(i + 1) % self.points.len()];
-
-    //         let point = closest_point_on_line_segment(start, end, normalized_mouse_pos);
-    //         let distance = distance(point, normalized_mouse_pos);
-
-    //         if distance < min_distance {
-    //             min_distance = distance;
-    //             closest_point = Some(EdgePoint {
-    //                 // gpu should handle rendering back to screen coordinates
-    //                 point: Point {
-    //                     x: point.x * self.dimensions.0 + self.transform.position.x,
-    //                     y: point.y * self.dimensions.1 + self.transform.position.y,
-    //                 },
-    //                 edge_index: i,
-    //             });
-    //         }
-    //     }
-
-    //     // Convert the distance threshold to normalized space
-    //     let normalized_threshold = 5.0 / self.dimensions.0.min(self.dimensions.1);
-
-    //     if min_distance < normalized_threshold {
-    //         closest_point
-    //     } else {
-    //         None
-    //     }
-    // }
-
-    // pub fn add_point(
-    //     &mut self,
-    //     new_point: Point,
-    //     edge_index: usize,
-    //     window_size: &WindowSize,
-    //     device: &wgpu::Device,
-    //     camera: &Camera,
-    // ) {
-    //     println!("Add point");
-    //     self.points.insert(edge_index + 1, new_point);
-    //     self.update_data_from_points(window_size, device, self.points.clone(), camera);
-    // }
-
-    // pub fn move_point(&mut self, point_index: usize, new_position: Point) {
-    //     if point_index < self.points.len() {
-    //         self.points[point_index] = new_position;
-    //     }
-    // }
-
-    // pub fn closest_edge(&self, point: Point) -> Option<usize> {
-    //     let world_points: Vec<Point> = self
-    //         .points
-    //         .iter()
-    //         .map(|p| Point {
-    //             x: p.x * self.dimensions.0 + self.transform.position.x,
-    //             y: p.y * self.dimensions.1 + self.transform.position.y,
-    //         })
-    //         .collect();
-
-    //     let mut closest_edge = None;
-    //     let mut min_distance = f32::MAX;
-
-    //     for i in 0..world_points.len() {
-    //         let start = world_points[i];
-    //         let end = world_points[(i + 1) % world_points.len()];
-
-    //         let distance = point_to_line_segment_distance(point, start, end);
-
-    //         if distance < min_distance {
-    //             min_distance = distance;
-    //             closest_edge = Some(i);
-    //         }
-    //     }
-
-    //     if min_distance <= 5.0 {
-    //         // Threshold for edge selection
-    //         closest_edge
-    //     } else {
-    //         None
-    //     }
-    // }
-
-    // pub fn move_edge(
-    //     &mut self,
-    //     edge_index: usize,
-    //     mouse_pos: Point,
-    //     window_size: &WindowSize,
-    //     device: &wgpu::Device,
-    //     camera: &Camera,
-    // ) {
-    //     let start_index = edge_index;
-    //     let end_index = (edge_index + 1) % self.points.len();
-
-    //     let start = self.points[start_index];
-    //     let end = self.points[end_index];
-
-    //     // Convert normalized points to world coordinates
-    //     let world_start = Point {
-    //         x: start.x * self.dimensions.0 + self.transform.position.x,
-    //         y: start.y * self.dimensions.1 + self.transform.position.y,
-    //     };
-    //     let world_end = Point {
-    //         x: end.x * self.dimensions.0 + self.transform.position.x,
-    //         y: end.y * self.dimensions.1 + self.transform.position.y,
-    //     };
-
-    //     // Calculate the movement vector in world coordinates
-    //     let edge_center = Point {
-    //         x: (world_start.x + world_end.x) / 2.0,
-    //         y: (world_start.y + world_end.y) / 2.0,
-    //     };
-    //     let dx = mouse_pos.x - edge_center.x;
-    //     let dy = mouse_pos.y - edge_center.y;
-
-    //     // Move both points of the edge in world coordinates
-    //     let new_world_start = Point {
-    //         x: world_start.x + dx,
-    //         y: world_start.y + dy,
-    //     };
-    //     let new_world_end = Point {
-    //         x: world_end.x + dx,
-    //         y: world_end.y + dy,
-    //     };
-
-    //     // Convert back to normalized coordinates
-    //     self.points[start_index] = Point {
-    //         x: (new_world_start.x - self.transform.position.x) / self.dimensions.0,
-    //         y: (new_world_start.y - self.transform.position.y) / self.dimensions.1,
-    //     };
-    //     self.points[end_index] = Point {
-    //         x: (new_world_end.x - self.transform.position.x) / self.dimensions.0,
-    //         y: (new_world_end.y - self.transform.position.y) / self.dimensions.1,
-    //     };
-
-    //     // Update the polygon data
-    //     self.update_data_from_points(window_size, device, self.points.clone(), camera);
-    // }
-
     pub fn to_config(&self) -> PolygonConfig {
         PolygonConfig {
             id: self.id,
@@ -881,6 +683,7 @@ impl Polygon {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+        group_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         camera: &Camera,
         selected_sequence_id: String,
     ) -> Polygon {
@@ -889,6 +692,7 @@ impl Polygon {
             device,
             queue,
             model_bind_group_layout,
+            group_bind_group_layout,
             camera,
             vec![
                 Point { x: 0.0, y: 0.0 },
@@ -938,6 +742,7 @@ pub struct Polygon {
     pub current_sequence_id: Uuid,
     pub source_polygon_id: Option<Uuid>,
     pub source_keyframe_id: Option<Uuid>,
+    pub source_path_id: Option<Uuid>,
     pub name: String,
     pub points: Vec<Point>,
     pub old_points: Option<Vec<Point>>,
@@ -953,6 +758,7 @@ pub struct Polygon {
     pub bind_group: wgpu::BindGroup,
     pub hidden: bool,
     pub layer: i32,
+    pub group_bind_group: wgpu::BindGroup,
 }
 
 #[derive(Clone, Copy, Debug)]

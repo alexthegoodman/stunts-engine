@@ -12,7 +12,7 @@ use wgpu::{Device, Queue, TextureView};
 use crate::camera::Camera;
 use crate::editor::Point;
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
-use crate::transform::matrix4_to_raw_array;
+use crate::transform::{create_empty_group_transform, matrix4_to_raw_array};
 use crate::{
     editor::WindowSize,
     transform::Transform,
@@ -55,6 +55,7 @@ pub struct StImage {
     pub indices: [u32; 6],
     pub hidden: bool,
     pub layer: i32,
+    pub group_bind_group: wgpu::BindGroup,
 }
 
 impl StImage {
@@ -65,6 +66,7 @@ impl StImage {
         image_config: StImageConfig,
         window_size: &WindowSize,
         bind_group_layout: &wgpu::BindGroupLayout,
+        group_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         z_index: f32,
         new_id: String,
         current_sequence_id: Uuid,
@@ -261,6 +263,9 @@ impl StImage {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let (tmp_group_bind_group, tmp_group_transform) =
+            create_empty_group_transform(device, group_bind_group_layout, window_size);
+
         Self {
             id: new_id,
             current_sequence_id,
@@ -280,6 +285,7 @@ impl StImage {
             indices: indices.clone(),
             hidden: false,
             layer: image_config.layer - INTERNAL_LAYER_SPACE,
+            group_bind_group: tmp_group_bind_group,
         }
     }
 
@@ -387,6 +393,7 @@ impl StImage {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         model_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
+        group_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         camera: &Camera,
         selected_sequence_id: String,
     ) -> StImage {
@@ -398,6 +405,7 @@ impl StImage {
             config.clone(),
             &window_size,
             model_bind_group_layout,
+            group_bind_group_layout,
             -2.0,
             config.id.clone(),
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
