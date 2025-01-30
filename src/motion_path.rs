@@ -106,6 +106,8 @@ impl MotionPath {
                     handle.source_polygon_id = Some(polygon_id);
                     handle.source_keyframe_id = Some(start_kf_id);
 
+                    handle.update_group_position(initial_position);
+
                     static_polygons.push(handle);
                 }
 
@@ -143,6 +145,8 @@ impl MotionPath {
                 handle.source_polygon_id = Some(polygon_id);
                 handle.source_keyframe_id = Some(end_kf_id);
                 handle.source_path_id = Some(new_id);
+
+                handle.update_group_position(initial_position);
 
                 static_polygons.push(handle);
 
@@ -197,6 +201,8 @@ impl MotionPath {
 
                     segment.source_path_id = Some(new_id);
 
+                    segment.update_group_position(initial_position);
+
                     static_polygons.push(segment);
 
                     // arrow for indicating direction of motion
@@ -215,6 +221,8 @@ impl MotionPath {
                             path_fill,
                             rotation + arrow_orientation_offset,
                         );
+
+                        arrow.update_group_position(initial_position);
 
                         static_polygons.push(arrow);
                     }
@@ -274,6 +282,10 @@ impl MotionPath {
     ) {
         self.transform
             .update_position([position.x, position.y], window_size);
+
+        self.static_polygons.iter_mut().for_each(|p| {
+            p.update_group_position([position.x as i32, position.y as i32]);
+        });
     }
 
     // pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {

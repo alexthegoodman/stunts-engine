@@ -421,6 +421,7 @@ impl Polygon {
             hidden: false,
             layer: transform_layer,
             group_bind_group: tmp_group_bind_group,
+            active_group_position: [0, 0],
         }
     }
 
@@ -429,6 +430,10 @@ impl Polygon {
         let layer_index = layer_index - INTERNAL_LAYER_SPACE;
         self.layer = layer_index;
         self.transform.layer = layer_index as f32;
+    }
+
+    pub fn update_group_position(&mut self, position: [i32; 2]) {
+        self.active_group_position = position;
     }
 
     // pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
@@ -451,8 +456,8 @@ impl Polygon {
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
         // First untranslate the point relative to polygon's position
         let untranslated = Point {
-            x: world_point.x - self.transform.position.x,
-            y: world_point.y - self.transform.position.y,
+            x: world_point.x - self.transform.position.x - self.active_group_position[0] as f32,
+            y: world_point.y - self.transform.position.y - self.active_group_position[1] as f32,
         };
 
         // Apply inverse rotation
@@ -759,6 +764,7 @@ pub struct Polygon {
     pub hidden: bool,
     pub layer: i32,
     pub group_bind_group: wgpu::BindGroup,
+    pub active_group_position: [i32; 2],
 }
 
 #[derive(Clone, Copy, Debug)]
