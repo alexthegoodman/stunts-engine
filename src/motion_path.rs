@@ -105,6 +105,7 @@ impl MotionPath {
 
                     handle.source_polygon_id = Some(polygon_id);
                     handle.source_keyframe_id = Some(start_kf_id);
+                    handle.source_path_id = Some(new_id);
 
                     handle.update_group_position(initial_position);
 
