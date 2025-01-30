@@ -3114,9 +3114,14 @@ impl Editor {
 
                 let (selected_sequence_data, selected_keyframes) = on_up(
                     path_id,
+                    // Point {
+                    //     x: path_point.x - 600.0,
+                    //     y: path_point.y - 50.0,
+                    // },
+                    // no offset needed because all relative?
                     Point {
-                        x: path_point.x - 600.0,
-                        y: path_point.y - 50.0,
+                        x: path_point.x,
+                        y: path_point.y,
                     },
                 );
 
@@ -3133,6 +3138,7 @@ impl Editor {
         self.dragging_image = None;
         self.drag_start = None;
         self.dragging_path = None;
+        self.dragging_path_assoc_path = None;
         self.dragging_path_handle = None;
         self.dragging_path_object = None;
         self.dragging_path_keyframe = None;

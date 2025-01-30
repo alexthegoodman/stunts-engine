@@ -253,6 +253,8 @@ impl MotionPath {
             window_size,
         );
 
+        group_transform.update_uniform_buffer(&queue, &window_size);
+
         Self {
             id: new_id,
             transform: group_transform,
