@@ -838,40 +838,45 @@ impl Editor {
 
         // Get the current positions of all objects
         let mut current_positions = Vec::new();
+        let mut total = 0; // use controlled total as get_item_id function filters by hidden
         for (i, polygon) in self.polygons.iter().enumerate() {
             if !polygon.hidden {
                 current_positions.push((
-                    i,
-                    polygon.transform.position.x,
-                    polygon.transform.position.y,
+                    total,
+                    polygon.transform.position.x - CANVAS_HORIZ_OFFSET,
+                    polygon.transform.position.y - CANVAS_VERT_OFFSET,
                 ));
+                total = total + 1;
             }
         }
         for (i, text) in self.text_items.iter().enumerate() {
             if !text.hidden {
                 current_positions.push((
-                    i + self.polygons.len(),
-                    text.transform.position.x,
-                    text.transform.position.y,
+                    total,
+                    text.transform.position.x - CANVAS_HORIZ_OFFSET,
+                    text.transform.position.y - CANVAS_VERT_OFFSET,
                 ));
+                total = total + 1;
             }
         }
         for (i, image) in self.image_items.iter().enumerate() {
             if !image.hidden {
                 current_positions.push((
-                    i + self.polygons.len() + self.text_items.len(),
-                    image.transform.position.x,
-                    image.transform.position.y,
+                    total,
+                    image.transform.position.x - CANVAS_HORIZ_OFFSET,
+                    image.transform.position.y - CANVAS_VERT_OFFSET,
                 ));
+                total = total + 1;
             }
         }
         for (i, video) in self.video_items.iter().enumerate() {
             if !video.hidden {
                 current_positions.push((
-                    i + self.polygons.len() + self.text_items.len() + self.image_items.len(),
-                    video.transform.position.x,
-                    video.transform.position.y,
+                    total,
+                    video.transform.position.x - CANVAS_HORIZ_OFFSET,
+                    video.transform.position.y - CANVAS_VERT_OFFSET,
                 ));
+                total = total + 1;
             }
         }
 
