@@ -3052,8 +3052,9 @@ impl Editor {
         let mut handle_point = None;
         if handle_id != Uuid::nil() {
             let active_handle = self
-                .static_polygons
+                .motion_paths
                 .iter()
+                .flat_map(|m| &m.static_polygons)
                 .find(|p| p.id == handle_id)
                 .expect("Couldn't find handle");
             handle_point = Some(Point {
