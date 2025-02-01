@@ -57,8 +57,11 @@ pub struct StVideo {
     pub indices: [u32; 6],
     pub hidden: bool,
     pub layer: i32,
-    pub source_reader: IMFSourceReader,
     pub group_bind_group: wgpu::BindGroup,
+    #[cfg(target_os = "windows")]
+    pub source_reader: IMFSourceReader,
+    // #[cfg(target_arch = "wasm32")]
+    // pub source_reader: WebCodecs
 }
 
 impl StVideo {
@@ -74,54 +77,8 @@ impl StVideo {
         new_id: String,
         current_sequence_id: Uuid,
     ) -> Result<Self, windows::core::Error> {
-        // Intialize Media Foundation
-        unsafe {
-            MFStartup(MF_VERSION, MFSTARTUP_FULL)?;
-        }
-
-        let source_reader =
-            StVideo::create_source_reader(&path.to_str().expect("Couldn't get path string"))
-                .expect("Couldn't create source reader");
-
-        // Get source duration
-        let mut duration = 0;
-        unsafe {
-            let presentation_duration = source_reader
-                .GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE.0 as u32, &MF_PD_DURATION)
-                .expect("Couldn't get presentation duration");
-            let ns_100_duration =
-                PropVariantToInt64(&presentation_duration).expect("Couldn't get duration");
-            duration = ns_100_duration / 10_000_000; // convert to seconds
-        }
-
-        // Get source dimensions
-        let mut source_width = 0;
-        let mut source_height = 0;
-        unsafe {
-            let mut media_type = source_reader
-                .GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, 0)?;
-
-            let mut size_attr = media_type.GetUINT64(&MF_MT_FRAME_SIZE)?;
-            source_width = (size_attr >> 32) as u32;
-            source_height = (size_attr & 0xFFFFFFFF) as u32;
-        }
-
-        // Get source frame rate
-        let mut source_frame_rate = 0.0;
-        unsafe {
-            let mut media_type = source_reader
-                .GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, 0)
-                .expect("Failed to get media type");
-
-            let mut frame_rate_attr = media_type
-                .GetUINT64(&MF_MT_FRAME_RATE)
-                .expect("Failed to get frame rate");
-
-            let frame_rate = (frame_rate_attr >> 32) as f64; // Numerator
-            let frame_rate_base = (frame_rate_attr & 0xFFFFFFFF) as f64; // Denominator
-
-            source_frame_rate = frame_rate / frame_rate_base;
-        }
+        let (source_reader, duration, source_width, source_height, source_frame_rate) =
+            Self::initialize_media_source(path)?;
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Video Texture"),
@@ -134,14 +91,6 @@ impl StVideo {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            // YUV 4:2:0 chroma subsampled format.
-            // Contains two planes:
-            // 0: Single 8 bit channel luminance.
-            // 1: Dual 8 bit channel chrominance at half width and half height.
-            // Valid view formats for luminance are TextureFormat::R8Unorm.
-            // Valid view formats for chrominance are TextureFormat::Rg8Unorm.
-            // Width and height must be even.
-            // Features::TEXTURE_FORMAT_NV12 must be enabled to use this texture format.
             // format: wgpu::TextureFormat::NV12,
             // use rgb for now
             format: wgpu::TextureFormat::Rgba8Unorm,
@@ -274,6 +223,71 @@ impl StVideo {
             group_bind_group: tmp_group_bind_group,
         })
     }
+
+    #[cfg(target_os = "windows")]
+    fn initialize_media_source(
+        path: &Path,
+    ) -> Result<(IMFSourceReader, i64, u32, u32, f64), windows::core::Error> {
+        // Intialize Media Foundation
+        unsafe {
+            MFStartup(MF_VERSION, MFSTARTUP_FULL)?;
+        }
+
+        let source_reader =
+            StVideo::create_source_reader(&path.to_str().expect("Couldn't get path string"))
+                .expect("Couldn't create source reader");
+
+        // Get source duration
+        let mut duration = 0;
+        unsafe {
+            let presentation_duration = source_reader
+                .GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE.0 as u32, &MF_PD_DURATION)
+                .expect("Couldn't get presentation duration");
+            let ns_100_duration =
+                PropVariantToInt64(&presentation_duration).expect("Couldn't get duration");
+            duration = ns_100_duration / 10_000_000; // convert to seconds
+        }
+
+        // Get source dimensions
+        let mut source_width = 0;
+        let mut source_height = 0;
+        unsafe {
+            let mut media_type = source_reader
+                .GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, 0)?;
+
+            let mut size_attr = media_type.GetUINT64(&MF_MT_FRAME_SIZE)?;
+            source_width = (size_attr >> 32) as u32;
+            source_height = (size_attr & 0xFFFFFFFF) as u32;
+        }
+
+        // Get source frame rate
+        let mut source_frame_rate = 0.0;
+        unsafe {
+            let mut media_type = source_reader
+                .GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, 0)
+                .expect("Failed to get media type");
+
+            let mut frame_rate_attr = media_type
+                .GetUINT64(&MF_MT_FRAME_RATE)
+                .expect("Failed to get frame rate");
+
+            let frame_rate = (frame_rate_attr >> 32) as f64; // Numerator
+            let frame_rate_base = (frame_rate_attr & 0xFFFFFFFF) as f64; // Denominator
+
+            source_frame_rate = frame_rate / frame_rate_base;
+        }
+
+        Ok((
+            source_reader,
+            duration,
+            source_width,
+            source_height,
+            source_frame_rate,
+        ))
+    }
+
+    // #[cfg(target_arch = "wasm32")]
+    // fn initialize_media_source() {}
 
     fn create_source_reader(
         // &self,

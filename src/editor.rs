@@ -278,10 +278,18 @@ pub struct Editor {
 
 use std::borrow::{Borrow, BorrowMut};
 
+#[cfg(target_os = "windows")]
 pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>) -> Editor {
     let inference = load_common_motion_2d();
 
     let editor = Editor::new(viewport, Some(inference));
+
+    editor
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>) -> Editor {
+    let editor = Editor::new(viewport, None);
 
     editor
 }
