@@ -640,9 +640,14 @@ impl Editor {
 
                 polygon.transform.position.x = p.position.x as f32 + CANVAS_HORIZ_OFFSET;
                 polygon.transform.position.y = p.position.y as f32 + CANVAS_VERT_OFFSET;
+                polygon.transform.rotation = 0.0;
+                polygon.transform.update_scale([1.0, 1.0]);
+
                 polygon
                     .transform
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                polygon.update_opacity(&gpu_resources.queue, 1.0);
             });
 
             current_sequence.active_text_items.iter().for_each(|t| {
@@ -656,6 +661,8 @@ impl Editor {
                 text.transform.position.y = t.position.y as f32 + CANVAS_VERT_OFFSET;
                 text.transform
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                // TODO: reset other properties once scale is figured out
             });
 
             current_sequence.active_image_items.iter().for_each(|i| {
@@ -670,6 +677,8 @@ impl Editor {
                 image
                     .transform
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                // TODO: reset other properties once scale is figured out
             });
 
             current_sequence.active_video_items.iter().for_each(|i| {
@@ -684,6 +693,8 @@ impl Editor {
                 video
                     .transform
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                // TODO: reset other properties once scale is figured out
             });
         }
     }
