@@ -1411,8 +1411,10 @@ impl Editor {
                 }
 
                 // Find the surrounding keyframes
-                let (start_frame, end_frame) =
-                    self.get_surrounding_keyframes(&property.keyframes, current_time - start_time);
+                let (start_frame, end_frame) = self.get_surrounding_keyframes(
+                    &mut property.keyframes.clone(), // do not love clone in loop
+                    current_time - start_time,
+                );
                 let Some((start_frame, end_frame)) = start_frame.zip(end_frame) else {
                     continue;
                 };
@@ -1566,13 +1568,17 @@ impl Editor {
     // }
 
     /// Returns a "virtual" keyframe for the end keyframe in case of a Range type
-    pub fn get_surrounding_keyframes<'a>(
+    pub fn get_surrounding_keyframes(
         &self,
-        keyframes: &'a [UIKeyframe],
+        keyframes: &mut [UIKeyframe],
         current_time: Duration,
     ) -> (Option<UIKeyframe>, Option<UIKeyframe>) {
         let mut prev_frame = None;
         let mut next_frame = None;
+
+        // TODO: need to pick prev_frame based on timing not index
+        // so just sort the keyframes here
+        keyframes.sort_by_key(|k| k.time);
 
         for (i, frame) in keyframes.iter().enumerate() {
             if frame.time > current_time {
@@ -1613,7 +1619,7 @@ impl Editor {
                 }
 
                 // Regular keyframe logic
-                // TODO: Too many clones?
+
                 next_frame = Some(frame.clone());
                 prev_frame = if i > 0 {
                     Some(keyframes[i - 1].clone())
