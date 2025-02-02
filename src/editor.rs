@@ -1467,68 +1467,88 @@ impl Editor {
                         }
                     }
                     (KeyframeValue::Rotation(start), KeyframeValue::Rotation(end)) => {
-                        // TODO: requires testing (radians or degrees for storage?)
-                        // let new_rotation = self.lerp(*start, *end, progress);
+                        // rotation is stored as degrees
+                        let new_rotation = self.lerp(*start, *end, progress);
 
-                        // match animation.object_type {
-                        //     ObjectType::Polygon => {
-                        //         self.polygons[object_idx]
-                        //             .transform
-                        //             .update_rotation(new_rotation);
-                        //     }
-                        //     ObjectType::TextItem => {
-                        //         self.text_items[object_idx]
-                        //             .transform
-                        //             .update_rotation(new_rotation);
-                        //     }
-                        //     ObjectType::ImageItem => {
-                        //         self.image_items[object_idx]
-                        //             .transform
-                        //             .update_rotation(new_rotation);
-                        //     }
-                        // }
-                    }
-                    (KeyframeValue::Scale(start), KeyframeValue::Scale(end)) => {
-                        // TODO: requires testing (verify 100 scale in storage)
-                        // let new_scale = self.lerp(*start, *end, progress) as f32 / 100.0;
+                        let new_rotation_rad = new_rotation.to_radians();
 
-                        // match animation.object_type {
-                        //     ObjectType::Polygon => {
-                        //         self.polygons[object_idx]
-                        //             .transform
-                        //             .update_scale([new_scale, new_scale]);
-                        //     }
-                        //     ObjectType::TextItem => {
-                        //         self.text_items[object_idx]
-                        //             .transform
-                        //             .update_scale([new_scale, new_scale]);
-                        //     }
-                        //     ObjectType::ImageItem => {
-                        //         self.image_items[object_idx]
-                        //             .transform
-                        //             .update_scale([new_scale, new_scale]);
-                        //     }
-                        // }
-                    }
-                    (KeyframeValue::Opacity(start), KeyframeValue::Opacity(end)) => {
                         match animation.object_type {
                             ObjectType::Polygon => {
-                                let current_fill = self.polygons[object_idx].fill;
-                                self.polygons[object_idx].fill = [
-                                    current_fill[0],
-                                    current_fill[1],
-                                    current_fill[2],
-                                    self.lerp(*start, *end, progress) / 100.0,
-                                ];
+                                self.polygons[object_idx]
+                                    .transform
+                                    .update_rotation(new_rotation_rad);
                             }
                             ObjectType::TextItem => {
-                                // use text color property?
+                                self.text_items[object_idx]
+                                    .transform
+                                    .update_rotation(new_rotation_rad);
                             }
                             ObjectType::ImageItem => {
-                                // set up opacity property?
+                                self.image_items[object_idx]
+                                    .transform
+                                    .update_rotation(new_rotation_rad);
                             }
                             ObjectType::VideoItem => {
-                                // set up opacity property?
+                                self.video_items[object_idx]
+                                    .transform
+                                    .update_rotation(new_rotation_rad);
+                            }
+                        }
+                    }
+                    (KeyframeValue::Scale(start), KeyframeValue::Scale(end)) => {
+                        // scale is stored out 100 (100 being standard size, ie. 100%)
+                        let new_scale = self.lerp(*start, *end, progress) as f32 / 100.0;
+
+                        // TODO: verify scale on all objects as some treat it differently as-is
+
+                        match animation.object_type {
+                            ObjectType::Polygon => {
+                                self.polygons[object_idx]
+                                    .transform
+                                    .update_scale([new_scale, new_scale]);
+                            }
+                            ObjectType::TextItem => {
+                                self.text_items[object_idx]
+                                    .transform
+                                    .update_scale([new_scale, new_scale]);
+                            }
+                            ObjectType::ImageItem => {
+                                self.image_items[object_idx]
+                                    .transform
+                                    .update_scale([new_scale, new_scale]);
+                            }
+                            ObjectType::VideoItem => {
+                                self.video_items[object_idx]
+                                    .transform
+                                    .update_scale([new_scale, new_scale]);
+                            }
+                        }
+                    }
+                    (KeyframeValue::Opacity(start), KeyframeValue::Opacity(end)) => {
+                        // opacity is out 100 (100%)
+                        let opacity = self.lerp(*start, *end, progress) / 100.0;
+
+                        let gpu_resources = self
+                            .gpu_resources
+                            .as_ref()
+                            .expect("Couldn't get gpu resources");
+
+                        match animation.object_type {
+                            ObjectType::Polygon => {
+                                self.polygons[object_idx]
+                                    .update_opacity(&gpu_resources.queue, opacity);
+                            }
+                            ObjectType::TextItem => {
+                                self.text_items[object_idx]
+                                    .update_opacity(&gpu_resources.queue, opacity);
+                            }
+                            ObjectType::ImageItem => {
+                                self.image_items[object_idx]
+                                    .update_opacity(&gpu_resources.queue, opacity);
+                            }
+                            ObjectType::VideoItem => {
+                                self.video_items[object_idx]
+                                    .update_opacity(&gpu_resources.queue, opacity);
                             }
                         }
                     }

@@ -534,6 +534,30 @@ impl TextRenderer {
         self.indices = indices;
     }
 
+    // pub fn update_color(&mut self, color: [u8; 3]) {
+    //     let active_color = rgb_to_wgpu(
+    //         self.color[0] as u8,
+    //         self.color[1] as u8,
+    //         self.color[2] as u8,
+    //         1.0,
+    //     );
+    // }
+
+    pub fn update_opacity(&mut self, queue: &wgpu::Queue, opacity: f32) {
+        let new_color = [
+            self.color[0] as f32,
+            self.color[1] as f32,
+            self.color[2] as f32,
+            opacity,
+        ];
+
+        self.vertices.iter_mut().for_each(|v| {
+            v.color = new_color;
+        });
+
+        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
+    }
+
     pub fn update_data_from_dimensions(
         &mut self,
         window_size: &WindowSize,

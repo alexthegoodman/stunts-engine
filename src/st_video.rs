@@ -402,6 +402,16 @@ impl StVideo {
         self.transform.update_scale([dimensions.0, dimensions.1]);
         self.transform.update_uniform_buffer(&queue, &window_size);
     }
+
+    pub fn update_opacity(&mut self, queue: &wgpu::Queue, opacity: f32) {
+        let new_color = [1.0, 1.0, 1.0, opacity];
+
+        self.vertices.iter_mut().for_each(|v| {
+            v.color = new_color;
+        });
+
+        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
+    }
 }
 
 // TODO: add to Drop trait?

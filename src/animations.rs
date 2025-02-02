@@ -90,8 +90,8 @@ pub struct UIKeyframe {
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum KeyframeValue {
     Position([i32; 2]),
-    Rotation(i32),
-    Scale(i32), // this will be 100 for default size to work with i32 and Eq
+    Rotation(i32), // stored as degrees
+    Scale(i32),    // this will be 100 for default size to work with i32 and Eq
     PerspectiveX(i32),
     PerspectiveY(i32),
     Opacity(i32), // also out of 100

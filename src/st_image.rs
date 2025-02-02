@@ -289,6 +289,16 @@ impl StImage {
         }
     }
 
+    pub fn update_opacity(&mut self, queue: &wgpu::Queue, opacity: f32) {
+        let new_color = [1.0, 1.0, 1.0, opacity];
+
+        self.vertices.iter_mut().for_each(|v| {
+            v.color = new_color;
+        });
+
+        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
+    }
+
     pub fn update_data_from_dimensions(
         &mut self,
         window_size: &WindowSize,

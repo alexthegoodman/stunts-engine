@@ -425,6 +425,16 @@ impl Polygon {
         }
     }
 
+    pub fn update_opacity(&mut self, queue: &wgpu::Queue, opacity: f32) {
+        let new_color = [self.fill[0], self.fill[1], self.fill[2], opacity];
+
+        self.vertices.iter_mut().for_each(|v| {
+            v.color = new_color;
+        });
+
+        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
+    }
+
     pub fn update_layer(&mut self, layer_index: i32) {
         // -10.0 to provide 10 spots for internal items on top of objects
         let layer_index = layer_index - INTERNAL_LAYER_SPACE;
