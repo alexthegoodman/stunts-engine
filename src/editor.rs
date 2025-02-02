@@ -1410,6 +1410,10 @@ impl Editor {
                     continue;
                 }
 
+                if start_time > current_time {
+                    continue;
+                }
+
                 // Find the surrounding keyframes
                 let (start_frame, end_frame) = self.get_surrounding_keyframes(
                     &mut property.keyframes.clone(), // do not love clone in loop
@@ -1651,10 +1655,11 @@ impl Editor {
         }
 
         // Handle wrap-around case
-        if next_frame.is_none() {
-            prev_frame = keyframes.last().cloned();
-            next_frame = keyframes.first().cloned();
-        }
+        // can result in a duration subtraction error
+        // if next_frame.is_none() {
+        //     prev_frame = keyframes.last().cloned();
+        //     next_frame = keyframes.first().cloned();
+        // }
 
         (prev_frame, next_frame)
     }
