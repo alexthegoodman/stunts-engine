@@ -365,6 +365,7 @@ impl TextRenderer {
         let glyphs = layout.glyphs();
 
         // Calculate the total width and height of the text
+        // TODO: more accurate to just use dimensions instead?
         let total_width = glyphs
             .iter()
             .fold(0.0, |max_width: f32, glyph: &GlyphPosition| {
