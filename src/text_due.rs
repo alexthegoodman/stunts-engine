@@ -130,14 +130,16 @@ impl TextRenderer {
         // Initialize empty vertex and index buffers
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Text Vertex Buffer"),
-            size: 4096, // Initial size, can be adjusted
+            // size: 4096, // Initial size, can be adjusted
+            size: 65536, // 64KB, better for large amount of text
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Text Index Buffer"),
-            size: 4096, // Initial size, can be adjusted
+            // size: 4096, // Initial size, can be adjusted
+            size: 65536, // 64KB, better for large amount of text
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -239,10 +241,10 @@ impl TextRenderer {
         queue: &Queue,
         raster_config: GlyphRasterConfig,
     ) -> AtlasGlyph {
-        println!(
-            "Adding glyph... Atlas Position: {:?}",
-            self.next_atlas_position
-        );
+        // println!(
+        //     "Adding glyph... Atlas Position: {:?}",
+        //     self.next_atlas_position
+        // );
 
         // let (metrics, bitmap) = self.font.rasterize(c, self.font_size as f32);
         let (metrics, bitmap) = self.font.rasterize_config(raster_config);
@@ -270,6 +272,8 @@ impl TextRenderer {
             metrics.width as f32 / self.atlas_size.0 as f32,
             metrics.height as f32 / self.atlas_size.1 as f32,
         ];
+
+        // println!("Writing texture...");
 
         // Write glyph bitmap to atlas
         queue.write_texture(
@@ -429,6 +433,105 @@ impl TextRenderer {
     // }
 
     pub fn render_text<'a>(&'a mut self, device: &Device, queue: &Queue) {
+        // let mut vertices = Vec::new();
+        // let mut indices: Vec<u32> = Vec::new();
+
+        // let text = self.text.clone();
+
+        // // Create a layout instance
+        // let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
+
+        // // Configure layout settings
+        // let layout_settings = LayoutSettings {
+        //     max_width: Some(self.dimensions.0), // Set a maximum width for text wrapping
+        //     ..LayoutSettings::default()
+        // };
+        // layout.reset(&layout_settings);
+
+        // // Append text to the layout
+        // let font = &self.font; // Assuming `self.font` is your `fontdue::Font` instance
+        // let style = TextStyle {
+        //     text: &text,
+        //     font_index: 0, // Use the first font in the list
+        //     px: self.font_size as f32,
+        //     user_data: (),
+        // };
+        // layout.append(&[font], &style);
+
+        // // Get the laid out glyphs
+        // let glyphs = layout.glyphs();
+
+        // for glyph in glyphs {
+        //     let key: GlyphRasterConfig = glyph.key; // hashable key
+
+        //     // Ensure the glyph is in the atlas
+        //     if !self.glyph_cache.contains_key(&key) {
+        //         // let glyph_char = char::from_u32(glyph.key.glyph_index).unwrap(); // Convert glyph key to char
+        //         let atlas_glyph = self.add_glyph_to_atlas(device, queue, glyph.key);
+        //         self.glyph_cache.insert(key.clone(), atlas_glyph);
+        //     }
+
+        //     let atlas_glyph = self.glyph_cache.get(&key).unwrap();
+
+        //     let base_vertex = vertices.len() as u32;
+
+        //     // Calculate vertex positions using the glyph's position and metrics
+        //     let x0 = glyph.x;
+        //     let x1 = x0 + atlas_glyph.metrics[0];
+        //     let y0 = glyph.y;
+        //     let y1 = y0 + atlas_glyph.metrics[1];
+
+        //     // UV coordinates from atlas
+        //     let u0 = atlas_glyph.uv_rect[0];
+        //     let u1 = u0 + atlas_glyph.uv_rect[2];
+        //     let v0 = atlas_glyph.uv_rect[1];
+        //     let v1 = v0 + atlas_glyph.uv_rect[3];
+
+        //     let z = get_z_layer(1.0);
+
+        //     let active_color = rgb_to_wgpu(
+        //         self.color[0] as u8,
+        //         self.color[1] as u8,
+        //         self.color[2] as u8,
+        //         1.0,
+        //     );
+
+        //     vertices.extend_from_slice(&[
+        //         Vertex {
+        //             position: [x0, y0, z],
+        //             tex_coords: [u0, v0],
+        //             color: active_color,
+        //         },
+        //         Vertex {
+        //             position: [x1, y0, z],
+        //             tex_coords: [u1, v0],
+        //             color: active_color,
+        //         },
+        //         Vertex {
+        //             position: [x1, y1, z],
+        //             tex_coords: [u1, v1],
+        //             color: active_color,
+        //         },
+        //         Vertex {
+        //             position: [x0, y1, z],
+        //             tex_coords: [u0, v1],
+        //             color: active_color,
+        //         },
+        //     ]);
+
+        //     indices.extend_from_slice(&[
+        //         base_vertex,
+        //         base_vertex + 1,
+        //         base_vertex + 2,
+        //         base_vertex,
+        //         base_vertex + 2,
+        //         base_vertex + 3,
+        //     ]);
+        // }
+
+        // println!("Vertex data size: {}", std::mem::size_of_val(&vertices[..]));
+        // println!("Index data size: {}", std::mem::size_of_val(&indices[..]));
+
         let mut vertices = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
 
@@ -457,13 +560,23 @@ impl TextRenderer {
         // Get the laid out glyphs
         let glyphs = layout.glyphs();
 
+        // Calculate the total width and height of the text
+        let total_width = glyphs
+            .iter()
+            .fold(0.0, |max_width: f32, glyph: &GlyphPosition| {
+                max_width.max(glyph.x + glyph.width as f32)
+            });
+        let total_height = layout.height();
+
+        // Calculate the starting x and y positions to center the text
+        let start_x = -total_width / 2.0;
+        let start_y = -total_height / 2.0;
+
         for glyph in glyphs {
-            // let key = glyph.key.font_hash.to_string() + &self.font_size.to_string();
             let key: GlyphRasterConfig = glyph.key; // hashable key
 
             // Ensure the glyph is in the atlas
             if !self.glyph_cache.contains_key(&key) {
-                // let glyph_char = char::from_u32(glyph.key.glyph_index).unwrap(); // Convert glyph key to char
                 let atlas_glyph = self.add_glyph_to_atlas(device, queue, glyph.key);
                 self.glyph_cache.insert(key.clone(), atlas_glyph);
             }
@@ -473,9 +586,9 @@ impl TextRenderer {
             let base_vertex = vertices.len() as u32;
 
             // Calculate vertex positions using the glyph's position and metrics
-            let x0 = glyph.x;
+            let x0 = start_x + glyph.x;
             let x1 = x0 + atlas_glyph.metrics[0];
-            let y0 = glyph.y;
+            let y0 = start_y + glyph.y;
             let y1 = y0 + atlas_glyph.metrics[1];
 
             // UV coordinates from atlas
@@ -597,18 +710,36 @@ impl TextRenderer {
     //     inside
     // }
 
+    // pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
+    //     let local_point = self.to_local_space(*point, camera);
+
+    //     // Get the bounds of the rectangle based on dimensions
+    //     // Since dimensions are (width, height), the rectangle extends from (0,0) to (width, height)
+    //     let (width, height) = self.dimensions;
+
+    //     // Check if the point is within the bounds
+    //     local_point.x >= 0.0
+    //         && local_point.x <= width
+    //         && local_point.y >= 0.0
+    //         && local_point.y <= height
+    // }
+
     pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
-        let local_point = self.to_local_space(*point, camera);
+        // let local_point = self.to_local_space(*point, camera);
+        let untranslated = Point {
+            x: point.x - (self.transform.position.x),
+            y: point.y - self.transform.position.y,
+        };
 
         // Get the bounds of the rectangle based on dimensions
         // Since dimensions are (width, height), the rectangle extends from (0,0) to (width, height)
         let (width, height) = self.dimensions;
 
-        // Check if the point is within the bounds
-        local_point.x >= 0.0
-            && local_point.x <= width
-            && local_point.y >= 0.0
-            && local_point.y <= height
+        // Check if the point is within -0.5 to 0.5 range
+        untranslated.x >= -0.5 * self.dimensions.0 as f32
+            && untranslated.x <= 0.5 * self.dimensions.0 as f32
+            && untranslated.y >= -0.5 * self.dimensions.1 as f32
+            && untranslated.y <= 0.5 * self.dimensions.1 as f32
     }
 
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
