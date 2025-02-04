@@ -659,8 +659,12 @@ impl Editor {
 
                 text.transform.position.x = t.position.x as f32 + CANVAS_HORIZ_OFFSET;
                 text.transform.position.y = t.position.y as f32 + CANVAS_VERT_OFFSET;
+                text.transform.rotation = 0.0;
+
                 text.transform
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                text.update_opacity(&gpu_resources.queue, 1.0);
 
                 // TODO: reset other properties once scale is figured out
             });
@@ -674,9 +678,14 @@ impl Editor {
 
                 image.transform.position.x = i.position.x as f32 + CANVAS_HORIZ_OFFSET;
                 image.transform.position.y = i.position.y as f32 + CANVAS_VERT_OFFSET;
+
+                image.transform.rotation = 0.0;
+
                 image
                     .transform
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                image.update_opacity(&gpu_resources.queue, 1.0);
 
                 // TODO: reset other properties once scale is figured out
             });
@@ -690,9 +699,14 @@ impl Editor {
 
                 video.transform.position.x = i.position.x as f32 + CANVAS_HORIZ_OFFSET;
                 video.transform.position.y = i.position.y as f32 + CANVAS_VERT_OFFSET;
+
+                video.transform.rotation = 0.0;
+
                 video
                     .transform
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                video.update_opacity(&gpu_resources.queue, 1.0);
 
                 // TODO: reset other properties once scale is figured out
             });
@@ -1528,14 +1542,18 @@ impl Editor {
                                     .update_scale([new_scale, new_scale]);
                             }
                             ObjectType::ImageItem => {
-                                self.image_items[object_idx]
-                                    .transform
-                                    .update_scale([new_scale, new_scale]);
+                                let original_scale = self.image_items[object_idx].dimensions;
+                                self.image_items[object_idx].transform.update_scale([
+                                    original_scale.0 as f32 * new_scale,
+                                    original_scale.1 as f32 * new_scale,
+                                ]);
                             }
                             ObjectType::VideoItem => {
-                                self.video_items[object_idx]
-                                    .transform
-                                    .update_scale([new_scale, new_scale]);
+                                let original_scale = self.video_items[object_idx].dimensions;
+                                self.video_items[object_idx].transform.update_scale([
+                                    original_scale.0 as f32 * new_scale,
+                                    original_scale.1 as f32 * new_scale,
+                                ]);
                             }
                         }
                     }
