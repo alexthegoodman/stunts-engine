@@ -1,5 +1,6 @@
 mod animations;
 mod camera;
+mod capture;
 mod dot;
 mod editor;
 mod export;

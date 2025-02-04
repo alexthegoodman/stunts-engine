@@ -1,5 +1,6 @@
 pub mod animations;
 pub mod camera;
+pub mod capture;
 pub mod dot;
 pub mod editor;
 pub mod export;

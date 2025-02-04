@@ -13,7 +13,9 @@ lyon_tessellation = "1.0.15"
 floem_renderer = { path = "D:/projects/common/common-floem/renderer", version = "0.1.0" }
 strum = "0.26.3"
 strum_macros = "0.26"
-floem-winit = { git = "https://github.com/lapce/winit", rev = "c8d3b8fd6fa4ffd5e0f99be78aacddcf6de57bcd", features = ["rwh_05"] }
+floem-winit = { git = "https://github.com/lapce/winit", rev = "c8d3b8fd6fa4ffd5e0f99be78aacddcf6de57bcd", features = [
+    "rwh_05",
+] }
 cgmath = "0.18.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -22,10 +24,26 @@ fontdue = "0.9.2"
 image = "0.25.5"
 rand = "0.8.5"
 munkres = "0.5.2"
+device_query = "2.1.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.58", features = ["implement", "Win32_Media_MediaFoundation", "Win32_System", "Win32_System_Com", "Win32_System_Memory", "Win32_UI_Shell_PropertiesSystem", "Win32_System_Threading", "Win32_Security", "Win32_System_Com_Urlmon", "Win32_Media_KernelStreaming", "Win32_System_Com_StructuredStorage"] }
+windows = { version = "0.58", features = [
+    "implement",
+    "Win32_Media_MediaFoundation",
+    "Win32_System",
+    "Win32_System_Com",
+    "Win32_System_Memory",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_System_Com_Urlmon",
+    "Win32_Media_KernelStreaming",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
 windows-core = "0.58.0"
+windows-capture = "1.4.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 pollster = "0.3.0"

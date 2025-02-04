@@ -1,0 +1,483 @@
+use device_query::{DeviceQuery, DeviceState, MouseState};
+use serde_json::json;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
+
+use serde::{Deserialize, Serialize};
+use serde_json;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::env;
+use std::error::Error;
+use std::fs;
+use std::fs::File;
+use std::io::BufReader;
+use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time;
+use std::time::Instant;
+use windows_capture::window::Window;
+
+use windows::{
+    Win32::Foundation::{BOOL, HWND, LPARAM, RECT},
+    Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowRect, GetWindowTextW, IsWindowVisible},
+};
+
+use core::ffi::c_int;
+use std::ffi::c_void;
+use windows_capture::monitor::Monitor;
+use windows_capture::{
+    capture::{Context, GraphicsCaptureApiHandler},
+    encoder::{AudioSettingsBuilder, ContainerSettingsBuilder, VideoEncoder, VideoSettingsBuilder},
+    frame::Frame,
+    graphics_capture_api::InternalCaptureControl,
+    settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
+};
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct RectInfo {
+    pub left: i32,
+    pub right: i32,
+    pub top: i32,
+    pub bottom: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct WindowInfo {
+    pub hwnd: usize,
+    pub title: String,
+    pub rect: RectInfo,
+}
+
+pub struct MouseTrackingState {
+    pub mouse_positions: Arc<Mutex<Vec<serde_json::Value>>>,
+    pub start_time: SystemTime,
+    pub is_tracking: Arc<AtomicBool>,
+    pub is_recording: Arc<Mutex<bool>>,
+}
+
+pub struct StCapture {
+    pub state: MouseTrackingState,
+    pub capture_dir: PathBuf,
+}
+
+impl StCapture {
+    pub fn new(capture_dir: PathBuf) -> StCapture {
+        let state = MouseTrackingState {
+            mouse_positions: Arc::new(Mutex::new(Vec::new())),
+            start_time: SystemTime::now(),
+            is_tracking: Arc::new(AtomicBool::new(true)),
+            is_recording: Arc::new(Mutex::new(false)),
+        };
+
+        return Self { state, capture_dir };
+    }
+
+    pub fn get_sources(&self) -> Result<Vec<WindowInfo>, String> {
+        // use windows::Win32::Foundation::BOOLEAN;
+
+        let mut windows: Vec<WindowInfo> = Vec::new();
+
+        // EnumWindows callback to enumerate all top-level windows
+        unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            // Only capture windows that are visible
+            if IsWindowVisible(hwnd).as_bool() {
+                // Get the window title and its rect (position/size)
+                if let Ok((title, rect)) = get_window_info(hwnd) {
+                    let sources = lparam.0 as *mut Vec<WindowInfo>;
+                    let window_info = WindowInfo {
+                        hwnd: hwnd.0 as usize,
+                        title: title,
+                        rect: RectInfo {
+                            left: rect.left,
+                            top: rect.top,
+                            right: rect.right,
+                            bottom: rect.bottom,
+                            width: rect.right - rect.left,
+                            height: rect.bottom - rect.top,
+                        },
+                    };
+                    (*sources).push(window_info);
+                }
+            }
+
+            // 1 // Continue enumeration
+            true.into() // Continue enumeration
+        }
+
+        unsafe {
+            // Enumerate all top-level windows
+            EnumWindows(
+                Some(enum_windows_callback),
+                LPARAM(&mut windows as *mut _ as isize),
+            )
+            .expect("Couldn't enumerate windows");
+        }
+
+        Ok(windows)
+    }
+
+    pub fn save_source_data(
+        &self,
+        hwnd: usize,
+        current_project_id: String,
+    ) -> Result<serde_json::Value, String> {
+        let window_info =
+            get_window_info_by_usize(hwnd).expect("Couldn't get window info by usize");
+
+        let source_data = json!({
+            "id": hwnd.to_string(),
+            "name": window_info.title,
+            "width": window_info.rect.width,
+            "height": window_info.rect.height,
+            "x": window_info.rect.left,
+            "y": window_info.rect.top,
+            "scale_factor": 1.0
+        });
+
+        // let save_path = app_handle.path_resolver().app_data_dir().unwrap();
+        let file_path = self
+            .capture_dir
+            .join("projects")
+            .join(&current_project_id)
+            .join("sourceData.json");
+
+        fs::write(
+            file_path,
+            serde_json::to_string_pretty(&source_data).unwrap(),
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(source_data)
+    }
+
+    pub fn start_mouse_tracking(&mut self) -> Result<bool, String> {
+        let state = MouseTrackingState {
+            mouse_positions: Arc::new(Mutex::new(Vec::new())),
+            start_time: SystemTime::now(),
+            is_tracking: Arc::new(AtomicBool::new(true)),
+            is_recording: Arc::new(Mutex::new(false)),
+        };
+
+        self.state = state;
+
+        let mouse_positions = self.state.mouse_positions.clone();
+        let start_time = self.state.start_time;
+        let is_tracking = self.state.is_tracking.clone();
+
+        thread::spawn(move || {
+            let device_state = DeviceState::new();
+            while is_tracking.load(Ordering::Relaxed) {
+                let mouse: MouseState = device_state.get_mouse();
+                let now = SystemTime::now();
+                let timestamp = now.duration_since(start_time).unwrap().as_millis();
+
+                let position = json!({
+                    "x": mouse.coords.0,
+                    "y": mouse.coords.1,
+                    "timestamp": timestamp
+                });
+
+                mouse_positions.lock().unwrap().push(position);
+                thread::sleep(Duration::from_millis(100));
+            }
+        });
+
+        // app_handle.manage(state);
+
+        Ok(true)
+    }
+
+    pub fn stop_mouse_tracking(&self, project_id: String) -> Result<bool, String> {
+        // let state = app_handle.state::<MouseTrackingState>();
+
+        // Signal the tracking thread to stop
+        // state.is_tracking.store(false, Ordering::Relaxed);
+
+        // Give the thread some time to finish
+        thread::sleep(Duration::from_millis(200));
+
+        let mouse_positions = self.state.mouse_positions.lock().unwrap().clone();
+
+        // let save_path = app_handle.path_resolver().app_data_dir().unwrap();
+        let file_path = self
+            .capture_dir
+            .join("projects")
+            .join(&project_id)
+            .join("mousePositions.json");
+
+        fs::write(
+            file_path,
+            serde_json::to_string_pretty(&mouse_positions).unwrap(),
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(true)
+    }
+
+    pub fn get_project_data(
+        &self,
+        current_project_id: String,
+    ) -> Result<serde_json::Value, String> {
+        // let save_path = app_handle.path_resolver().app_data_dir().unwrap();
+        let project_path = self.capture_dir.join("projects").join(&current_project_id);
+
+        let mouse_positions: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(project_path.join("mousePositions.json"))
+                .map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+
+        let source_data: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(project_path.join("sourceData.json")).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+
+        let original_capture =
+            fs::read(project_path.join("capture.mp4")).map_err(|e| e.to_string())?;
+
+        Ok(json!({
+            "currentProjectId": current_project_id,
+            "mousePositions": mouse_positions,
+            "originalCapture": original_capture,
+            "sourceData": source_data,
+        }))
+    }
+
+    pub fn start_video_capture(
+        &mut self,
+        hwnd: usize,
+        width: u32,
+        height: u32,
+        project_id: String,
+    ) -> Result<(), String> {
+        // let state = app_handle.state::<MouseTrackingState>();
+        let mut is_recording = self.state.is_recording.lock().unwrap();
+
+        if *is_recording {
+            return Err("Already recording".to_string());
+        }
+
+        *is_recording = true;
+        drop(is_recording);
+
+        let hwnd = HWND(hwnd as *mut _);
+        let raw_hwnd = hwnd.0 as *mut c_void;
+        let target_window: Window = unsafe { Window::from_raw_hwnd(raw_hwnd) };
+
+        // let app_data_dir = app_handle
+        //     .path_resolver()
+        //     .app_data_dir()
+        //     .ok_or("Failed to get app data directory")?;
+        let project_path = self.capture_dir.join("projects").join(&project_id);
+        let output_path = project_path
+            .join("capture_pre.mp4")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let compressed_path = project_path
+            .join("capture.mp4")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        // hardcode hd for testing to avoid miscolored recording,
+        // TODO: scale to fullscreen width / height for users
+        if (width > 1920 || height > 1080) {
+            let primary_monitor = Monitor::primary().expect("There is no primary monitor");
+
+            let settings = Settings::new(
+                primary_monitor,
+                CursorCaptureSettings::Default,
+                DrawBorderSettings::Default,
+                ColorFormat::Rgba8,
+                (
+                    output_path,
+                    compressed_path,
+                    1920,
+                    1080,
+                    self.state.is_recording.clone(),
+                ),
+            );
+
+            // std::thread::spawn(move || {
+            if let Err(e) = Capture::start(settings) {
+                eprintln!("Capture error: {}", e);
+                // Ensure is_recording is set to false if an error occurs
+                *self.state.is_recording.lock().unwrap() = false;
+            }
+            // });
+        } else {
+            let settings = Settings::new(
+                target_window,
+                CursorCaptureSettings::Default,
+                DrawBorderSettings::Default,
+                ColorFormat::Rgba8,
+                (
+                    output_path,
+                    compressed_path,
+                    width,
+                    height,
+                    self.state.is_recording.clone(),
+                ),
+            );
+
+            // std::thread::spawn(move || {
+            if let Err(e) = Capture::start(settings) {
+                eprintln!("Capture error: {}", e);
+                // Ensure is_recording is set to false if an error occurs
+                *self.state.is_recording.lock().unwrap() = false;
+            }
+            // });
+        }
+
+        Ok(())
+    }
+
+    pub fn stop_video_capture(&mut self, project_id: String) -> Result<(), String> {
+        // let app_data_dir = app_handle
+        //     .path_resolver()
+        //     .app_data_dir()
+        //     .ok_or("Failed to get app data directory")?;
+        let project_path = self.capture_dir.join("projects").join(&project_id);
+        let output_path = project_path
+            .join("capture_pre.mp4")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let compressed_path = project_path
+            .join("capture.mp4")
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        // let state = app_handle.state::<MouseTrackingState>();
+        let mut is_recording = self.state.is_recording.lock().unwrap();
+
+        if !*is_recording {
+            return Err("Not currently recording".to_string());
+        }
+
+        *is_recording = false;
+
+        println!("sleep");
+
+        // let app_handle = app_handle.clone();
+
+        // thread::spawn(move || {
+        //     let app_handle = app_handle.clone();
+        //     thread::sleep(Duration::from_millis(5000));
+
+        //     println!("compress");
+
+        //     println!(
+        //         "PATH: {:?}",
+        //         env::var("PATH").unwrap_or_else(|_| "Not found".to_string())
+        //     );
+
+        //     if status.success() {
+        //         println!("Video compressed successfully!");
+        //         app_handle.emit_all("video-compression", "success").unwrap();
+        //     } else {
+        //         eprintln!("Error compressing the video.");
+        //         app_handle.emit_all("video-compression", "error").unwrap();
+        //     }
+        // });
+
+        Ok(())
+    }
+}
+
+pub fn get_window_info(hwnd: HWND) -> Result<(String, RECT), String> {
+    unsafe {
+        let mut rect = RECT::default();
+        GetWindowRect(hwnd, &mut rect).expect("Couldn't get WindowRect");
+
+        let mut title: [u16; 512] = [0; 512];
+        let len = GetWindowTextW(hwnd, &mut title);
+        let title = String::from_utf16_lossy(&title[..len as usize]);
+        Ok((title, rect))
+    }
+}
+
+pub fn get_window_info_by_usize(hwnd_value: usize) -> Result<WindowInfo, String> {
+    // Convert the usize back into an HWND
+    let hwnd = HWND(hwnd_value as *mut _);
+
+    if let Ok((title, rect)) = get_window_info(hwnd) {
+        let window_info = WindowInfo {
+            hwnd: hwnd_value,
+            title: title,
+            rect: RectInfo {
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom,
+                width: rect.right - rect.left,
+                height: rect.bottom - rect.top,
+            },
+        };
+        Ok(window_info)
+    } else {
+        Err("Failed to get window information".to_string())
+    }
+}
+
+struct Capture {
+    encoder: Option<VideoEncoder>,
+    is_recording: Arc<Mutex<bool>>,
+    output_path: String,
+    compressed_path: String,
+}
+
+impl GraphicsCaptureApiHandler for Capture {
+    type Flags = (String, String, u32, u32, Arc<Mutex<bool>>);
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
+        let (output_path, compressed_path, width, height, is_recording) = ctx.flags;
+        let encoder = VideoEncoder::new(
+            VideoSettingsBuilder::new(width, height),
+            AudioSettingsBuilder::default().disabled(true),
+            ContainerSettingsBuilder::default(),
+            &output_path,
+        )?;
+
+        Ok(Self {
+            encoder: Some(encoder),
+            is_recording,
+            output_path,
+            compressed_path,
+        })
+    }
+
+    fn on_frame_arrived(
+        &mut self,
+        frame: &mut Frame,
+        capture_control: InternalCaptureControl,
+    ) -> Result<(), Self::Error> {
+        if let Some(encoder) = &mut self.encoder {
+            encoder.send_frame(frame)?;
+        }
+
+        if !*self.is_recording.lock().unwrap() {
+            if let Some(encoder) = self.encoder.take() {
+                encoder.finish()?;
+            }
+            capture_control.stop();
+        }
+
+        Ok(())
+    }
+
+    fn on_closed(&mut self) -> Result<(), Self::Error> {
+        println!("Capture Session Closed");
+        Ok(())
+    }
+}
