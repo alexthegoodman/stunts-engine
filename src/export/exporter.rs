@@ -9,7 +9,7 @@ use crate::{animations::Sequence, editor::WindowSize, timelines::SavedTimelineSt
 #[derive(Debug, Clone)]
 pub enum ExportProgress {
     Progress(f32),
-    Complete,
+    Complete(String),
     Error(String),
 }
 
