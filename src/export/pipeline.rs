@@ -1,18 +1,23 @@
 use crate::{
     animations::Sequence,
     camera::{Camera, CameraBinding},
-    editor::{Editor, Viewport, WindowSize, WindowSizeShader},
+    editor::{
+        Editor, Viewport, WindowSize, WindowSizeShader, CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET,
+    },
     timelines::{SavedTimelineStateConfig, TimelineSequence},
     vertex::Vertex,
 };
+use cgmath::Vector2;
+use floem_renderer::gpu_resources::{self, GpuResources};
 use std::sync::{Arc, Mutex};
 use wgpu::{util::DeviceExt, RenderPipeline};
 
 use super::frame_buffer::FrameCaptureBuffer;
 
 pub struct ExportPipeline {
-    pub device: Option<wgpu::Device>,
-    pub queue: Option<wgpu::Queue>,
+    // pub device: Option<wgpu::Device>,
+    // pub queue: Option<wgpu::Queue>,
+    pub gpu_resources: Option<Arc<GpuResources>>,
     pub camera: Option<Camera>,
     pub camera_binding: Option<CameraBinding>,
     pub render_pipeline: Option<RenderPipeline>,
@@ -27,8 +32,9 @@ pub struct ExportPipeline {
 impl ExportPipeline {
     pub fn new() -> Self {
         ExportPipeline {
-            device: None,
-            queue: None,
+            // device: None,
+            // queue: None,
+            gpu_resources: None,
             camera: None,
             camera_binding: None,
             render_pipeline: None,
@@ -49,13 +55,16 @@ impl ExportPipeline {
         video_width: u32,
         video_height: u32,
     ) {
-        let camera = Camera::new(
+        let mut camera = Camera::new(
             //window_size
             WindowSize {
                 width: video_width,
                 height: video_height,
             },
         );
+
+        camera.position = Vector2::new(CANVAS_VERT_OFFSET, CANVAS_HORIZ_OFFSET);
+        camera.zoom = 1.25;
 
         let viewport = Arc::new(Mutex::new(Viewport::new(
             // swap for video dimensions?
@@ -160,6 +169,26 @@ impl ExportPipeline {
 
         let model_bind_group_layout = Arc::new(model_bind_group_layout);
 
+        let group_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    // Existing uniform buffer binding
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+                label: Some("export group_bind_group_layout"),
+            });
+
+        let group_bind_group_layout = Arc::new(group_bind_group_layout);
+
         let window_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&[WindowSizeShader {
@@ -203,6 +232,7 @@ impl ExportPipeline {
                 &camera_binding.bind_group_layout,
                 &model_bind_group_layout,
                 &window_size_bind_group_layout,
+                &group_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -224,8 +254,8 @@ impl ExportPipeline {
         //     .surface
         //     .get_capabilities(&gpu_resources.adapter);
         // let swapchain_format = swapchain_capabilities.formats[0]; // Choosing the first available format
-        // let swapchain_format = wgpu::TextureFormat::Bgra8UnormSrgb; // hardcode for now - may be able to change from the floem requirement
-        let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
+        let swapchain_format = wgpu::TextureFormat::Bgra8UnormSrgb; // hardcode for now - may be able to change from the floem requirement
+                                                                    // let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
 
         // Configure the render pipeline
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -311,8 +341,24 @@ impl ExportPipeline {
 
         camera_binding.update(&queue, &camera);
 
+        let gpu_resources = GpuResources {
+            surface: None,
+            adapter,
+            device,
+            queue,
+        };
+
+        let gpu_resources = Arc::new(gpu_resources);
+
         // set needed editor properties
         export_editor.model_bind_group_layout = Some(model_bind_group_layout);
+        export_editor.group_bind_group_layout = Some(group_bind_group_layout);
+        export_editor.gpu_resources = Some(gpu_resources.clone());
+
+        // let gpu_resources = export_editor
+        //     .gpu_resources
+        //     .as_ref()
+        //     .expect("Couldn't get gpu resources");
 
         // restore objects to the editor
         sequences.iter().enumerate().for_each(|(i, s)| {
@@ -326,8 +372,8 @@ impl ExportPipeline {
                 },
                 &camera,
                 if i == 0 { false } else { true },
-                &device,
-                &queue,
+                // &gpu_resources.device,
+                // &gpu_resources.queue,
             );
         });
 
@@ -346,8 +392,9 @@ impl ExportPipeline {
 
         println!("Video exporting!");
 
-        self.device = Some(device);
-        self.queue = Some(queue);
+        // self.device = Some(device);
+        // self.queue = Some(queue);
+        self.gpu_resources = export_editor.gpu_resources.clone();
         self.camera = Some(camera);
         self.camera_binding = Some(camera_binding);
         self.render_pipeline = Some(render_pipeline);
@@ -360,8 +407,14 @@ impl ExportPipeline {
 
     pub fn render_frame(&mut self, current_time: f64) {
         let mut editor = self.export_editor.as_mut().expect("Couldn't get editor");
-        let device = self.device.as_ref().expect("Couldn't get device");
-        let queue = self.queue.as_ref().expect("Couldn't get queue");
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get gpu resources");
+        let device = &gpu_resources.device;
+        let queue = &gpu_resources.queue;
+        // let device = self.device.as_ref().expect("Couldn't get device");
+        // let queue = self.queue.as_ref().expect("Couldn't get queue");
         let view = self.view.as_ref().expect("Couldn't get texture view");
         let depth_view = self
             .depth_view
@@ -427,6 +480,7 @@ impl ExportPipeline {
                     .transform
                     .update_uniform_buffer(&queue, &camera.window_size);
                 render_pass.set_bind_group(1, &polygon.bind_group, &[]);
+                render_pass.set_bind_group(3, &polygon.group_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, polygon.vertex_buffer.slice(..));
                 render_pass
                     .set_index_buffer(polygon.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
@@ -440,6 +494,7 @@ impl ExportPipeline {
                         .transform
                         .update_uniform_buffer(&queue, &camera.window_size);
                     render_pass.set_bind_group(1, &polygon.bind_group, &[]);
+                    render_pass.set_bind_group(3, &polygon.group_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, polygon.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(
                         polygon.index_buffer.slice(..),
@@ -456,6 +511,7 @@ impl ExportPipeline {
                         .transform
                         .update_uniform_buffer(&queue, &camera.window_size);
                     render_pass.set_bind_group(1, &text_item.bind_group, &[]);
+                    render_pass.set_bind_group(3, &text_item.group_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, text_item.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(
                         text_item.index_buffer.slice(..),
@@ -472,6 +528,7 @@ impl ExportPipeline {
                         .transform
                         .update_uniform_buffer(&queue, &camera.window_size);
                     render_pass.set_bind_group(1, &st_image.bind_group, &[]);
+                    render_pass.set_bind_group(3, &st_image.group_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, st_image.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(
                         st_image.index_buffer.slice(..),
@@ -488,6 +545,7 @@ impl ExportPipeline {
                         .transform
                         .update_uniform_buffer(&queue, &camera.window_size);
                     render_pass.set_bind_group(1, &st_video.bind_group, &[]);
+                    render_pass.set_bind_group(3, &st_video.group_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, st_video.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(
                         st_video.index_buffer.slice(..),

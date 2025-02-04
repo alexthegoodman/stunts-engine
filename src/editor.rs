@@ -389,9 +389,16 @@ impl Editor {
         window_size: WindowSize,
         camera: &Camera,
         hidden: bool,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        // device: &wgpu::Device,
+        // queue: &wgpu::Queue,
     ) {
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get gpu resources");
+        let device = &gpu_resources.device;
+        let queue = &gpu_resources.queue;
+
         saved_sequence.active_polygons.iter().for_each(|p| {
             // let gpu_resources = self
             //     .gpu_resources

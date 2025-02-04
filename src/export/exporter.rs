@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use floem_renderer::gpu_resources;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use super::{encode::VideoEncoder, frame_buffer::FrameCaptureBuffer, pipeline::ExportPipeline};
@@ -48,7 +49,11 @@ impl Exporter {
 
         println!("Preparing frame buffer...");
         let frame_buffer = FrameCaptureBuffer::new(
-            &wgpu_pipeline.device.as_ref().expect("Couldn't get device"),
+            &wgpu_pipeline
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get gpu resources")
+                .device,
             video_width,
             video_height,
         );
@@ -81,7 +86,13 @@ impl Exporter {
                 .expect("Couldn't get frame buffer");
 
             let frame_bytes = frame_buffer
-                .get_frame_data(&wgpu_pipeline.device.as_ref().expect("Couldn't get device"))
+                .get_frame_data(
+                    &wgpu_pipeline
+                        .gpu_resources
+                        .as_ref()
+                        .expect("Couldn't get gpu resources")
+                        .device,
+                )
                 .await;
 
             // Write frame to video
