@@ -1483,8 +1483,12 @@ impl Editor {
                     1.0 - (-2.0 * progress + 2.0).powi(2) / 2.0
                 };
 
+                // do not update a property when start and end are the same
+                if start_frame.value == end_frame.value {
+                    continue;
+                }
+
                 // Apply the interpolated value to the object's property
-                // Apply interpolated value based on property type
                 match (&start_frame.value, &end_frame.value) {
                     (KeyframeValue::Position(start), KeyframeValue::Position(end)) => {
                         let x = self.lerp(start[0], end[0], progress);
@@ -1605,6 +1609,52 @@ impl Editor {
                             ObjectType::VideoItem => {
                                 self.video_items[object_idx]
                                     .update_opacity(&gpu_resources.queue, opacity);
+                            }
+                        }
+                    }
+                    (KeyframeValue::Zoom(start), KeyframeValue::Zoom(end)) => {
+                        // zoom is out 100 (100%)
+                        let zoom = self.lerp(*start, *end, progress) / 100.0;
+
+                        let gpu_resources = self
+                            .gpu_resources
+                            .as_ref()
+                            .expect("Couldn't get gpu resources");
+
+                        match animation.object_type {
+                            ObjectType::VideoItem => {
+                                if let Some(mouse_positions) =
+                                    &self.video_items[object_idx].mouse_positions
+                                {
+                                    let elapsed_ms = (elapsed * 1000.0) as u128; // Convert elapsed seconds to milliseconds
+
+                                    // Get the most recent valid timestamp
+                                    if let Some(most_recent_mouse_position) = mouse_positions
+                                        .iter()
+                                        .filter(|p| p.timestamp <= elapsed_ms)
+                                        .max_by_key(|p| p.timestamp)
+                                    {
+                                        let dimensions = self.video_items[object_idx].dimensions;
+                                        let source_dimensions =
+                                            self.video_items[object_idx].source_dimensions;
+                                        let center_point = Point {
+                                            x: (most_recent_mouse_position.x
+                                                / source_dimensions.0 as f32)
+                                                * dimensions.0 as f32,
+                                            y: (most_recent_mouse_position.y
+                                                / source_dimensions.1 as f32)
+                                                * dimensions.1 as f32,
+                                        };
+                                        self.video_items[object_idx].update_zoom(
+                                            &gpu_resources.queue,
+                                            zoom,
+                                            center_point,
+                                        );
+                                    }
+                                }
+                            }
+                            _ => {
+                                println!("Zoom not supported here");
                             }
                         }
                     }
