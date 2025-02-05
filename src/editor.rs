@@ -1630,14 +1630,20 @@ impl Editor {
 
                                     // picks new zoom point every 1 second, interpolating between this second and the next one for the center_point
 
-                                    if let Some((start_point, end_point)) =
-                                        mouse_positions
-                                            .iter()
-                                            .filter(|p| (p.timestamp / 1000) * 1000 <= elapsed_ms)
-                                            .zip(mouse_positions.iter().filter(|p| {
-                                                (p.timestamp / 1000) * 1000 > elapsed_ms
-                                            }))
-                                            .next()
+                                    // TODO: seems to be ahead of the user's mouse position
+                                    // could it be the next() call or the timing?
+                                    if let Some((start_point, end_point)) = mouse_positions
+                                        .iter()
+                                        .filter(|p| (p.timestamp / 1000) * 1000 <= elapsed_ms)
+                                        .zip(
+                                            mouse_positions
+                                                .iter()
+                                                .filter(|p| {
+                                                    (p.timestamp / 1000) * 1000 > elapsed_ms
+                                                })
+                                                .rev(),
+                                        )
+                                        .next()
                                     {
                                         let time_progress = (elapsed_ms - start_point.timestamp)
                                             as f32
@@ -1663,7 +1669,7 @@ impl Editor {
                                         if let Some(last_center_point) =
                                             self.video_items[object_idx].last_center_point
                                         {
-                                            let alpha = 0.05; // Adjust for smoother/faster transitions (0.0 = no change, 1.0 = instant)
+                                            let alpha = 0.01; // Adjust for smoother/faster transitions (0.0 = no change, 1.0 = instant)
                                             let blended_center_point = Point {
                                                 x: last_center_point.x * (1.0 - alpha)
                                                     + new_center_point.x * alpha,
