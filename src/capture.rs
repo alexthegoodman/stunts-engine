@@ -3,6 +3,7 @@ use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+use windows_capture::encoder::VideoSettingsSubType;
 
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -443,7 +444,7 @@ impl GraphicsCaptureApiHandler for Capture {
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
         let (output_path, compressed_path, width, height, is_recording) = ctx.flags;
         let encoder = VideoEncoder::new(
-            VideoSettingsBuilder::new(width, height),
+            VideoSettingsBuilder::new(width, height).sub_type(VideoSettingsSubType::H264),
             AudioSettingsBuilder::default().disabled(true),
             ContainerSettingsBuilder::default(),
             &output_path,
