@@ -197,10 +197,12 @@ impl StVideo {
         let (tmp_group_bind_group, tmp_group_transform) =
             create_empty_group_transform(device, group_bind_group_layout, window_size);
 
+        println!("Adding video {:?}", new_id);
+
         Ok(Self {
             id: new_id,
             current_sequence_id,
-            name: String::new(),
+            name: video_config.name,
             path: path
                 .to_str()
                 .expect("Couldn't convert to string")

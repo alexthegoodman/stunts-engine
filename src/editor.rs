@@ -2809,7 +2809,10 @@ impl Editor {
                 continue;
             }
 
+            println!("Checking video point");
+
             if video_item.contains_point(&self.last_top_left, &camera) {
+                println!("Video contains point");
                 intersecting_objects
                     .push((video_item.layer, InteractionTarget::Video(video_index)));
             }
@@ -2950,8 +2953,12 @@ impl Editor {
                         Some(Uuid::from_str(&video_item.id).expect("Couldn't convert to uuid"));
                     self.drag_start = Some(self.last_top_left);
 
+                    println!("Video interaction");
+
                     // TODO: make DRY with below
                     if (self.handle_video_click.is_some()) {
+                        println!("Video click");
+
                         let handler_creator = self
                             .handle_video_click
                             .as_ref()
@@ -3095,6 +3102,12 @@ impl Editor {
             }
         }
 
+        if let Some(video_id) = self.dragging_video {
+            if let Some(start) = self.drag_start {
+                self.move_video(self.last_top_left, start, video_id, window_size, device);
+            }
+        }
+
         self.previous_top_left = self.last_top_left;
     }
 
@@ -3147,6 +3160,17 @@ impl Editor {
             active_point = Some(Point {
                 x: active_text.transform.position.x,
                 y: active_text.transform.position.y,
+            });
+        } else if let Some(video_id) = self.dragging_video {
+            object_id = video_id;
+            let active_video = self
+                .video_items
+                .iter()
+                .find(|t| t.id == video_id.to_string())
+                .expect("Couldn't find video");
+            active_point = Some(Point {
+                x: active_video.transform.position.x,
+                y: active_video.transform.position.y,
             });
         }
 
@@ -3268,6 +3292,7 @@ impl Editor {
         self.dragging_polygon = None;
         self.dragging_text = None;
         self.dragging_image = None;
+        self.dragging_video = None;
         self.drag_start = None;
         self.dragging_path = None;
         self.dragging_path_assoc_path = None;
@@ -3520,6 +3545,39 @@ impl Editor {
         println!("move_image {:?}", new_position);
 
         image_item
+            .transform
+            .update_position([new_position.x, new_position.y], window_size);
+
+        self.drag_start = Some(mouse_pos);
+        // self.update_guide_lines(poly_index, window_size);
+    }
+
+    pub fn move_video(
+        &mut self,
+        mouse_pos: Point,
+        start: Point,
+        video_id: Uuid,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+    ) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
+        let dx = mouse_pos.x - start.x;
+        let dy = mouse_pos.y - start.y;
+        // let image_item = &mut self.image_items[image_index];
+        let video_item = self
+            .video_items
+            .iter_mut()
+            .find(|i| i.id == video_id.to_string())
+            .expect("Couldn't find video item");
+        let new_position = Point {
+            x: video_item.transform.position.x + (dx * 0.9), // not sure relation with aspect_ratio?
+            y: video_item.transform.position.y + dy,
+        };
+
+        println!("move_image {:?}", new_position);
+
+        video_item
             .transform
             .update_position([new_position.x, new_position.y], window_size);
 
