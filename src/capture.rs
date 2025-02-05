@@ -39,7 +39,7 @@ use windows_capture::{
     settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
 };
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct RectInfo {
     pub left: i32,
     pub right: i32,
@@ -49,7 +49,7 @@ pub struct RectInfo {
     pub height: i32,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct WindowInfo {
     pub hwnd: usize,
     pub title: String,
@@ -297,7 +297,7 @@ impl StCapture {
         Ok(())
     }
 
-    pub fn stop_video_capture(&mut self, project_id: String) -> Result<(), String> {
+    pub fn stop_video_capture(&mut self, project_id: String) -> Result<(String), String> {
         // let app_data_dir = app_handle
         //     .path_resolver()
         //     .app_data_dir()
@@ -347,7 +347,7 @@ impl StCapture {
         //     }
         // });
 
-        Ok(())
+        Ok((output_path))
     }
 }
 
