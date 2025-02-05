@@ -95,6 +95,7 @@ pub enum KeyframeValue {
     PerspectiveX(i32),
     PerspectiveY(i32),
     Opacity(i32), // also out of 100
+    Zoom(i32),    // 100 is minimum, needs precision
     Custom(Vec<i32>),
 }
 
