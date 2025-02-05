@@ -65,6 +65,7 @@ pub struct StVideo {
     pub current_zoom: f32,
     pub mouse_path: Option<String>,
     pub mouse_positions: Option<Vec<MousePosition>>,
+    pub last_center_point: Option<Point>,
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
     // #[cfg(target_arch = "wasm32")]
@@ -237,6 +238,7 @@ impl StVideo {
             current_zoom: 1.0,
             mouse_path: video_config.mouse_path,
             mouse_positions: None,
+            last_center_point: None,
         })
     }
 
@@ -422,53 +424,93 @@ impl StVideo {
         self.transform.update_uniform_buffer(&queue, &window_size);
     }
 
+    // pub fn update_zoom(&mut self, queue: &Queue, new_zoom: f32, center_point: Point) {
+    //     let scale_factor = new_zoom / self.current_zoom;
+    //     self.current_zoom = new_zoom;
+
+    //     // Calculate the zoomed viewport as a proportion of the full video
+    //     let (video_width, video_height) = self.dimensions;
+    //     let viewport_width = self.dimensions.0 as f32 / new_zoom;
+    //     let viewport_height = self.dimensions.1 as f32 / new_zoom;
+
+    //     // Convert center point from screen space to texture UV space
+    //     let uv_center_x = center_point.x / self.dimensions.0 as f32;
+    //     let uv_center_y = center_point.y / self.dimensions.1 as f32;
+
+    //     // Compute new UV bounds for the zoomed region
+    //     let uv_min_x = (uv_center_x - viewport_width / (2.0 * video_width as f32)).max(0.0);
+    //     let uv_max_x = (uv_center_x + viewport_width / (2.0 * video_width as f32)).min(1.0);
+    //     let uv_min_y = (uv_center_y - viewport_height / (2.0 * video_height as f32)).max(0.0);
+    //     let uv_max_y = (uv_center_y + viewport_height / (2.0 * video_height as f32)).min(1.0);
+
+    //     // Update vertex UVs to reflect the new clipped texture region
+    //     self.vertices.iter_mut().enumerate().for_each(|(i, v)| {
+    //         if i == 0 {
+    //             v.tex_coords = [uv_min_x, uv_max_y];
+    //         }
+    //         if i == 1 {
+    //             v.tex_coords = [uv_max_x, uv_max_y];
+    //         }
+    //         if i == 2 {
+    //             v.tex_coords = [uv_max_x, uv_min_y];
+    //         }
+    //         if i == 3 {
+    //             v.tex_coords = [uv_min_x, uv_min_y];
+    //         }
+    //     });
+
+    //     // Update GPU buffers with new vertex data
+    //     queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
+    // }
+
     pub fn update_zoom(&mut self, queue: &Queue, new_zoom: f32, center_point: Point) {
-        let scale_factor = new_zoom / self.current_zoom;
         self.current_zoom = new_zoom;
-
-        // Calculate the zoomed viewport as a proportion of the full video
-        // let (video_width, video_height) = self.source_dimensions;
         let (video_width, video_height) = self.dimensions;
-        let viewport_width = self.dimensions.0 as f32 / new_zoom;
-        let viewport_height = self.dimensions.1 as f32 / new_zoom;
 
-        // Convert center point from screen space to texture UV space
-        let uv_center_x = center_point.x / self.dimensions.0 as f32;
-        let uv_center_y = center_point.y / self.dimensions.1 as f32;
+        let uv_center_x = center_point.x / video_width as f32;
+        let uv_center_y = center_point.y / video_height as f32;
 
-        // Compute new UV bounds for the zoomed region
-        let uv_min_x = (uv_center_x - viewport_width / (2.0 * video_width as f32)).max(0.0);
-        let uv_max_x = (uv_center_x + viewport_width / (2.0 * video_width as f32)).min(1.0);
-        let uv_min_y = (uv_center_y - viewport_height / (2.0 * video_height as f32)).max(0.0);
-        let uv_max_y = (uv_center_y + viewport_height / (2.0 * video_height as f32)).min(1.0);
+        let half_width = 0.5 / new_zoom;
+        let half_height = 0.5 / new_zoom;
 
-        // Update vertex UVs to reflect the new clipped texture region
-        // self.vertices = [
-        //     Vertex::new(-1.0, -1.0, uv_min_x, uv_max_y), // Bottom-left
-        //     Vertex::new(1.0, -1.0, uv_max_x, uv_max_y),  // Bottom-right
-        //     Vertex::new(1.0, 1.0, uv_max_x, uv_min_y),   // Top-right
-        //     Vertex::new(-1.0, 1.0, uv_min_x, uv_min_y),  // Top-left
-        // ];
-        self.vertices.iter_mut().enumerate().for_each(|(i, v)| {
-            if i == 0 {
-                v.tex_coords = [uv_min_x, uv_max_y];
-            }
-            if i == 1 {
-                v.tex_coords = [uv_max_x, uv_max_y];
-            }
-            if i == 2 {
-                v.tex_coords = [uv_max_x, uv_min_y];
-            }
-            if i == 3 {
-                v.tex_coords = [uv_min_x, uv_min_y];
-            }
-        });
+        let mut uv_min_x = uv_center_x - half_width;
+        let mut uv_max_x = uv_center_x + half_width;
+        let mut uv_min_y = uv_center_y - half_height;
+        let mut uv_max_y = uv_center_y + half_height;
 
-        // Update GPU buffers with new vertex data
+        // Check for clamping and adjust other UVs accordingly to prevent warping
+        if uv_min_x < 0.0 {
+            let diff = -uv_min_x;
+            uv_min_x = 0.0;
+            uv_max_x = (uv_max_x + diff).min(1.0); // Clamp max_x as well
+        } else if uv_max_x > 1.0 {
+            let diff = uv_max_x - 1.0;
+            uv_max_x = 1.0;
+            uv_min_x = (uv_min_x - diff).max(0.0); // Clamp min_x
+        }
+
+        if uv_min_y < 0.0 {
+            let diff = -uv_min_y;
+            uv_min_y = 0.0;
+            uv_max_y = (uv_max_y + diff).min(1.0); // Clamp max_y
+        } else if uv_max_y > 1.0 {
+            let diff = uv_max_y - 1.0;
+            uv_max_y = 1.0;
+            uv_min_y = (uv_min_y - diff).max(0.0); // Clamp min_y
+        }
+
+        self.vertices
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, v)| match i {
+                0 => v.tex_coords = [uv_min_x, uv_min_y],
+                1 => v.tex_coords = [uv_max_x, uv_min_y],
+                2 => v.tex_coords = [uv_max_x, uv_max_y],
+                3 => v.tex_coords = [uv_min_x, uv_max_y],
+                _ => {}
+            });
+
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
-
-        // Update uniform buffer (if needed)
-        // self.transform.update_uniform_buffer(&queue, &window_size);
     }
 
     pub fn update_opacity(&mut self, queue: &wgpu::Queue, opacity: f32) {
