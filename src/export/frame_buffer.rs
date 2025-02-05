@@ -117,6 +117,7 @@ impl FrameCaptureBuffer {
             let height = self.capture_texture.height() as usize;
             let mut unpadded = Vec::with_capacity(actual_width * height);
             for row in 0..height {
+                // for row in (0..height).rev() {
                 let row_start = row * padded_width;
                 unpadded.extend_from_slice(&data[row_start..row_start + actual_width]);
             }

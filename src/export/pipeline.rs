@@ -63,8 +63,8 @@ impl ExportPipeline {
             },
         );
 
-        camera.position = Vector2::new(CANVAS_VERT_OFFSET, CANVAS_HORIZ_OFFSET);
-        camera.zoom = 1.25;
+        camera.position = Vector2::new(0.0, -450.0);
+        camera.zoom = 2.4;
 
         let viewport = Arc::new(Mutex::new(Viewport::new(
             // swap for video dimensions?
@@ -254,8 +254,9 @@ impl ExportPipeline {
         //     .surface
         //     .get_capabilities(&gpu_resources.adapter);
         // let swapchain_format = swapchain_capabilities.formats[0]; // Choosing the first available format
-        let swapchain_format = wgpu::TextureFormat::Bgra8UnormSrgb; // hardcode for now - may be able to change from the floem requirement
-                                                                    // let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
+        // let swapchain_format = wgpu::TextureFormat::Bgra8UnormSrgb; // hardcode for now - may be able to change from the floem requirement
+        let swapchain_format = wgpu::TextureFormat::Bgra8Unorm;
+        // let swapchain_format = wgpu::TextureFormat::Rgba8Unorm;
 
         // Configure the render pipeline
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
