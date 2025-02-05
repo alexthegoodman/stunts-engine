@@ -56,13 +56,15 @@ pub struct WindowInfo {
     pub rect: RectInfo,
 }
 
+#[derive(Clone)]
 pub struct MouseTrackingState {
     pub mouse_positions: Arc<Mutex<Vec<serde_json::Value>>>,
     pub start_time: SystemTime,
     pub is_tracking: Arc<AtomicBool>,
-    pub is_recording: Arc<Mutex<bool>>,
+    pub is_recording: Arc<AtomicBool>,
 }
 
+#[derive(Clone)]
 pub struct StCapture {
     pub state: MouseTrackingState,
     pub capture_dir: PathBuf,
@@ -74,7 +76,7 @@ impl StCapture {
             mouse_positions: Arc::new(Mutex::new(Vec::new())),
             start_time: SystemTime::now(),
             is_tracking: Arc::new(AtomicBool::new(false)),
-            is_recording: Arc::new(Mutex::new(false)),
+            is_recording: Arc::new(AtomicBool::new(false)),
         };
 
         return Self { state, capture_dir };
@@ -115,14 +117,18 @@ impl StCapture {
     }
 
     pub fn start_mouse_tracking(&mut self) -> Result<bool, String> {
-        let state = MouseTrackingState {
-            mouse_positions: Arc::new(Mutex::new(Vec::new())),
-            start_time: SystemTime::now(),
-            is_tracking: Arc::new(AtomicBool::new(true)),
-            is_recording: Arc::new(Mutex::new(false)),
-        };
+        // let state = MouseTrackingState {
+        //     mouse_positions: Arc::new(Mutex::new(Vec::new())),
+        //     start_time: SystemTime::now(),
+        //     is_tracking: Arc::new(AtomicBool::new(true)),
+        //     is_recording: Arc::new(AtomicBool::new(false)),
+        // };
+        // Reset only the mouse positions and start time, keep existing Arc<AtomicBool>s
+        self.state.mouse_positions = Arc::new(Mutex::new(Vec::new()));
+        self.state.start_time = SystemTime::now();
+        self.state.is_tracking.store(true, Ordering::SeqCst);
 
-        self.state = state;
+        // self.state = state;
 
         let mouse_positions = self.state.mouse_positions.clone();
         let start_time = self.state.start_time;
@@ -130,7 +136,7 @@ impl StCapture {
 
         thread::spawn(move || {
             let device_state = DeviceState::new();
-            while is_tracking.load(Ordering::Relaxed) {
+            while is_tracking.load(Ordering::SeqCst) {
                 let mouse: MouseState = device_state.get_mouse();
                 let now = SystemTime::now();
                 let timestamp = now.duration_since(start_time).unwrap().as_millis();
@@ -155,7 +161,7 @@ impl StCapture {
         // let state = app_handle.state::<MouseTrackingState>();
 
         // Signal the tracking thread to stop
-        self.state.is_tracking.store(false, Ordering::Relaxed);
+        self.state.is_tracking.store(false, Ordering::SeqCst);
 
         // Give the thread some time to finish
         thread::sleep(Duration::from_millis(200));
@@ -214,25 +220,29 @@ impl StCapture {
         height: u32,
         project_id: String,
     ) -> Result<(), String> {
-        // let state = app_handle.state::<MouseTrackingState>();
-        let mut is_recording = self.state.is_recording.lock().unwrap();
+        let is_recording = self.state.is_recording.load(Ordering::SeqCst);
 
-        if *is_recording {
+        if is_recording {
             return Err("Already recording".to_string());
         }
 
-        *is_recording = true;
-        drop(is_recording);
+        // *is_recording = true;
+        self.state.is_recording.store(true, Ordering::SeqCst);
+
+        println!("Start capture...");
+
+        // drop(is_recording);
 
         let hwnd = HWND(hwnd as *mut _);
         let raw_hwnd = hwnd.0 as *mut c_void;
         let target_window: Window = unsafe { Window::from_raw_hwnd(raw_hwnd) };
 
-        // let app_data_dir = app_handle
-        //     .path_resolver()
-        //     .app_data_dir()
-        //     .ok_or("Failed to get app data directory")?;
         let project_path = self.capture_dir.join("projects").join(&project_id);
+
+        fs::create_dir_all(&project_path)
+            .ok()
+            .expect("Couldn't check or create Stunts Projects directory");
+
         let output_path = project_path
             .join("capture_pre.mp4")
             .to_str()
@@ -263,13 +273,11 @@ impl StCapture {
                 ),
             );
 
-            // std::thread::spawn(move || {
-            if let Err(e) = Capture::start(settings) {
+            if let Err(e) = Capture::start_free_threaded(settings) {
                 eprintln!("Capture error: {}", e);
                 // Ensure is_recording is set to false if an error occurs
-                *self.state.is_recording.lock().unwrap() = false;
+                self.state.is_recording.store(false, Ordering::SeqCst);
             }
-            // });
         } else {
             let settings = Settings::new(
                 target_window,
@@ -285,23 +293,17 @@ impl StCapture {
                 ),
             );
 
-            // std::thread::spawn(move || {
-            if let Err(e) = Capture::start(settings) {
+            if let Err(e) = Capture::start_free_threaded(settings) {
                 eprintln!("Capture error: {}", e);
                 // Ensure is_recording is set to false if an error occurs
-                *self.state.is_recording.lock().unwrap() = false;
+                self.state.is_recording.store(false, Ordering::SeqCst);
             }
-            // });
         }
 
         Ok(())
     }
 
     pub fn stop_video_capture(&mut self, project_id: String) -> Result<(String), String> {
-        // let app_data_dir = app_handle
-        //     .path_resolver()
-        //     .app_data_dir()
-        //     .ok_or("Failed to get app data directory")?;
         let project_path = self.capture_dir.join("projects").join(&project_id);
         let output_path = project_path
             .join("capture_pre.mp4")
@@ -315,37 +317,22 @@ impl StCapture {
             .to_string();
 
         // let state = app_handle.state::<MouseTrackingState>();
-        let mut is_recording = self.state.is_recording.lock().unwrap();
+        // let mut is_recording = self.state.is_recording.lock().unwrap();
+        let is_recording = self.state.is_recording.load(Ordering::SeqCst);
 
-        if !*is_recording {
+        println!("Check if recording... {:?}", is_recording);
+
+        if !is_recording {
             return Err("Not currently recording".to_string());
         }
 
-        *is_recording = false;
+        // *is_recording = false;
+        self.state.is_recording.store(false, Ordering::SeqCst);
 
-        println!("sleep");
+        println!("recording finished!");
 
-        // let app_handle = app_handle.clone();
-
-        // thread::spawn(move || {
-        //     let app_handle = app_handle.clone();
-        //     thread::sleep(Duration::from_millis(5000));
-
-        //     println!("compress");
-
-        //     println!(
-        //         "PATH: {:?}",
-        //         env::var("PATH").unwrap_or_else(|_| "Not found".to_string())
-        //     );
-
-        //     if status.success() {
-        //         println!("Video compressed successfully!");
-        //         app_handle.emit_all("video-compression", "success").unwrap();
-        //     } else {
-        //         eprintln!("Error compressing the video.");
-        //         app_handle.emit_all("video-compression", "error").unwrap();
-        //     }
-        // });
+        // give time for video to save out
+        // thread::sleep(Duration::from_millis(500));
 
         Ok((output_path))
     }
@@ -432,13 +419,13 @@ pub fn get_window_info_by_usize(hwnd_value: usize) -> Result<WindowInfo, String>
 
 struct Capture {
     encoder: Option<VideoEncoder>,
-    is_recording: Arc<Mutex<bool>>,
+    is_recording: Arc<AtomicBool>,
     output_path: String,
     compressed_path: String,
 }
 
 impl GraphicsCaptureApiHandler for Capture {
-    type Flags = (String, String, u32, u32, Arc<Mutex<bool>>);
+    type Flags = (String, String, u32, u32, Arc<AtomicBool>);
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
@@ -467,8 +454,12 @@ impl GraphicsCaptureApiHandler for Capture {
             encoder.send_frame(frame)?;
         }
 
-        if !*self.is_recording.lock().unwrap() {
+        let is_recording = self.is_recording.load(Ordering::SeqCst);
+
+        if !is_recording {
+            println!("No longer recording...");
             if let Some(encoder) = self.encoder.take() {
+                println!("Encoder finish...");
                 encoder.finish()?;
             }
             capture_control.stop();

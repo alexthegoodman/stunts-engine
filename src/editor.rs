@@ -2803,6 +2803,18 @@ impl Editor {
             }
         }
 
+        // Collect intersecting image items
+        for (video_index, video_item) in self.video_items.iter_mut().enumerate() {
+            if video_item.hidden {
+                continue;
+            }
+
+            if video_item.contains_point(&self.last_top_left, &camera) {
+                intersecting_objects
+                    .push((video_item.layer, InteractionTarget::Video(video_index)));
+            }
+        }
+
         // Sort intersecting objects by layer in descending order (highest layer first)
         // intersecting_objects.sort_by(|a, b| b.0.cmp(&a.0));
 
@@ -2921,6 +2933,45 @@ impl Editor {
                                     y: image_item.transform.position.y,
                                 },
                                 layer: image_item.layer, // border_radius: polygon.border_radius,
+                                                         // fill: polygon.fill,
+                                                         // stroke: polygon.stroke,
+                            },
+                        );
+                        self.selected_polygon_id = uuid; // TODO: separate property for each object type?
+                                                         // polygon.old_points = Some(polygon.points.clone());
+                    }
+
+                    return None; // nothing to add to undo stack
+                }
+                InteractionTarget::Video(index) => {
+                    let video_item = &mut self.video_items[index];
+
+                    self.dragging_video =
+                        Some(Uuid::from_str(&video_item.id).expect("Couldn't convert to uuid"));
+                    self.drag_start = Some(self.last_top_left);
+
+                    // TODO: make DRY with below
+                    if (self.handle_video_click.is_some()) {
+                        let handler_creator = self
+                            .handle_video_click
+                            .as_ref()
+                            .expect("Couldn't get handler");
+                        let mut handle_click = handler_creator().expect("Couldn't get handler");
+                        let uuid = Uuid::from_str(&video_item.id.clone())
+                            .expect("Couldn't convert string to uuid");
+                        handle_click(
+                            uuid,
+                            StVideoConfig {
+                                id: video_item.id.clone(),
+                                name: video_item.name.clone(),
+                                path: video_item.path.clone(),
+                                // points: polygon.points.clone(),
+                                dimensions: video_item.dimensions,
+                                position: Point {
+                                    x: video_item.transform.position.x,
+                                    y: video_item.transform.position.y,
+                                },
+                                layer: video_item.layer, // border_radius: polygon.border_radius,
                                                          // fill: polygon.fill,
                                                          // stroke: polygon.stroke,
                             },
@@ -3852,6 +3903,7 @@ pub enum InteractionTarget {
     Polygon(usize),
     Text(usize),
     Image(usize),
+    Video(usize),
 }
 
 pub fn get_color(color_index: u32) -> u32 {

@@ -412,6 +412,45 @@ impl StVideo {
 
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
     }
+
+    pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
+        // let local_point = self.to_local_space(*point, camera);
+        let untranslated = Point {
+            x: point.x - (self.transform.position.x),
+            y: point.y - self.transform.position.y,
+        };
+
+        // Get the bounds of the rectangle based on dimensions
+        // Since dimensions are (width, height), the rectangle extends from (0,0) to (width, height)
+        let (width, height) = self.dimensions;
+
+        // Check if the point is within -0.5 to 0.5 range
+        untranslated.x >= -0.5 * self.dimensions.0 as f32
+            && untranslated.x <= 0.5 * self.dimensions.0 as f32
+            && untranslated.y >= -0.5 * self.dimensions.1 as f32
+            && untranslated.y <= 0.5 * self.dimensions.1 as f32
+    }
+
+    pub fn update_layer(&mut self, layer_index: i32) {
+        // -10.0 to provide 10 spots for internal items on top of objects
+        let layer_index = layer_index - INTERNAL_LAYER_SPACE;
+        self.layer = layer_index;
+        self.transform.layer = layer_index as f32;
+    }
+
+    pub fn to_config(&self) -> StVideoConfig {
+        StVideoConfig {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            path: self.path.clone(),
+            dimensions: self.dimensions,
+            position: Point {
+                x: self.transform.position.x - 600.0,
+                y: self.transform.position.y - 50.0,
+            },
+            layer: self.layer,
+        }
+    }
 }
 
 // TODO: add to Drop trait?
