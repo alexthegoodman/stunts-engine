@@ -64,6 +64,12 @@ pub struct MouseTrackingState {
     pub is_recording: Arc<AtomicBool>,
 }
 
+pub struct MousePosition {
+    pub x: f32,
+    pub y: f32,
+    pub timestamp: u128,
+}
+
 #[derive(Clone)]
 pub struct StCapture {
     pub state: MouseTrackingState,
@@ -116,19 +122,11 @@ impl StCapture {
         Ok(source_data)
     }
 
+    // Only called once at beginning of tracking
     pub fn start_mouse_tracking(&mut self) -> Result<bool, String> {
-        // let state = MouseTrackingState {
-        //     mouse_positions: Arc::new(Mutex::new(Vec::new())),
-        //     start_time: SystemTime::now(),
-        //     is_tracking: Arc::new(AtomicBool::new(true)),
-        //     is_recording: Arc::new(AtomicBool::new(false)),
-        // };
-        // Reset only the mouse positions and start time, keep existing Arc<AtomicBool>s
-        self.state.mouse_positions = Arc::new(Mutex::new(Vec::new()));
+        // self.state.mouse_positions = Arc::new(Mutex::new(Vec::new()));
         self.state.start_time = SystemTime::now();
         self.state.is_tracking.store(true, Ordering::SeqCst);
-
-        // self.state = state;
 
         let mouse_positions = self.state.mouse_positions.clone();
         let start_time = self.state.start_time;
@@ -141,34 +139,39 @@ impl StCapture {
                 let now = SystemTime::now();
                 let timestamp = now.duration_since(start_time).unwrap().as_millis();
 
-                let position = json!({
-                    "x": mouse.coords.0,
-                    "y": mouse.coords.1,
-                    "timestamp": timestamp
-                });
+                if let Ok(existing_positions) = &mut mouse_positions.try_lock() {
+                    println!(
+                        "Tracking mouse {:?} {:?} {:?}",
+                        mouse.coords,
+                        existing_positions.len(),
+                        timestamp
+                    );
 
-                mouse_positions.lock().unwrap().push(position);
-                thread::sleep(Duration::from_millis(100));
+                    let position = json!({
+                        "x": mouse.coords.0,
+                        "y": mouse.coords.1,
+                        "timestamp": timestamp
+                    });
+
+                    existing_positions.push(position);
+                    thread::sleep(Duration::from_millis(100));
+                } else {
+                    println!("Can't acquire lock in stop_mouse_tracking");
+                }
             }
         });
-
-        // app_handle.manage(state);
 
         Ok(true)
     }
 
-    pub fn stop_mouse_tracking(&self, project_id: String) -> Result<bool, String> {
-        // let state = app_handle.state::<MouseTrackingState>();
-
+    pub fn stop_mouse_tracking(&mut self, project_id: String) -> Result<(String), String> {
         // Signal the tracking thread to stop
         self.state.is_tracking.store(false, Ordering::SeqCst);
 
-        // Give the thread some time to finish
-        thread::sleep(Duration::from_millis(200));
-
         let mouse_positions = self.state.mouse_positions.lock().unwrap().clone();
 
-        // let save_path = app_handle.path_resolver().app_data_dir().unwrap();
+        println!("Saving mouse positions {:?}", mouse_positions.len());
+
         let file_path = self
             .capture_dir
             .join("projects")
@@ -176,12 +179,18 @@ impl StCapture {
             .join("mousePositions.json");
 
         fs::write(
-            file_path,
+            file_path.clone(),
             serde_json::to_string_pretty(&mouse_positions).unwrap(),
         )
         .map_err(|e| e.to_string())?;
 
-        Ok(true)
+        // reset mouse positions
+        self.state.mouse_positions = Arc::new(Mutex::new(Vec::new()));
+
+        Ok((file_path
+            .to_str()
+            .expect("Couldn't create string from path")
+            .to_string()))
     }
 
     pub fn get_project_data(

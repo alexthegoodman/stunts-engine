@@ -13,6 +13,7 @@ use windows::Win32::System::Com::StructuredStorage::PropVariantToInt64;
 use windows_core::PCWSTR;
 
 use crate::camera::Camera;
+use crate::capture::MousePosition;
 use crate::editor::{Point, WindowSize};
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array, Transform};
@@ -59,6 +60,9 @@ pub struct StVideo {
     pub hidden: bool,
     pub layer: i32,
     pub group_bind_group: wgpu::BindGroup,
+    pub current_zoom: f32,
+    pub mouse_path: Option<String>,
+    pub mouse_positions: Option<Vec<MousePosition>>,
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
     // #[cfg(target_arch = "wasm32")]
@@ -228,6 +232,9 @@ impl StVideo {
             layer: video_config.layer - INTERNAL_LAYER_SPACE,
             source_reader,
             group_bind_group: tmp_group_bind_group,
+            current_zoom: 1.0,
+            mouse_path: None,
+            mouse_positions: None,
         })
     }
 

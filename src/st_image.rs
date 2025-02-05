@@ -10,6 +10,7 @@ use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
 
 use crate::camera::Camera;
+use crate::capture::MousePosition;
 use crate::editor::Point;
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array};
@@ -71,8 +72,6 @@ impl StImage {
         new_id: String,
         current_sequence_id: Uuid,
     ) -> StImage {
-        // NOTE: may be best to move images into destination project folder before supplying a path to StImage
-
         // specify resizing strategy
         let feature = "low_quality_resize"; // faster
                                             // let feature = "high_quality_resize"; // slow
@@ -81,10 +80,6 @@ impl StImage {
         let img = image::open(path).expect("Couldn't open image");
         let original_dimensions = img.dimensions();
         let dimensions = image_config.dimensions;
-
-        // // Calculate scale factors to maintain aspect ratio
-        // let scale_x = dimensions.0 as f32 / original_dimensions.0 as f32;
-        // let scale_y = dimensions.1 as f32 / original_dimensions.1 as f32;
 
         // Option 1: Resize image data before creating texture
         let img = if (feature == "high_quality_resize") {
@@ -125,7 +120,6 @@ impl StImage {
         });
 
         // Convert image to RGBA
-        // let rgba = img.to_rgba8();
         let rgba = img.to_rgba8().into_raw();
 
         // Write texture data
@@ -191,8 +185,6 @@ impl StImage {
             label: Some("Image Bind Group"),
         });
 
-        // let scale_x = original_dimensions.0 as f32 * scale_x;
-        // let scale_y = original_dimensions.1 as f32 * scale_y;
         let scale_x = dimensions.0 as f32;
         let scale_y = dimensions.1 as f32;
 
@@ -222,29 +214,24 @@ impl StImage {
         transform.update_uniform_buffer(&queue, &window_size);
 
         // Rest of the implementation remains the same...
-        // let z = get_z_layer(1.0);
         let vertices = [
             Vertex {
                 position: [-0.5, -0.5, 0.0],
-                // tex_coords: [0.0, 1.0],
                 tex_coords: [0.0, 0.0],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
                 position: [0.5, -0.5, 0.0],
-                // tex_coords: [1.0, 1.0],
                 tex_coords: [1.0, 0.0],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
                 position: [0.5, 0.5, 0.0],
-                // tex_coords: [1.0, 0.0],
                 tex_coords: [1.0, 1.0],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
             Vertex {
                 position: [-0.5, 0.5, 0.0],
-                // tex_coords: [0.0, 0.0],
                 tex_coords: [0.0, 1.0],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
@@ -330,27 +317,11 @@ impl StImage {
     }
 
     pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
-        // let local_point = self.to_local_space(*point, camera);
         let untranslated = Point {
             x: point.x - (self.transform.position.x),
             y: point.y - self.transform.position.y,
         };
 
-        // Get the bounds of the rectangle based on dimensions
-        // Since dimensions are (width, height), the rectangle extends from (0,0) to (width, height)
-        let (width, height) = self.dimensions;
-
-        // println!(
-        //     "contains_point scale: {:?} position: {:?} dimensions: {:?} point: {:?} untranslated: {:?}",
-        //     self.transform.scale, self.transform.position, self.dimensions, point, untranslated
-        // );
-
-        // // Check if the point is within the bounds
-        // untranslated.x >= 0.0
-        //     && untranslated.x <= width as f32
-        //     && untranslated.y >= 0.0
-        //     && untranslated.y <= height as f32
-        // Check if the point is within -0.5 to 0.5 range
         untranslated.x >= -0.5 * self.dimensions.0 as f32
             && untranslated.x <= 0.5 * self.dimensions.0 as f32
             && untranslated.y >= -0.5 * self.dimensions.1 as f32
@@ -374,14 +345,6 @@ impl StImage {
 
         local_point
     }
-
-    // will be integrated directly in render loop
-    // pub fn draw<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>) {
-    //     render_pass.set_bind_group(0, &self.bind_group, &[]);
-    //     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-    //     render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-    //     render_pass.draw_indexed(0..6, 0, 0..1);
-    // }
 
     pub fn to_config(&self) -> StImageConfig {
         StImageConfig {
