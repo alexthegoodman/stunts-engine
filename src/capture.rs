@@ -73,55 +73,11 @@ impl StCapture {
         let state = MouseTrackingState {
             mouse_positions: Arc::new(Mutex::new(Vec::new())),
             start_time: SystemTime::now(),
-            is_tracking: Arc::new(AtomicBool::new(true)),
+            is_tracking: Arc::new(AtomicBool::new(false)),
             is_recording: Arc::new(Mutex::new(false)),
         };
 
         return Self { state, capture_dir };
-    }
-
-    pub fn get_sources(&self) -> Result<Vec<WindowInfo>, String> {
-        // use windows::Win32::Foundation::BOOLEAN;
-
-        let mut windows: Vec<WindowInfo> = Vec::new();
-
-        // EnumWindows callback to enumerate all top-level windows
-        unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
-            // Only capture windows that are visible
-            if IsWindowVisible(hwnd).as_bool() {
-                // Get the window title and its rect (position/size)
-                if let Ok((title, rect)) = get_window_info(hwnd) {
-                    let sources = lparam.0 as *mut Vec<WindowInfo>;
-                    let window_info = WindowInfo {
-                        hwnd: hwnd.0 as usize,
-                        title: title,
-                        rect: RectInfo {
-                            left: rect.left,
-                            top: rect.top,
-                            right: rect.right,
-                            bottom: rect.bottom,
-                            width: rect.right - rect.left,
-                            height: rect.bottom - rect.top,
-                        },
-                    };
-                    (*sources).push(window_info);
-                }
-            }
-
-            // 1 // Continue enumeration
-            true.into() // Continue enumeration
-        }
-
-        unsafe {
-            // Enumerate all top-level windows
-            EnumWindows(
-                Some(enum_windows_callback),
-                LPARAM(&mut windows as *mut _ as isize),
-            )
-            .expect("Couldn't enumerate windows");
-        }
-
-        Ok(windows)
     }
 
     pub fn save_source_data(
@@ -199,7 +155,7 @@ impl StCapture {
         // let state = app_handle.state::<MouseTrackingState>();
 
         // Signal the tracking thread to stop
-        // state.is_tracking.store(false, Ordering::Relaxed);
+        self.state.is_tracking.store(false, Ordering::Relaxed);
 
         // Give the thread some time to finish
         thread::sleep(Duration::from_millis(200));
@@ -240,13 +196,13 @@ impl StCapture {
         )
         .map_err(|e| e.to_string())?;
 
-        let original_capture =
-            fs::read(project_path.join("capture.mp4")).map_err(|e| e.to_string())?;
+        // let original_capture =
+        //     fs::read(project_path.join("capture.mp4")).map_err(|e| e.to_string())?;
 
         Ok(json!({
             "currentProjectId": current_project_id,
             "mousePositions": mouse_positions,
-            "originalCapture": original_capture,
+            // "originalCapture": original_capture,
             "sourceData": source_data,
         }))
     }
@@ -393,6 +349,50 @@ impl StCapture {
 
         Ok(())
     }
+}
+
+pub fn get_sources() -> Result<Vec<WindowInfo>, String> {
+    // use windows::Win32::Foundation::BOOLEAN;
+
+    let mut windows: Vec<WindowInfo> = Vec::new();
+
+    // EnumWindows callback to enumerate all top-level windows
+    unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        // Only capture windows that are visible
+        if IsWindowVisible(hwnd).as_bool() {
+            // Get the window title and its rect (position/size)
+            if let Ok((title, rect)) = get_window_info(hwnd) {
+                let sources = lparam.0 as *mut Vec<WindowInfo>;
+                let window_info = WindowInfo {
+                    hwnd: hwnd.0 as usize,
+                    title: title,
+                    rect: RectInfo {
+                        left: rect.left,
+                        top: rect.top,
+                        right: rect.right,
+                        bottom: rect.bottom,
+                        width: rect.right - rect.left,
+                        height: rect.bottom - rect.top,
+                    },
+                };
+                (*sources).push(window_info);
+            }
+        }
+
+        // 1 // Continue enumeration
+        true.into() // Continue enumeration
+    }
+
+    unsafe {
+        // Enumerate all top-level windows
+        EnumWindows(
+            Some(enum_windows_callback),
+            LPARAM(&mut windows as *mut _ as isize),
+        )
+        .expect("Couldn't enumerate windows");
+    }
+
+    Ok(windows)
 }
 
 pub fn get_window_info(hwnd: HWND) -> Result<(String, RECT), String> {
