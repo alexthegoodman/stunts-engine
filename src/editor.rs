@@ -577,8 +577,13 @@ impl Editor {
 
         saved_sequence.active_video_items.iter().for_each(|i| {
             // let mut saved_mouse_path = None;
+            let mut source_data_path = None;
             let mut stored_mouse_positions = None;
             if let Some(mouse_path) = &i.mouse_path {
+                let mut mouse_pathbuf = Path::new(&mouse_path).to_path_buf();
+                mouse_pathbuf.pop();
+                source_data_path = Some(mouse_pathbuf.join("sourceData.json"));
+
                 if let Ok(positions) = fs::read_to_string(mouse_path) {
                     if let Ok(mouse_positions) =
                         serde_json::from_str::<Vec<MousePosition>>(&positions)
@@ -588,6 +593,20 @@ impl Editor {
                     }
                 }
             }
+
+            let mut stored_source_data = None;
+            if let Some(source_path) = &source_data_path {
+                if let Ok(source_data) = fs::read_to_string(source_path) {
+                    if let Ok(data) = serde_json::from_str::<SourceData>(&source_data) {
+                        stored_source_data = Some(data);
+                    }
+                }
+            }
+
+            println!(
+                "Restoring video source data... {:?} {:?}",
+                source_data_path, stored_source_data
+            );
 
             let position = Point {
                 x: 600.0 + i.position.x as f32,
@@ -626,6 +645,9 @@ impl Editor {
             .expect("Couldn't restore video");
 
             restored_video.hidden = hidden;
+
+            // set window data from capture
+            restored_video.source_data = stored_source_data;
 
             // set mouse positions
             restored_video.mouse_positions = stored_mouse_positions;
@@ -1484,9 +1506,10 @@ impl Editor {
                 };
 
                 // do not update a property when start and end are the same
-                if start_frame.value == end_frame.value {
-                    continue;
-                }
+                // TODO: make this a setting for zooms so the center_point can continue its interpolation?
+                // if start_frame.value == end_frame.value {
+                //     continue;
+                // }
 
                 // Apply the interpolated value to the object's property
                 match (&start_frame.value, &end_frame.value) {
@@ -1626,75 +1649,115 @@ impl Editor {
                                 if let Some(mouse_positions) =
                                     &self.video_items[object_idx].mouse_positions
                                 {
-                                    let elapsed_ms = (elapsed * 1000.0).round() as u128; // Convert elapsed seconds to milliseconds and round
-
-                                    // picks new zoom point every 1 second, interpolating between this second and the next one for the center_point
-
-                                    // TODO: seems to be ahead of the user's mouse position
-                                    // could it be the next() call or the timing?
-                                    if let Some((start_point, end_point)) = mouse_positions
-                                        .iter()
-                                        .filter(|p| (p.timestamp / 1000) * 1000 <= elapsed_ms)
-                                        .zip(
-                                            mouse_positions
-                                                .iter()
-                                                .filter(|p| {
-                                                    (p.timestamp / 1000) * 1000 > elapsed_ms
-                                                })
-                                                .rev(),
-                                        )
-                                        .next()
+                                    if let Some(source_data) =
+                                        &self.video_items[object_idx].source_data
                                     {
-                                        let time_progress = (elapsed_ms - start_point.timestamp)
-                                            as f32
-                                            / (end_point.timestamp - start_point.timestamp) as f32;
+                                        let elapsed_ms = (elapsed * 1000.0).round() as u128; // Convert elapsed seconds to milliseconds and round
 
-                                        let interpolated_x = start_point.x
-                                            + (end_point.x - start_point.x) * time_progress;
-                                        let interpolated_y = start_point.y
-                                            + (end_point.y - start_point.y) * time_progress;
+                                        // picks new zoom point every 1 second, interpolating between this second and the next one for the center_point
 
-                                        let dimensions = self.video_items[object_idx].dimensions;
-                                        let source_dimensions =
-                                            self.video_items[object_idx].source_dimensions;
+                                        // if let Some((start_point, end_point)) = mouse_positions
+                                        //     .iter()
+                                        //     .filter(|p| (p.timestamp / 1000) * 1000 <= elapsed_ms)
+                                        //     .rev()
+                                        //     .zip(
+                                        //         mouse_positions.iter().filter(|p| {
+                                        //             (p.timestamp / 1000) * 1000 > elapsed_ms
+                                        //         }), // .rev(),
+                                        //     )
+                                        //     .next()
+                                        // {
+                                        //     let time_progress = (elapsed_ms - start_point.timestamp)
+                                        //         as f32
+                                        //         / (end_point.timestamp - start_point.timestamp)
+                                        //             as f32;
 
-                                        let new_center_point = Point {
-                                            x: (interpolated_x / source_dimensions.0 as f32)
-                                                * dimensions.0 as f32,
-                                            y: (interpolated_y / source_dimensions.1 as f32)
-                                                * dimensions.1 as f32,
-                                        };
-
-                                        // If last_center_point exists, blend towards it for smooth transitions
-                                        if let Some(last_center_point) =
-                                            self.video_items[object_idx].last_center_point
+                                        if let Some((start_point, end_point)) = mouse_positions
+                                            .iter()
+                                            .filter(|p| {
+                                                // ((p.timestamp / 1000) * 1000) >= elapsed_ms - 500
+                                                p.timestamp >= elapsed_ms - 200
+                                            }) // Include 500ms after elapsed_ms
+                                            // .rev()
+                                            .zip(
+                                                mouse_positions.iter().filter(|p| {
+                                                    // ((p.timestamp / 1000) * 1000)
+                                                    //     >= elapsed_ms + 500
+                                                    p.timestamp >= elapsed_ms + 800
+                                                }), // Include 500ms before elapsed_ms
+                                            )
+                                            .next()
                                         {
-                                            let alpha = 0.01; // Adjust for smoother/faster transitions (0.0 = no change, 1.0 = instant)
-                                            let blended_center_point = Point {
-                                                x: last_center_point.x * (1.0 - alpha)
-                                                    + new_center_point.x * alpha,
-                                                y: last_center_point.y * (1.0 - alpha)
-                                                    + new_center_point.y * alpha,
+                                            // println!(
+                                            //     "timestamps {:?} {:?}",
+                                            //     start_point.timestamp, end_point.timestamp
+                                            // );
+                                            // Ensure elapsed_ms falls within the range of start_point and end_point
+                                            let clamped_elapsed_ms = elapsed_ms
+                                                .clamp(start_point.timestamp, end_point.timestamp);
+
+                                            // Calculate time_progress using the clamped elapsed_ms
+                                            let time_progress =
+                                                (clamped_elapsed_ms - start_point.timestamp) as f32
+                                                    / (end_point.timestamp - start_point.timestamp)
+                                                        as f32;
+
+                                            let interpolated_x = start_point.x
+                                                + (end_point.x - start_point.x) * time_progress;
+                                            let interpolated_y = start_point.y
+                                                + (end_point.y - start_point.y) * time_progress;
+
+                                            let dimensions =
+                                                self.video_items[object_idx].dimensions;
+                                            let source_dimensions =
+                                                self.video_items[object_idx].source_dimensions;
+
+                                            // println!(
+                                            //     "interpolated coords {:?} {:?} {:?} {:?} {:?} {:?}",
+                                            //     time_progress,
+                                            //     elapsed_ms,
+                                            //     start_point,
+                                            //     end_point,
+                                            //     interpolated_x,
+                                            //     interpolated_y
+                                            // );
+
+                                            let new_center_point = Point {
+                                                x: ((interpolated_x - source_data.x as f32)
+                                                    / source_dimensions.0 as f32)
+                                                    * dimensions.0 as f32,
+                                                y: ((interpolated_y - source_data.y as f32)
+                                                    / source_dimensions.1 as f32)
+                                                    * dimensions.1 as f32,
                                             };
 
-                                            // println!("Zoom {:?} {:?}", zoom, blended_center_point);
-                                            self.video_items[object_idx].update_zoom(
-                                                &gpu_resources.queue,
-                                                zoom,
-                                                blended_center_point,
-                                            );
+                                            // println!("new_center_point {:?}", new_center_point);
 
-                                            self.video_items[object_idx].last_center_point =
-                                                Some(blended_center_point);
-                                        } else {
-                                            // First frame, just use new value
-                                            // self.video_items[object_idx].update_zoom(
-                                            //     &gpu_resources.queue,
-                                            //     zoom,
-                                            //     new_center_point,
-                                            // );
-                                            self.video_items[object_idx].last_center_point =
-                                                Some(new_center_point);
+                                            // If last_center_point exists, blend towards it for smooth transitions
+                                            if let Some(last_center_point) =
+                                                self.video_items[object_idx].last_center_point
+                                            {
+                                                // no need for alpha as already interpolated?
+                                                let alpha = 0.01; // Adjust for smoother/faster transitions (0.0 = no change, 1.0 = instant)
+                                                let blended_center_point = Point {
+                                                    x: last_center_point.x * (1.0 - alpha)
+                                                        + new_center_point.x * alpha,
+                                                    y: last_center_point.y * (1.0 - alpha)
+                                                        + new_center_point.y * alpha,
+                                                };
+
+                                                self.video_items[object_idx].update_zoom(
+                                                    &gpu_resources.queue,
+                                                    zoom,
+                                                    blended_center_point,
+                                                );
+
+                                                self.video_items[object_idx].last_center_point =
+                                                    Some(blended_center_point);
+                                            } else {
+                                                self.video_items[object_idx].last_center_point =
+                                                    Some(new_center_point);
+                                            }
                                         }
                                     }
                                 }
@@ -2093,6 +2156,7 @@ impl Editor {
         new_id: Uuid,
         selected_sequence_id: String,
         mouse_positions: Option<Vec<MousePosition>>,
+        stored_source_data: Option<SourceData>,
     ) {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
         let mut video_item = StVideo::new(
@@ -2114,6 +2178,9 @@ impl Editor {
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
         )
         .expect("Couldn't create video item");
+
+        // set mouse capture source data if it exists
+        video_item.source_data = stored_source_data;
 
         // set mouse positions for later use
         video_item.mouse_positions = mouse_positions;
@@ -3933,7 +4000,7 @@ use crate::animations::{
     Sequence, UIKeyframe,
 };
 use crate::camera::{Camera, CameraBinding};
-use crate::capture::MousePosition;
+use crate::capture::{MousePosition, SourceData};
 use crate::dot::RingDot;
 use crate::fonts::FontManager;
 use crate::motion_path::{MotionPath, MotionPathConfig};

@@ -71,6 +71,17 @@ pub struct MousePosition {
     pub timestamp: u128,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct SourceData {
+    pub id: String,
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+    pub scale_factor: f32,
+}
+
 #[derive(Clone)]
 pub struct StCapture {
     pub state: MouseTrackingState,
@@ -241,7 +252,7 @@ impl StCapture {
 
         println!("Start capture...");
 
-        // drop(is_recording);
+        let retain_hwnd = hwnd.clone();
 
         let hwnd = HWND(hwnd as *mut _);
         let raw_hwnd = hwnd.0 as *mut c_void;
@@ -252,6 +263,9 @@ impl StCapture {
         fs::create_dir_all(&project_path)
             .ok()
             .expect("Couldn't check or create Stunts Projects directory");
+
+        self.save_source_data(retain_hwnd, project_id.clone())
+            .expect("Couldn't save source data");
 
         let output_path = project_path
             .join("capture_pre.mp4")
@@ -313,15 +327,15 @@ impl StCapture {
         Ok(())
     }
 
-    pub fn stop_video_capture(&mut self, project_id: String) -> Result<(String), String> {
+    pub fn stop_video_capture(&mut self, project_id: String) -> Result<(String, String), String> {
         let project_path = self.capture_dir.join("projects").join(&project_id);
         let output_path = project_path
             .join("capture_pre.mp4")
             .to_str()
             .unwrap()
             .to_string();
-        let compressed_path = project_path
-            .join("capture.mp4")
+        let source_data_path = project_path
+            .join("sourceData.json")
             .to_str()
             .unwrap()
             .to_string();
@@ -344,7 +358,7 @@ impl StCapture {
         // give time for video to save out
         // thread::sleep(Duration::from_millis(500));
 
-        Ok((output_path))
+        Ok((output_path, source_data_path))
     }
 }
 

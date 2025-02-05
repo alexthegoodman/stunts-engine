@@ -13,7 +13,7 @@ use windows::Win32::System::Com::StructuredStorage::PropVariantToInt64;
 use windows_core::PCWSTR;
 
 use crate::camera::Camera;
-use crate::capture::MousePosition;
+use crate::capture::{MousePosition, SourceData};
 use crate::editor::{Point, WindowSize};
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array, Transform};
@@ -66,6 +66,7 @@ pub struct StVideo {
     pub mouse_path: Option<String>,
     pub mouse_positions: Option<Vec<MousePosition>>,
     pub last_center_point: Option<Point>,
+    pub source_data: Option<SourceData>,
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
     // #[cfg(target_arch = "wasm32")]
@@ -239,6 +240,7 @@ impl StVideo {
             mouse_path: video_config.mouse_path,
             mouse_positions: None,
             last_center_point: None,
+            source_data: None,
         })
     }
 
@@ -470,6 +472,11 @@ impl StVideo {
         let uv_center_x = center_point.x / video_width as f32;
         let uv_center_y = center_point.y / video_height as f32;
 
+        // println!(
+        //     "Center Point: {:?}, UV Center: ({}, {})",
+        //     center_point, uv_center_x, uv_center_y
+        // );
+
         let half_width = 0.5 / new_zoom;
         let half_height = 0.5 / new_zoom;
 
@@ -477,6 +484,11 @@ impl StVideo {
         let mut uv_max_x = uv_center_x + half_width;
         let mut uv_min_y = uv_center_y - half_height;
         let mut uv_max_y = uv_center_y + half_height;
+
+        // println!(
+        //     "Before Clamping - UV Min: ({}, {}), UV Max: ({}, {})",
+        //     uv_min_x, uv_min_y, uv_max_x, uv_max_y
+        // );
 
         // Check for clamping and adjust other UVs accordingly to prevent warping
         if uv_min_x < 0.0 {
@@ -498,6 +510,11 @@ impl StVideo {
             uv_max_y = 1.0;
             uv_min_y = (uv_min_y - diff).max(0.0); // Clamp min_y
         }
+
+        // println!(
+        //     "After Clamping - UV Min: ({}, {}), UV Max: ({}, {})",
+        //     uv_min_x, uv_min_y, uv_max_x, uv_max_y
+        // );
 
         self.vertices
             .iter_mut()
