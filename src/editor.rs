@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::fmt::Display;
+use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -575,10 +576,18 @@ impl Editor {
         });
 
         saved_sequence.active_video_items.iter().for_each(|i| {
-            // let gpu_resources = self
-            //     .gpu_resources
-            //     .as_ref()
-            //     .expect("Couldn't get GPU Resources");
+            // let mut saved_mouse_path = None;
+            let mut stored_mouse_positions = None;
+            if let Some(mouse_path) = &i.mouse_path {
+                if let Ok(positions) = fs::read_to_string(mouse_path) {
+                    if let Ok(mouse_positions) =
+                        serde_json::from_str::<Vec<MousePosition>>(&positions)
+                    {
+                        // saved_mouse_path = Some(mouse_path);
+                        stored_mouse_positions = Some(mouse_positions);
+                    }
+                }
+            }
 
             let position = Point {
                 x: 600.0 + i.position.x as f32,
@@ -592,6 +601,7 @@ impl Editor {
                 path: i.path.clone(),
                 position,
                 layer: i.layer.clone(),
+                mouse_path: i.mouse_path.clone(),
             };
 
             let mut restored_video = StVideo::new(
@@ -616,6 +626,9 @@ impl Editor {
             .expect("Couldn't restore video");
 
             restored_video.hidden = hidden;
+
+            // set mouse positions
+            restored_video.mouse_positions = stored_mouse_positions;
 
             // render 1 frame to provide preview image
             restored_video
@@ -1983,6 +1996,7 @@ impl Editor {
         path: &Path,
         new_id: Uuid,
         selected_sequence_id: String,
+        mouse_positions: Option<Vec<MousePosition>>,
     ) {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
         let mut video_item = StVideo::new(
@@ -2004,6 +2018,9 @@ impl Editor {
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
         )
         .expect("Couldn't create video item");
+
+        // set mouse positions for later use
+        video_item.mouse_positions = mouse_positions;
 
         // render 1 frame to provide preview image
         video_item
@@ -2981,9 +2998,10 @@ impl Editor {
                                     x: video_item.transform.position.x,
                                     y: video_item.transform.position.y,
                                 },
-                                layer: video_item.layer, // border_radius: polygon.border_radius,
-                                                         // fill: polygon.fill,
-                                                         // stroke: polygon.stroke,
+                                layer: video_item.layer,
+                                mouse_path: video_item.mouse_path.clone(), // border_radius: polygon.border_radius,
+                                                                           // fill: polygon.fill,
+                                                                           // stroke: polygon.stroke,
                             },
                         );
                         self.selected_polygon_id = uuid; // TODO: separate property for each object type?
@@ -3819,6 +3837,7 @@ use crate::animations::{
     Sequence, UIKeyframe,
 };
 use crate::camera::{Camera, CameraBinding};
+use crate::capture::MousePosition;
 use crate::dot::RingDot;
 use crate::fonts::FontManager;
 use crate::motion_path::{MotionPath, MotionPathConfig};

@@ -27,6 +27,7 @@ pub struct SavedStVideoConfig {
     pub path: String,
     pub position: SavedPoint,
     pub layer: i32,
+    pub mouse_path: Option<String>,
 }
 
 #[derive(Clone)]
@@ -37,6 +38,7 @@ pub struct StVideoConfig {
     pub position: Point,
     pub path: String,
     pub layer: i32,
+    pub mouse_path: Option<String>,
 }
 
 pub struct StVideo {
@@ -233,7 +235,7 @@ impl StVideo {
             source_reader,
             group_bind_group: tmp_group_bind_group,
             current_zoom: 1.0,
-            mouse_path: None,
+            mouse_path: video_config.mouse_path,
             mouse_positions: None,
         })
     }
@@ -420,6 +422,55 @@ impl StVideo {
         self.transform.update_uniform_buffer(&queue, &window_size);
     }
 
+    pub fn update_zoom(&mut self, queue: &Queue, new_zoom: f32, center_point: Point) {
+        let scale_factor = new_zoom / self.current_zoom;
+        self.current_zoom = new_zoom;
+
+        // Calculate the zoomed viewport as a proportion of the full video
+        // let (video_width, video_height) = self.source_dimensions;
+        let (video_width, video_height) = self.dimensions;
+        let viewport_width = self.dimensions.0 as f32 / new_zoom;
+        let viewport_height = self.dimensions.1 as f32 / new_zoom;
+
+        // Convert center point from screen space to texture UV space
+        let uv_center_x = center_point.x / self.dimensions.0 as f32;
+        let uv_center_y = center_point.y / self.dimensions.1 as f32;
+
+        // Compute new UV bounds for the zoomed region
+        let uv_min_x = (uv_center_x - viewport_width / (2.0 * video_width as f32)).max(0.0);
+        let uv_max_x = (uv_center_x + viewport_width / (2.0 * video_width as f32)).min(1.0);
+        let uv_min_y = (uv_center_y - viewport_height / (2.0 * video_height as f32)).max(0.0);
+        let uv_max_y = (uv_center_y + viewport_height / (2.0 * video_height as f32)).min(1.0);
+
+        // Update vertex UVs to reflect the new clipped texture region
+        // self.vertices = [
+        //     Vertex::new(-1.0, -1.0, uv_min_x, uv_max_y), // Bottom-left
+        //     Vertex::new(1.0, -1.0, uv_max_x, uv_max_y),  // Bottom-right
+        //     Vertex::new(1.0, 1.0, uv_max_x, uv_min_y),   // Top-right
+        //     Vertex::new(-1.0, 1.0, uv_min_x, uv_min_y),  // Top-left
+        // ];
+        self.vertices.iter_mut().enumerate().for_each(|(i, v)| {
+            if i == 0 {
+                v.tex_coords = [uv_min_x, uv_max_y];
+            }
+            if i == 1 {
+                v.tex_coords = [uv_max_x, uv_max_y];
+            }
+            if i == 2 {
+                v.tex_coords = [uv_max_x, uv_min_y];
+            }
+            if i == 3 {
+                v.tex_coords = [uv_min_x, uv_min_y];
+            }
+        });
+
+        // Update GPU buffers with new vertex data
+        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
+
+        // Update uniform buffer (if needed)
+        // self.transform.update_uniform_buffer(&queue, &window_size);
+    }
+
     pub fn update_opacity(&mut self, queue: &wgpu::Queue, opacity: f32) {
         let new_color = [1.0, 1.0, 1.0, opacity];
 
@@ -466,6 +517,7 @@ impl StVideo {
                 y: self.transform.position.y - 50.0,
             },
             layer: self.layer,
+            mouse_path: self.mouse_path.clone(),
         }
     }
 }

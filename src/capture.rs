@@ -64,6 +64,7 @@ pub struct MouseTrackingState {
     pub is_recording: Arc<AtomicBool>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MousePosition {
     pub x: f32,
     pub y: f32,
