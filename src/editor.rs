@@ -1416,6 +1416,7 @@ impl Editor {
             // if video frame rate is 30FPS, then call draw on every other frame
             if animation.object_type == ObjectType::VideoItem {
                 let frame_rate = self.video_items[object_idx].source_frame_rate;
+                let source_duration_ms = self.video_items[object_idx].source_duration_ms;
                 let frame_interval = Duration::from_secs_f32(1.0 / frame_rate as f32);
 
                 // Calculate the number of frames that should have been displayed by now
@@ -1430,9 +1431,11 @@ impl Editor {
                 if current_time >= current_frame_time
                     && current_time < current_frame_time + frame_interval
                 {
-                    self.video_items[object_idx]
-                        .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
-                        .expect("Couldn't draw video frame");
+                    if current_time.as_millis() + 200 < source_duration_ms as u128 {
+                        self.video_items[object_idx]
+                            .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
+                            .expect("Couldn't draw video frame");
+                    }
                 }
             }
 

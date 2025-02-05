@@ -44,6 +44,7 @@ pub struct StVideo {
     pub name: String,
     pub path: String,
     pub source_duration: i64,
+    pub source_duration_ms: i64,
     pub source_dimensions: (u32, u32),
     pub source_frame_rate: f64,
     pub texture: wgpu::Texture,
@@ -77,7 +78,7 @@ impl StVideo {
         new_id: String,
         current_sequence_id: Uuid,
     ) -> Result<Self, windows::core::Error> {
-        let (source_reader, duration, source_width, source_height, source_frame_rate) =
+        let (source_reader, duration, duration_ms, source_width, source_height, source_frame_rate) =
             Self::initialize_media_source(path)?;
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -208,6 +209,7 @@ impl StVideo {
                 .expect("Couldn't convert to string")
                 .to_string(),
             source_duration: duration,
+            source_duration_ms: duration_ms,
             source_dimensions: (source_width, source_height),
             source_frame_rate,
             texture,
@@ -229,7 +231,7 @@ impl StVideo {
     #[cfg(target_os = "windows")]
     fn initialize_media_source(
         path: &Path,
-    ) -> Result<(IMFSourceReader, i64, u32, u32, f64), windows::core::Error> {
+    ) -> Result<(IMFSourceReader, i64, i64, u32, u32, f64), windows::core::Error> {
         // Intialize Media Foundation
         unsafe {
             MFStartup(MF_VERSION, MFSTARTUP_FULL)?;
@@ -241,6 +243,7 @@ impl StVideo {
 
         // Get source duration
         let mut duration = 0;
+        let mut duration_ms = 0;
         unsafe {
             let presentation_duration = source_reader
                 .GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE.0 as u32, &MF_PD_DURATION)
@@ -248,6 +251,7 @@ impl StVideo {
             let ns_100_duration =
                 PropVariantToInt64(&presentation_duration).expect("Couldn't get duration");
             duration = ns_100_duration / 10_000_000; // convert to seconds
+            duration_ms = ns_100_duration / 10_000; // convert to milliseconds
         }
 
         // Get source dimensions
@@ -282,6 +286,7 @@ impl StVideo {
         Ok((
             source_reader,
             duration,
+            duration_ms,
             source_width,
             source_height,
             source_frame_rate,
