@@ -1466,7 +1466,7 @@ impl Editor {
                 if current_time >= current_frame_time
                     && current_time < current_frame_time + frame_interval
                 {
-                    if current_time.as_millis() + 200 < source_duration_ms as u128 {
+                    if current_time.as_millis() + 100 < source_duration_ms as u128 {
                         self.video_items[object_idx]
                             .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
                             .expect("Couldn't draw video frame");
@@ -1636,7 +1636,6 @@ impl Editor {
                         }
                     }
                     (KeyframeValue::Zoom(start), KeyframeValue::Zoom(end)) => {
-                        // zoom is out 100 (100%)
                         let zoom = self.lerp(*start, *end, progress) / 100.0;
 
                         let gpu_resources = self
@@ -1646,119 +1645,124 @@ impl Editor {
 
                         match animation.object_type {
                             ObjectType::VideoItem => {
-                                if let Some(mouse_positions) =
-                                    &self.video_items[object_idx].mouse_positions
-                                {
-                                    if let Some(source_data) =
-                                        &self.video_items[object_idx].source_data
-                                    {
-                                        let elapsed_ms = (elapsed * 1000.0).round() as u128; // Convert elapsed seconds to milliseconds and round
+                                let video_item = &mut self.video_items[object_idx];
+                                let elapsed_ms = current_time.as_millis() as u128;
 
-                                        // picks new zoom point every 1 second, interpolating between this second and the next one for the center_point
+                                if let (Some(mouse_positions), Some(source_data)) = (
+                                    video_item.mouse_positions.as_ref(),
+                                    video_item.source_data.as_ref(),
+                                ) {
+                                    // Check if we need to update the shift points
+                                    let should_update_shift = match video_item.last_shift_time {
+                                        Some(last_shift_time) => {
+                                            last_shift_time.elapsed().as_millis() > 1000
+                                        }
+                                        None => {
+                                            video_item.last_shift_time =
+                                                Some(std::time::Instant::now());
 
-                                        // if let Some((start_point, end_point)) = mouse_positions
-                                        //     .iter()
-                                        //     .filter(|p| (p.timestamp / 1000) * 1000 <= elapsed_ms)
-                                        //     .rev()
-                                        //     .zip(
-                                        //         mouse_positions.iter().filter(|p| {
-                                        //             (p.timestamp / 1000) * 1000 > elapsed_ms
-                                        //         }), // .rev(),
-                                        //     )
-                                        //     .next()
-                                        // {
-                                        //     let time_progress = (elapsed_ms - start_point.timestamp)
-                                        //         as f32
-                                        //         / (end_point.timestamp - start_point.timestamp)
-                                        //             as f32;
+                                            if let Some((start_point, end_point)) =
+                                                mouse_positions
+                                                    .iter()
+                                                    .filter(|p| p.timestamp >= elapsed_ms)
+                                                    .zip(mouse_positions.iter().filter(|p| {
+                                                        p.timestamp >= elapsed_ms + 1000
+                                                    }))
+                                                    .next()
+                                                    .map(|(start, end)| {
+                                                        ((*start).clone(), (*end).clone())
+                                                    })
+                                            {
+                                                video_item.last_start_point = Some(start_point);
+                                                video_item.last_end_point = Some(end_point);
+                                            }
+
+                                            false
+                                        }
+                                    };
+
+                                    // Update shift points if needed
+                                    if should_update_shift {
+                                        video_item.last_shift_time =
+                                            Some(std::time::Instant::now());
 
                                         if let Some((start_point, end_point)) = mouse_positions
                                             .iter()
-                                            .filter(|p| {
-                                                // ((p.timestamp / 1000) * 1000) >= elapsed_ms - 500
-                                                p.timestamp >= elapsed_ms - 200
-                                            }) // Include 500ms after elapsed_ms
-                                            // .rev()
+                                            .filter(|p| p.timestamp >= elapsed_ms - 1000)
                                             .zip(
-                                                mouse_positions.iter().filter(|p| {
-                                                    // ((p.timestamp / 1000) * 1000)
-                                                    //     >= elapsed_ms + 500
-                                                    p.timestamp >= elapsed_ms + 800
-                                                }), // Include 500ms before elapsed_ms
+                                                mouse_positions
+                                                    .iter()
+                                                    .filter(|p| p.timestamp >= elapsed_ms),
                                             )
                                             .next()
+                                            .map(|(start, end)| ((*start).clone(), (*end).clone()))
                                         {
-                                            // println!(
-                                            //     "timestamps {:?} {:?}",
-                                            //     start_point.timestamp, end_point.timestamp
-                                            // );
-                                            // Ensure elapsed_ms falls within the range of start_point and end_point
-                                            let clamped_elapsed_ms = elapsed_ms
-                                                .clamp(start_point.timestamp, end_point.timestamp);
-
-                                            // Calculate time_progress using the clamped elapsed_ms
-                                            let time_progress =
-                                                (clamped_elapsed_ms - start_point.timestamp) as f32
-                                                    / (end_point.timestamp - start_point.timestamp)
-                                                        as f32;
-
-                                            let interpolated_x = start_point.x
-                                                + (end_point.x - start_point.x) * time_progress;
-                                            let interpolated_y = start_point.y
-                                                + (end_point.y - start_point.y) * time_progress;
-
-                                            let dimensions =
-                                                self.video_items[object_idx].dimensions;
-                                            let source_dimensions =
-                                                self.video_items[object_idx].source_dimensions;
-
-                                            // println!(
-                                            //     "interpolated coords {:?} {:?} {:?} {:?} {:?} {:?}",
-                                            //     time_progress,
-                                            //     elapsed_ms,
-                                            //     start_point,
-                                            //     end_point,
-                                            //     interpolated_x,
-                                            //     interpolated_y
-                                            // );
-
-                                            let new_center_point = Point {
-                                                x: ((interpolated_x - source_data.x as f32)
-                                                    / source_dimensions.0 as f32)
-                                                    * dimensions.0 as f32,
-                                                y: ((interpolated_y - source_data.y as f32)
-                                                    / source_dimensions.1 as f32)
-                                                    * dimensions.1 as f32,
-                                            };
-
-                                            // println!("new_center_point {:?}", new_center_point);
-
-                                            // If last_center_point exists, blend towards it for smooth transitions
-                                            if let Some(last_center_point) =
-                                                self.video_items[object_idx].last_center_point
-                                            {
-                                                // no need for alpha as already interpolated?
-                                                let alpha = 0.01; // Adjust for smoother/faster transitions (0.0 = no change, 1.0 = instant)
-                                                let blended_center_point = Point {
-                                                    x: last_center_point.x * (1.0 - alpha)
-                                                        + new_center_point.x * alpha,
-                                                    y: last_center_point.y * (1.0 - alpha)
-                                                        + new_center_point.y * alpha,
-                                                };
-
-                                                self.video_items[object_idx].update_zoom(
-                                                    &gpu_resources.queue,
-                                                    zoom,
-                                                    blended_center_point,
-                                                );
-
-                                                self.video_items[object_idx].last_center_point =
-                                                    Some(blended_center_point);
-                                            } else {
-                                                self.video_items[object_idx].last_center_point =
-                                                    Some(new_center_point);
-                                            }
+                                            video_item.last_start_point = Some(start_point);
+                                            video_item.last_end_point = Some(end_point);
                                         }
+                                    }
+
+                                    // Always interpolate between the current shift points
+                                    if let (Some(start), Some(end)) =
+                                        (&video_item.last_start_point, &video_item.last_end_point)
+                                    {
+                                        let clamped_elapsed_ms =
+                                            elapsed_ms.clamp(start.timestamp, end.timestamp);
+
+                                        let time_progress = (clamped_elapsed_ms - start.timestamp)
+                                            as f32
+                                            / (end.timestamp - start.timestamp) as f32;
+
+                                        let interpolated_x =
+                                            start.x + (end.x - start.x) * time_progress;
+                                        let interpolated_y =
+                                            start.y + (end.y - start.y) * time_progress;
+
+                                        let dimensions = video_item.dimensions;
+                                        let source_dimensions = video_item.source_dimensions;
+
+                                        let new_center_point = Point {
+                                            x: ((interpolated_x - source_data.x as f32)
+                                                / source_dimensions.0 as f32)
+                                                * dimensions.0 as f32,
+                                            y: ((interpolated_y - source_data.y as f32)
+                                                / source_dimensions.1 as f32)
+                                                * dimensions.1 as f32,
+                                        };
+
+                                        // Smooth transition with existing center point
+                                        let blended_center_point = if let Some(last_center_point) =
+                                            video_item.last_center_point
+                                        {
+                                            let alpha = 0.01;
+                                            Point {
+                                                x: last_center_point.x * (1.0 - alpha)
+                                                    + new_center_point.x * alpha,
+                                                y: last_center_point.y * (1.0 - alpha)
+                                                    + new_center_point.y * alpha,
+                                            }
+                                        } else {
+                                            // let center = Point {
+                                            //     x: (dimensions.0 / 2) as f32,
+                                            //     y: (dimensions.1 / 2) as f32,
+                                            // };
+
+                                            // let alpha = 0.01;
+                                            // Point {
+                                            //     x: center.x * (1.0 - alpha)
+                                            //         + new_center_point.x * alpha,
+                                            //     y: center.y * (1.0 - alpha)
+                                            //         + new_center_point.y * alpha,
+                                            // }
+                                            new_center_point
+                                        };
+
+                                        video_item.update_zoom(
+                                            &gpu_resources.queue,
+                                            zoom,
+                                            blended_center_point,
+                                        );
+                                        video_item.last_center_point = Some(blended_center_point);
                                     }
                                 }
                             }

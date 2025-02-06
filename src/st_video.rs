@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Instant;
 
 use cgmath::SquareMatrix;
 use cgmath::{Matrix4, Vector2};
@@ -66,6 +67,9 @@ pub struct StVideo {
     pub mouse_path: Option<String>,
     pub mouse_positions: Option<Vec<MousePosition>>,
     pub last_center_point: Option<Point>,
+    pub last_start_point: Option<MousePosition>,
+    pub last_end_point: Option<MousePosition>,
+    pub last_shift_time: Option<Instant>,
     pub source_data: Option<SourceData>,
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
@@ -241,6 +245,9 @@ impl StVideo {
             mouse_positions: None,
             last_center_point: None,
             source_data: None,
+            last_shift_time: None,
+            last_start_point: None,
+            last_end_point: None,
         })
     }
 
