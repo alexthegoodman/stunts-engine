@@ -750,6 +750,10 @@ impl Editor {
 
                 video.update_opacity(&gpu_resources.queue, 1.0);
 
+                video
+                    .reset_playback()
+                    .expect("Couldn't reset video playback");
+
                 // TODO: reset other properties once scale is figured out
             });
         }

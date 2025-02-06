@@ -1,3 +1,4 @@
+use std::mem::MaybeUninit;
 use std::path::Path;
 use std::time::Instant;
 
@@ -9,9 +10,13 @@ use uuid::Uuid;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue};
 use windows::Win32::Foundation::*;
+use windows::Win32::Media::KernelStreaming::GUID_NULL;
 use windows::Win32::Media::MediaFoundation::*;
-use windows::Win32::System::Com::StructuredStorage::PropVariantToInt64;
-use windows_core::PCWSTR;
+use windows::Win32::System::Com::StructuredStorage::{
+    InitPropVariantFromUInt64Vector, PropVariantToInt64,
+};
+use windows::Win32::System::Variant::{VariantClear, VariantInit, VT_I8};
+use windows_core::{PCWSTR, PROPVARIANT};
 
 use crate::camera::Camera;
 use crate::capture::{MousePosition, SourceData};
@@ -422,6 +427,16 @@ impl StVideo {
         }
     }
 
+    pub fn reset_playback(&mut self) -> Result<(), windows::core::Error> {
+        let time = PROPVARIANT::from(0i64);
+
+        unsafe {
+            self.source_reader.SetCurrentPosition(&GUID_NULL, &time)?;
+        }
+
+        Ok(())
+    }
+
     pub fn update_data_from_dimensions(
         &mut self,
         window_size: &WindowSize,
@@ -435,45 +450,6 @@ impl StVideo {
         self.transform.update_scale([dimensions.0, dimensions.1]);
         self.transform.update_uniform_buffer(&queue, &window_size);
     }
-
-    // pub fn update_zoom(&mut self, queue: &Queue, new_zoom: f32, center_point: Point) {
-    //     let scale_factor = new_zoom / self.current_zoom;
-    //     self.current_zoom = new_zoom;
-
-    //     // Calculate the zoomed viewport as a proportion of the full video
-    //     let (video_width, video_height) = self.dimensions;
-    //     let viewport_width = self.dimensions.0 as f32 / new_zoom;
-    //     let viewport_height = self.dimensions.1 as f32 / new_zoom;
-
-    //     // Convert center point from screen space to texture UV space
-    //     let uv_center_x = center_point.x / self.dimensions.0 as f32;
-    //     let uv_center_y = center_point.y / self.dimensions.1 as f32;
-
-    //     // Compute new UV bounds for the zoomed region
-    //     let uv_min_x = (uv_center_x - viewport_width / (2.0 * video_width as f32)).max(0.0);
-    //     let uv_max_x = (uv_center_x + viewport_width / (2.0 * video_width as f32)).min(1.0);
-    //     let uv_min_y = (uv_center_y - viewport_height / (2.0 * video_height as f32)).max(0.0);
-    //     let uv_max_y = (uv_center_y + viewport_height / (2.0 * video_height as f32)).min(1.0);
-
-    //     // Update vertex UVs to reflect the new clipped texture region
-    //     self.vertices.iter_mut().enumerate().for_each(|(i, v)| {
-    //         if i == 0 {
-    //             v.tex_coords = [uv_min_x, uv_max_y];
-    //         }
-    //         if i == 1 {
-    //             v.tex_coords = [uv_max_x, uv_max_y];
-    //         }
-    //         if i == 2 {
-    //             v.tex_coords = [uv_max_x, uv_min_y];
-    //         }
-    //         if i == 3 {
-    //             v.tex_coords = [uv_min_x, uv_min_y];
-    //         }
-    //     });
-
-    //     // Update GPU buffers with new vertex data
-    //     queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
-    // }
 
     pub fn update_zoom(&mut self, queue: &Queue, new_zoom: f32, center_point: Point) {
         self.current_zoom = new_zoom;
