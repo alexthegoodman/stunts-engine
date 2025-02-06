@@ -1648,6 +1648,8 @@ impl Editor {
                                 let video_item = &mut self.video_items[object_idx];
                                 let elapsed_ms = current_time.as_millis() as u128;
 
+                                let autofollow_delay = 200;
+
                                 if let (Some(mouse_positions), Some(source_data)) = (
                                     video_item.mouse_positions.as_ref(),
                                     video_item.source_data.as_ref(),
@@ -1655,23 +1657,21 @@ impl Editor {
                                     // Check if we need to update the shift points
                                     let should_update_shift = match video_item.last_shift_time {
                                         Some(last_shift_time) => {
-                                            last_shift_time.elapsed().as_millis() > 1000
+                                            elapsed_ms - last_shift_time > autofollow_delay
                                         }
                                         None => {
-                                            video_item.last_shift_time =
-                                                Some(std::time::Instant::now());
+                                            video_item.last_shift_time = Some(elapsed_ms);
 
-                                            if let Some((start_point, end_point)) =
-                                                mouse_positions
-                                                    .iter()
-                                                    .filter(|p| p.timestamp >= elapsed_ms)
-                                                    .zip(mouse_positions.iter().filter(|p| {
-                                                        p.timestamp >= elapsed_ms + 1000
-                                                    }))
-                                                    .next()
-                                                    .map(|(start, end)| {
-                                                        ((*start).clone(), (*end).clone())
-                                                    })
+                                            if let Some((start_point, end_point)) = mouse_positions
+                                                .iter()
+                                                .filter(|p| p.timestamp >= elapsed_ms)
+                                                .zip(mouse_positions.iter().filter(|p| {
+                                                    p.timestamp >= elapsed_ms + autofollow_delay
+                                                }))
+                                                .next()
+                                                .map(|(start, end)| {
+                                                    ((*start).clone(), (*end).clone())
+                                                })
                                             {
                                                 video_item.last_start_point = Some(start_point);
                                                 video_item.last_end_point = Some(end_point);
@@ -1683,17 +1683,22 @@ impl Editor {
 
                                     // Update shift points if needed
                                     if should_update_shift {
-                                        video_item.last_shift_time =
-                                            Some(std::time::Instant::now());
+                                        // video_item.last_shift_time =
+                                        //     Some(std::time::Instant::now());
+                                        video_item.last_shift_time = Some(elapsed_ms);
 
                                         if let Some((start_point, end_point)) = mouse_positions
                                             .iter()
-                                            .filter(|p| p.timestamp >= elapsed_ms - 1000)
-                                            .zip(
-                                                mouse_positions
-                                                    .iter()
-                                                    .filter(|p| p.timestamp >= elapsed_ms),
-                                            )
+                                            .filter(|p| {
+                                                p.timestamp >= elapsed_ms - autofollow_delay
+                                                    && p.timestamp
+                                                        < video_item.source_duration_ms as u128
+                                            })
+                                            .zip(mouse_positions.iter().filter(|p| {
+                                                p.timestamp >= elapsed_ms
+                                                    && p.timestamp
+                                                        < video_item.source_duration_ms as u128
+                                            }))
                                             .next()
                                             .map(|(start, end)| ((*start).clone(), (*end).clone()))
                                         {

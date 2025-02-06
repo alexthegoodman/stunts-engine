@@ -69,7 +69,7 @@ pub struct StVideo {
     pub last_center_point: Option<Point>,
     pub last_start_point: Option<MousePosition>,
     pub last_end_point: Option<MousePosition>,
-    pub last_shift_time: Option<Instant>,
+    pub last_shift_time: Option<u128>,
     pub source_data: Option<SourceData>,
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
@@ -213,7 +213,10 @@ impl StVideo {
         let (tmp_group_bind_group, tmp_group_transform) =
             create_empty_group_transform(device, group_bind_group_layout, window_size);
 
-        println!("Adding video {:?}", new_id);
+        println!(
+            "Adding video id: {:?} duration_ms: {:?}",
+            new_id, duration_ms
+        );
 
         Ok(Self {
             id: new_id,
