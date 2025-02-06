@@ -214,8 +214,8 @@ impl StVideo {
             create_empty_group_transform(device, group_bind_group_layout, window_size);
 
         println!(
-            "Adding video id: {:?} duration_ms: {:?}",
-            new_id, duration_ms
+            "Adding video id: {:?} duration_ms: {:?} frame rate: {:?}",
+            new_id, duration_ms, source_frame_rate
         );
 
         Ok(Self {

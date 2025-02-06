@@ -1457,14 +1457,16 @@ impl Editor {
                 // Calculate the number of frames that should have been displayed by now
                 let elapsed_time = current_time - start_time;
                 let expected_frames =
-                    (elapsed_time.as_secs_f32() / frame_interval.as_secs_f32()).floor() as u32;
+                    (elapsed_time.as_secs_f32() / frame_interval.as_secs_f32()).floor() as f32; // number of frames since start
 
                 // Calculate the time at which the current frame should be displayed
-                let current_frame_time = start_time + frame_interval * expected_frames;
+                let elapsed_2 = (frame_interval.as_secs_f32() * expected_frames);
+                let current_frame_time = start_time.as_secs_f32() + elapsed_time.as_secs_f32();
 
                 // Only draw the frame if the current time is within the frame's display interval
-                if current_time >= current_frame_time
-                    && current_time < current_frame_time + frame_interval
+                if current_time.as_secs_f32() >= current_frame_time
+                    && current_time.as_secs_f32()
+                        < current_frame_time + frame_interval.as_secs_f32()
                 {
                     if current_time.as_millis() + 100 < source_duration_ms as u128 {
                         self.video_items[object_idx]
@@ -1648,7 +1650,7 @@ impl Editor {
                                 let video_item = &mut self.video_items[object_idx];
                                 let elapsed_ms = current_time.as_millis() as u128;
 
-                                let autofollow_delay = 200;
+                                let autofollow_delay = 300;
 
                                 if let (Some(mouse_positions), Some(source_data)) = (
                                     video_item.mouse_positions.as_ref(),
@@ -1683,8 +1685,6 @@ impl Editor {
 
                                     // Update shift points if needed
                                     if should_update_shift {
-                                        // video_item.last_shift_time =
-                                        //     Some(std::time::Instant::now());
                                         video_item.last_shift_time = Some(elapsed_ms);
 
                                         if let Some((start_point, end_point)) = mouse_positions
@@ -1740,6 +1740,7 @@ impl Editor {
                                             video_item.last_center_point
                                         {
                                             let alpha = 0.01;
+                                            // let alpha = 60.0 / autofollow_delay as f32;
                                             Point {
                                                 x: last_center_point.x * (1.0 - alpha)
                                                     + new_center_point.x * alpha,
@@ -1747,18 +1748,6 @@ impl Editor {
                                                     + new_center_point.y * alpha,
                                             }
                                         } else {
-                                            // let center = Point {
-                                            //     x: (dimensions.0 / 2) as f32,
-                                            //     y: (dimensions.1 / 2) as f32,
-                                            // };
-
-                                            // let alpha = 0.01;
-                                            // Point {
-                                            //     x: center.x * (1.0 - alpha)
-                                            //         + new_center_point.x * alpha,
-                                            //     y: center.y * (1.0 - alpha)
-                                            //         + new_center_point.y * alpha,
-                                            // }
                                             new_center_point
                                         };
 

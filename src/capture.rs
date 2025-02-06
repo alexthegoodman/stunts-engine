@@ -152,12 +152,12 @@ impl StCapture {
                 let timestamp = now.duration_since(start_time).unwrap().as_millis();
 
                 if let Ok(existing_positions) = &mut mouse_positions.try_lock() {
-                    println!(
-                        "Tracking mouse {:?} {:?} {:?}",
-                        mouse.coords,
-                        existing_positions.len(),
-                        timestamp
-                    );
+                    // println!(
+                    //     "Tracking mouse {:?} {:?} {:?}",
+                    //     mouse.coords,
+                    //     existing_positions.len(),
+                    //     timestamp
+                    // );
 
                     let position = json!({
                         "x": mouse.coords.0,
