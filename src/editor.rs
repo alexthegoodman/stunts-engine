@@ -1998,10 +1998,18 @@ impl Editor {
         //     },
         // };
 
-        if (mouse_pos.x < self.interactive_bounds.min.x
-            || mouse_pos.x > self.interactive_bounds.max.x
-            || mouse_pos.y < self.interactive_bounds.min.y
-            || mouse_pos.y > self.interactive_bounds.max.y)
+        // if (mouse_pos.x < self.interactive_bounds.min.x
+        //     || mouse_pos.x > self.interactive_bounds.max.x
+        //     || mouse_pos.y < self.interactive_bounds.min.y
+        //     || mouse_pos.y > self.interactive_bounds.max.y)
+        // {
+        //     return;
+        // }
+
+        if (self.last_screen.x < self.interactive_bounds.min.x
+            || self.last_screen.x > self.interactive_bounds.max.x
+            || self.last_screen.y < self.interactive_bounds.min.y
+            || self.last_screen.y > self.interactive_bounds.max.y)
         {
             return;
         }
