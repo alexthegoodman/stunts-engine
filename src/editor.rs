@@ -1472,7 +1472,7 @@ impl Editor {
                     && current_time.as_secs_f32()
                         < current_frame_time + frame_interval.as_secs_f32()
                 {
-                    if current_time.as_millis() + 100 < source_duration_ms as u128 {
+                    if current_time.as_millis() + 1000 < source_duration_ms as u128 {
                         self.video_items[object_idx]
                             .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
                             .expect("Couldn't draw video frame");
