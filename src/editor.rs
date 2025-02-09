@@ -1755,7 +1755,7 @@ impl Editor {
                                         }
                                     };
 
-                                    let delay_offset = 0; // Potential time offset
+                                    let delay_offset = 500; // Potential time offset for a consistent lag
                                     let min_distance = 100.0; // Distance to incur a shift
                                     let base_alpha = 0.01; // Your current default value
                                     let max_alpha = 0.1; // Maximum blending speed
