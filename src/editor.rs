@@ -1674,27 +1674,53 @@ impl Editor {
                                         }
                                     };
 
+                                    let delay_offset = 500;
+                                    let min_distance = 100.0;
+
                                     // Update shift points if needed
                                     if should_update_shift {
-                                        video_item.last_shift_time = Some(elapsed_ms);
-
                                         if let Some((start_point, end_point)) = mouse_positions
                                             .iter()
                                             .filter(|p| {
-                                                p.timestamp >= elapsed_ms - autofollow_delay
+                                                p.timestamp
+                                                    >= (elapsed_ms - autofollow_delay)
+                                                        + delay_offset
                                                     && p.timestamp
                                                         < video_item.source_duration_ms as u128
                                             })
                                             .zip(mouse_positions.iter().filter(|p| {
-                                                p.timestamp >= elapsed_ms
+                                                p.timestamp >= elapsed_ms + delay_offset
                                                     && p.timestamp
                                                         < video_item.source_duration_ms as u128
                                             }))
                                             .next()
                                             .map(|(start, end)| ((*start).clone(), (*end).clone()))
                                         {
-                                            video_item.last_start_point = Some(start_point);
-                                            video_item.last_end_point = Some(end_point);
+                                            if let Some(last_start_point) =
+                                                video_item.last_start_point
+                                            {
+                                                if let Some(last_end_point) =
+                                                    video_item.last_end_point
+                                                {
+                                                    video_item.last_shift_time = Some(elapsed_ms);
+
+                                                    let dx = start_point.x - last_start_point.x;
+                                                    let dy = start_point.y - last_start_point.y;
+                                                    let distance = (dx * dx + dy * dy).sqrt(); // Euclidean distance
+
+                                                    let dx2 = end_point.x - last_end_point.x;
+                                                    let dy2 = end_point.y - last_end_point.y;
+                                                    let distance2 = (dx2 * dx2 + dy2 * dy2).sqrt(); // Euclidean distance
+
+                                                    if distance >= min_distance
+                                                        || distance2 >= min_distance
+                                                    {
+                                                        video_item.last_start_point =
+                                                            Some(start_point);
+                                                        video_item.last_end_point = Some(end_point);
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
 
@@ -1753,7 +1779,7 @@ impl Editor {
                                             &gpu_resources.queue,
                                             blended_center_point,
                                             1.5,
-                                            (150.0, 150.0),
+                                            (200.0, 200.0),
                                         );
                                     }
                                 }
