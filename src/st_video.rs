@@ -1,6 +1,6 @@
 use std::mem::MaybeUninit;
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use cgmath::SquareMatrix;
 use cgmath::{Matrix4, Vector2};
@@ -79,6 +79,7 @@ pub struct StVideo {
     pub last_shift_time: Option<u128>,
     pub source_data: Option<SourceData>,
     pub grid_resolution: (u32, u32),
+    pub frame_timer: Option<FrameTimer>,
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
     // #[cfg(target_arch = "wasm32")]
@@ -306,6 +307,7 @@ impl StVideo {
             last_start_point: None,
             last_end_point: None,
             grid_resolution,
+            frame_timer: None,
         })
     }
 
@@ -718,6 +720,59 @@ impl Drop for StVideo {
     fn drop(&mut self) {
         unsafe {
             shutdown_media_foundation().expect("Couldn't shut down media foundation");
+        }
+    }
+}
+
+// Helper struct to manage frame timing
+pub struct FrameTimer {
+    pub frame_rate: f64,
+    pub last_frame_time: std::time::Duration,
+    pub frame_interval: std::time::Duration,
+    pub frame_count: u64,
+    pub drift_correction: f64,
+}
+
+impl FrameTimer {
+    pub fn new(frame_rate: f64, start_time: Duration) -> Self {
+        Self {
+            frame_rate,
+            last_frame_time: start_time,
+            frame_interval: Duration::from_secs_f64(1.0 / frame_rate),
+            frame_count: 0,
+            drift_correction: 0.0,
+        }
+    }
+
+    pub fn should_draw(&mut self, current_time: Duration) -> bool {
+        let elapsed = current_time - self.last_frame_time;
+
+        // Calculate ideal frame time including drift correction
+        let ideal_frame_time = self.frame_count as f64 * self.frame_interval.as_secs_f64();
+
+        // Calculate actual elapsed time
+        let actual_elapsed = elapsed.as_secs_f64() + self.drift_correction;
+
+        // println!(
+        //     "should_draw {:?} {:?} {:?} {:?}",
+        //     elapsed.as_secs_f64(),
+        //     actual_elapsed,
+        //     ideal_frame_time,
+        //     self.drift_correction
+        // );
+
+        if actual_elapsed >= self.frame_interval.as_secs_f64() {
+            // Update frame count and last frame time
+            self.frame_count += 1;
+            self.last_frame_time = current_time;
+
+            // Calculate and accumulate drift
+            let drift = current_time.as_secs_f64() - ideal_frame_time;
+            self.drift_correction = if drift.abs() < 0.002 { 0.0 } else { drift };
+
+            true
+        } else {
+            false
         }
     }
 }

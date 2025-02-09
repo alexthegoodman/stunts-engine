@@ -1440,27 +1440,49 @@ impl Editor {
             // step rate is throttled to 60FPS
             // if video frame rate is 60FPS, then call draw on each frame
             // if video frame rate is 30FPS, then call draw on every other frame
+
+            // slightly innaccurate?
+            // if animation.object_type == ObjectType::VideoItem {
+            //     let frame_rate = self.video_items[object_idx].source_frame_rate;
+            //     let source_duration_ms = self.video_items[object_idx].source_duration_ms;
+            //     let frame_interval = Duration::from_secs_f32(1.0 / frame_rate as f32);
+
+            //     // Calculate the number of frames that should have been displayed by now
+            //     let elapsed_time = current_time - start_time;
+            //     let expected_frames =
+            //         (elapsed_time.as_secs_f32() / frame_interval.as_secs_f32()).floor() as f32; // number of frames since start
+
+            //     // Calculate the time at which the current frame should be displayed
+            //     let elapsed_2 = (frame_interval.as_secs_f32() * expected_frames);
+            //     let current_frame_time = start_time.as_secs_f32() + elapsed_time.as_secs_f32();
+
+            //     // Only draw the frame if the current time is within the frame's display interval
+            //     if current_time.as_secs_f32() >= current_frame_time
+            //         && current_time.as_secs_f32()
+            //             < current_frame_time + frame_interval.as_secs_f32()
+            //     {
+            //         if current_time.as_millis() + 1000 < source_duration_ms as u128 {
+            //             self.video_items[object_idx]
+            //                 .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
+            //                 .expect("Couldn't draw video frame");
+            //         }
+            //     }
+            // }
+
             if animation.object_type == ObjectType::VideoItem {
-                let frame_rate = self.video_items[object_idx].source_frame_rate;
-                let source_duration_ms = self.video_items[object_idx].source_duration_ms;
-                let frame_interval = Duration::from_secs_f32(1.0 / frame_rate as f32);
+                let video_item = &mut self.video_items[object_idx];
 
-                // Calculate the number of frames that should have been displayed by now
-                let elapsed_time = current_time - start_time;
-                let expected_frames =
-                    (elapsed_time.as_secs_f32() / frame_interval.as_secs_f32()).floor() as f32; // number of frames since start
+                // Initialize frame timer if not exists
+                if video_item.frame_timer.is_none() {
+                    video_item.frame_timer =
+                        Some(FrameTimer::new(video_item.source_frame_rate, start_time));
+                }
 
-                // Calculate the time at which the current frame should be displayed
-                let elapsed_2 = (frame_interval.as_secs_f32() * expected_frames);
-                let current_frame_time = start_time.as_secs_f32() + elapsed_time.as_secs_f32();
-
-                // Only draw the frame if the current time is within the frame's display interval
-                if current_time.as_secs_f32() >= current_frame_time
-                    && current_time.as_secs_f32()
-                        < current_frame_time + frame_interval.as_secs_f32()
-                {
-                    if current_time.as_millis() + 1000 < source_duration_ms as u128 {
-                        self.video_items[object_idx]
+                if let Some(timer) = &mut video_item.frame_timer {
+                    if timer.should_draw(current_time)
+                        && current_time.as_millis() + 1000 < video_item.source_duration_ms as u128
+                    {
+                        video_item
                             .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
                             .expect("Couldn't draw video frame");
                     }
@@ -1674,7 +1696,7 @@ impl Editor {
                                         }
                                     };
 
-                                    let delay_offset = 500;
+                                    let delay_offset = 0;
                                     let min_distance = 100.0;
 
                                     // Update shift points if needed
@@ -4036,7 +4058,7 @@ use crate::fonts::FontManager;
 use crate::motion_path::{MotionPath, MotionPathConfig};
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};
-use crate::st_video::{StVideo, StVideoConfig};
+use crate::st_video::{FrameTimer, StVideo, StVideoConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
 use crate::timelines::{SavedTimelineStateConfig, TrackType};
 use crate::transform::{angle_between_points, degrees_between_points};
