@@ -81,6 +81,7 @@ pub struct StVideo {
     pub grid_resolution: (u32, u32),
     pub frame_timer: Option<FrameTimer>,
     pub dynamic_alpha: f32,
+    pub num_frames_drawn: u32,
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
     // #[cfg(target_arch = "wasm32")]
@@ -310,6 +311,7 @@ impl StVideo {
             grid_resolution,
             frame_timer: None,
             dynamic_alpha: 0.01,
+            num_frames_drawn: 0,
         })
     }
 
@@ -727,54 +729,156 @@ impl Drop for StVideo {
 }
 
 // Helper struct to manage frame timing
+// pub struct FrameTimer {
+//     pub frame_rate: f64,
+//     pub last_frame_time: std::time::Duration,
+//     pub frame_interval: std::time::Duration,
+//     pub frame_count: u64,
+//     pub drift_correction: f64,
+// }
+
+// impl FrameTimer {
+//     pub fn new(frame_rate: f64, start_time: Duration) -> Self {
+//         Self {
+//             frame_rate,
+//             last_frame_time: start_time,
+//             frame_interval: Duration::from_secs_f64(1.0 / frame_rate),
+//             frame_count: 0,
+//             drift_correction: 0.0,
+//         }
+//     }
+
+//     pub fn should_draw(&mut self, current_time: Duration) -> bool {
+//         let elapsed = current_time - self.last_frame_time;
+
+//         // Calculate ideal frame time including drift correction
+//         let ideal_frame_time = self.frame_count as f64 * self.frame_interval.as_secs_f64();
+
+//         // Calculate actual elapsed time
+//         let actual_elapsed = elapsed.as_secs_f64() + self.drift_correction;
+
+//         println!(
+//             "should_draw {:?} vs {:?}, {:?} vs {:?} and drift {:?}",
+//             elapsed.as_secs_f64(),
+//             actual_elapsed,
+//             current_time.as_secs_f64(),
+//             ideal_frame_time,
+//             self.drift_correction
+//         );
+
+//         if actual_elapsed >= self.frame_interval.as_secs_f64() {
+//             // Update frame count and last frame time
+//             self.frame_count += 1;
+//             self.last_frame_time = current_time;
+
+//             // Calculate and accumulate drift
+//             // let drift = current_time.as_secs_f64() - ideal_frame_time; // accumlates, but we are doing frame by frame drift?
+//             let drift = elapsed.as_secs_f64() - self.frame_interval.as_secs_f64();
+//             // self.drift_correction = if drift.abs() < 0.002 { 0.0 } else { drift };
+//             self.drift_correction = drift;
+
+//             true
+//         } else {
+//             false
+//         }
+//     }
+// }
+
+// pub struct FrameTimer {
+//     pub frame_rate: f64,
+//     pub start_time: Duration, // Keep start_time as Duration
+//     pub frame_interval: Duration,
+//     pub frame_count: u64,
+//     pub accumulated_drift: f64,
+//     last_instant: Instant, // Add an Instant to track time
+// }
+
+// impl FrameTimer {
+//     pub fn new(frame_rate: f64, start_time: Duration) -> Self {
+//         Self {
+//             frame_rate,
+//             start_time,
+//             frame_interval: Duration::from_secs_f64(1.0 / frame_rate),
+//             frame_count: 0,
+//             accumulated_drift: 0.0,
+//             last_instant: Instant::now(), // Initialize last_instant
+//         }
+//     }
+
+//     pub fn should_draw(&mut self, current_time: Duration) -> bool {
+//         let now = Instant::now();
+//         let elapsed_since_last = now.duration_since(self.last_instant);
+//         self.last_instant = now;
+
+//         let ideal_time_instant = Instant::now() - self.start_time
+//             + Duration::from_secs_f64(self.frame_count as f64 / self.frame_rate);
+//         let current_time_instant = Instant::now() - current_time;
+
+//         let time_difference = current_time_instant
+//             .duration_since(ideal_time_instant)
+//             .as_secs_f64();
+
+//         // Accumulate drift, but clamp it to prevent runaway correction.
+//         self.accumulated_drift += time_difference;
+
+//         // Apply a small correction each frame to avoid over-correction.
+//         let correction = time_difference * 0.1; // Adjust this factor (0.1) as needed
+//         self.accumulated_drift -= correction;
+
+//         println!(
+//             "should_draw: ideal_time: {:?}, current_time: {:?}, time_difference: {:?}, accumulated_drift: {:?}",
+//             ideal_time_instant, current_time_instant, time_difference, self.accumulated_drift
+//         );
+
+//         if time_difference >= 0.0 {
+//             // If current time is ahead of ideal time.
+//             self.frame_count += 1;
+//             true
+//         } else {
+//             false
+//         }
+//     }
+// }
+
 pub struct FrameTimer {
-    pub frame_rate: f64,
-    pub last_frame_time: std::time::Duration,
-    pub frame_interval: std::time::Duration,
-    pub frame_count: u64,
-    pub drift_correction: f64,
+    pub last_step_time: Duration,
+    pub last_frame_time: Duration,
+    pub accumulated_video_time: Duration,
 }
 
 impl FrameTimer {
-    pub fn new(frame_rate: f64, start_time: Duration) -> Self {
+    pub fn new() -> Self {
         Self {
-            frame_rate,
-            last_frame_time: start_time,
-            frame_interval: Duration::from_secs_f64(1.0 / frame_rate),
-            frame_count: 0,
-            drift_correction: 0.0,
+            last_step_time: Duration::ZERO,
+            last_frame_time: Duration::ZERO,
+            accumulated_video_time: Duration::ZERO,
         }
     }
 
-    pub fn should_draw(&mut self, current_time: Duration) -> bool {
-        let elapsed = current_time - self.last_frame_time;
+    pub fn update_and_get_frames_to_draw(
+        &mut self,
+        current_time: Duration,
+        video_frame_rate: f32,
+    ) -> u32 {
+        // Calculate time since last step
+        let step_delta = current_time - self.last_step_time;
 
-        // Calculate ideal frame time including drift correction
-        let ideal_frame_time = self.frame_count as f64 * self.frame_interval.as_secs_f64();
+        // Accumulate time for video frames
+        self.accumulated_video_time += step_delta;
 
-        // Calculate actual elapsed time
-        let actual_elapsed = elapsed.as_secs_f64() + self.drift_correction;
+        // Calculate how many video frames we need to draw to catch up
+        let frame_interval = Duration::from_secs_f32(1.0 / video_frame_rate);
+        let frames_to_draw = (self.accumulated_video_time.as_secs_f32()
+            / frame_interval.as_secs_f32())
+        .floor() as u32;
 
-        // println!(
-        //     "should_draw {:?} {:?} {:?} {:?}",
-        //     elapsed.as_secs_f64(),
-        //     actual_elapsed,
-        //     ideal_frame_time,
-        //     self.drift_correction
-        // );
-
-        if actual_elapsed >= self.frame_interval.as_secs_f64() {
-            // Update frame count and last frame time
-            self.frame_count += 1;
+        // Subtract the time for frames we're about to draw
+        if frames_to_draw > 0 {
+            self.accumulated_video_time -= frame_interval * frames_to_draw;
             self.last_frame_time = current_time;
-
-            // Calculate and accumulate drift
-            let drift = current_time.as_secs_f64() - ideal_frame_time;
-            self.drift_correction = if drift.abs() < 0.002 { 0.0 } else { drift };
-
-            true
-        } else {
-            false
         }
+
+        self.last_step_time = current_time;
+        frames_to_draw
     }
 }

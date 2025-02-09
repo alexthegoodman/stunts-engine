@@ -1440,53 +1440,112 @@ impl Editor {
             // step rate is throttled to 60FPS
             // if video frame rate is 60FPS, then call draw on each frame
             // if video frame rate is 30FPS, then call draw on every other frame
+            let mut animate_properties = false;
 
-            // slightly innaccurate?
+            if animation.object_type == ObjectType::VideoItem {
+                let frame_rate = self.video_items[object_idx].source_frame_rate;
+                let source_duration_ms = self.video_items[object_idx].source_duration_ms;
+                let frame_interval = Duration::from_secs_f64(1.0 / frame_rate as f64);
+
+                // Calculate the number of frames that should have been displayed by now
+                let elapsed_time: Duration = current_time - start_time;
+                let current_frame_time = self.video_items[object_idx].num_frames_drawn as f64
+                    * frame_interval.as_secs_f64();
+                // let last_frame_time = self.last_frame_time.expect("Couldn't get last frame time");
+
+                // println!(
+                //     "current times {:?} frame: {:?}",
+                //     current_time.as_secs_f64(),
+                //     current_frame_time
+                // );
+
+                // Only draw the frame if the current time is within the frame's display interval
+                if (current_time.as_secs_f64() >= current_frame_time
+                    && current_time.as_secs_f64()
+                        < current_frame_time + frame_interval.as_secs_f64())
+                {
+                    if current_time.as_millis() + 1000 < source_duration_ms as u128 {
+                        self.video_items[object_idx]
+                            .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
+                            .expect("Couldn't draw video frame");
+
+                        animate_properties = true;
+                        self.video_items[object_idx].num_frames_drawn += 1;
+                    }
+                } else {
+                    // TODO: deteermine distance between current_time and current_frame_time to determine
+                    // how many video frames to draw to catch up
+                    let difference = current_time.as_secs_f64() - current_frame_time;
+                    let catch_up_frames =
+                        (difference / frame_interval.as_secs_f64()).floor() as u32;
+
+                    // Only catch up if we're behind and within the video duration
+                    if catch_up_frames > 0
+                        && current_time.as_millis() + 1000 < source_duration_ms as u128
+                    {
+                        // Limit the maximum number of frames to catch up to avoid excessive CPU usage
+                        let max_catch_up = 5;
+                        let frames_to_draw = catch_up_frames.min(max_catch_up);
+
+                        // println!("frames_to_draw {:?}", frames_to_draw);
+
+                        for _ in 0..frames_to_draw {
+                            self.video_items[object_idx]
+                                .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
+                                .expect("Couldn't draw catch-up video frame");
+
+                            self.video_items[object_idx].num_frames_drawn += 1;
+                        }
+
+                        animate_properties = true;
+
+                        // println!(
+                        //     "Caught up {} frames out of {} needed",
+                        //     frames_to_draw, catch_up_frames
+                        // );
+                    }
+                }
+            } else {
+                animate_properties = true;
+            }
+
+            // let mut animate_properties = false;
+
+            // Modified video drawing code
             // if animation.object_type == ObjectType::VideoItem {
             //     let frame_rate = self.video_items[object_idx].source_frame_rate;
             //     let source_duration_ms = self.video_items[object_idx].source_duration_ms;
-            //     let frame_interval = Duration::from_secs_f32(1.0 / frame_rate as f32);
 
-            //     // Calculate the number of frames that should have been displayed by now
-            //     let elapsed_time = current_time - start_time;
-            //     let expected_frames =
-            //         (elapsed_time.as_secs_f32() / frame_interval.as_secs_f32()).floor() as f32; // number of frames since start
+            //     // Initialize frame timer if not exists
+            //     if self.video_items[object_idx].frame_timer.is_none() {
+            //         self.video_items[object_idx].frame_timer = Some(FrameTimer::new());
+            //     }
 
-            //     // Calculate the time at which the current frame should be displayed
-            //     let elapsed_2 = (frame_interval.as_secs_f32() * expected_frames);
-            //     let current_frame_time = start_time.as_secs_f32() + elapsed_time.as_secs_f32();
+            //     // Get number of frames to draw this step
+            //     let frames_to_draw = self.video_items[object_idx]
+            //         .frame_timer
+            //         .as_mut()
+            //         .expect("Couldn't get frame timer")
+            //         .update_and_get_frames_to_draw(current_time, frame_rate as f32);
 
-            //     // Only draw the frame if the current time is within the frame's display interval
-            //     if current_time.as_secs_f32() >= current_frame_time
-            //         && current_time.as_secs_f32()
-            //             < current_frame_time + frame_interval.as_secs_f32()
+            //     // Draw the required number of frames
+            //     if frames_to_draw > 0
+            //         && current_time.as_millis() + 1000 < source_duration_ms as u128
             //     {
-            //         if current_time.as_millis() + 1000 < source_duration_ms as u128 {
+            //         println!("frames_to_draw {:?}", frames_to_draw);
+            //         // Draw each frame
+            //         for _ in 0..frames_to_draw {
             //             self.video_items[object_idx]
             //                 .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
             //                 .expect("Couldn't draw video frame");
             //         }
+
+            //         animate_properties = true;
             //     }
             // }
 
-            if animation.object_type == ObjectType::VideoItem {
-                let video_item = &mut self.video_items[object_idx];
-
-                // Initialize frame timer if not exists
-                if video_item.frame_timer.is_none() {
-                    video_item.frame_timer =
-                        Some(FrameTimer::new(video_item.source_frame_rate, start_time));
-                }
-
-                if let Some(timer) = &mut video_item.frame_timer {
-                    if timer.should_draw(current_time)
-                        && current_time.as_millis() + 1000 < video_item.source_duration_ms as u128
-                    {
-                        video_item
-                            .draw_video_frame(&gpu_resources.device, &gpu_resources.queue)
-                            .expect("Couldn't draw video frame");
-                    }
-                }
+            if !animate_properties {
+                return;
             }
 
             // Go through each property
@@ -1663,7 +1722,7 @@ impl Editor {
                                 let video_item = &mut self.video_items[object_idx];
                                 let elapsed_ms = current_time.as_millis() as u128;
 
-                                let autofollow_delay = 300;
+                                let autofollow_delay = 150;
 
                                 if let (Some(mouse_positions), Some(source_data)) = (
                                     video_item.mouse_positions.as_ref(),
@@ -1700,7 +1759,7 @@ impl Editor {
                                     let min_distance = 100.0; // Distance to incur a shift
                                     let base_alpha = 0.01; // Your current default value
                                     let max_alpha = 0.1; // Maximum blending speed
-                                    let scaling_factor = 0.005; // Controls how quickly alpha increases with distance
+                                    let scaling_factor = 0.01; // Controls how quickly alpha increases with distance
 
                                     // Update shift points if needed
                                     if should_update_shift {
@@ -1727,8 +1786,6 @@ impl Editor {
                                                 if let Some(last_end_point) =
                                                     video_item.last_end_point
                                                 {
-                                                    video_item.last_shift_time = Some(elapsed_ms);
-
                                                     let dx = start_point.x - last_start_point.x;
                                                     let dy = start_point.y - last_start_point.y;
                                                     let distance = (dx * dx + dy * dy).sqrt(); // Euclidean distance
@@ -1740,6 +1797,9 @@ impl Editor {
                                                     if distance >= min_distance
                                                         || distance2 >= min_distance
                                                     {
+                                                        video_item.last_shift_time =
+                                                            Some(elapsed_ms);
+
                                                         video_item.last_start_point =
                                                             Some(start_point);
                                                         video_item.last_end_point = Some(end_point);
