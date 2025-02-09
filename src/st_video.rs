@@ -63,8 +63,10 @@ pub struct StVideo {
     pub index_buffer: wgpu::Buffer,
     pub dimensions: (u32, u32),
     pub bind_group: wgpu::BindGroup,
-    pub vertices: [Vertex; 4],
-    pub indices: [u32; 6],
+    // pub vertices: [Vertex; 4],
+    // pub indices: [u32; 6],
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
     pub hidden: bool,
     pub layer: i32,
     pub group_bind_group: wgpu::BindGroup,
@@ -76,6 +78,7 @@ pub struct StVideo {
     pub last_end_point: Option<MousePosition>,
     pub last_shift_time: Option<u128>,
     pub source_data: Option<SourceData>,
+    pub grid_resolution: (u32, u32),
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
     // #[cfg(target_arch = "wasm32")]
@@ -175,32 +178,78 @@ impl StVideo {
         transform.layer = video_config.layer as f32 - INTERNAL_LAYER_SPACE as f32;
         transform.update_uniform_buffer(&queue, &window_size);
 
-        let vertices = [
-            Vertex {
-                position: [-0.5, -0.5, 0.0],
-                // tex_coords: [0.0, 1.0],
-                tex_coords: [0.0, 0.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-            Vertex {
-                position: [0.5, -0.5, 0.0],
-                // tex_coords: [1.0, 1.0],
-                tex_coords: [1.0, 0.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-            Vertex {
-                position: [0.5, 0.5, 0.0],
-                // tex_coords: [1.0, 0.0],
-                tex_coords: [1.0, 1.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-            Vertex {
-                position: [-0.5, 0.5, 0.0],
-                // tex_coords: [0.0, 0.0],
-                tex_coords: [0.0, 1.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-        ];
+        // let vertices = [
+        //     Vertex {
+        //         position: [-0.5, -0.5, 0.0],
+        //         // tex_coords: [0.0, 1.0],
+        //         tex_coords: [0.0, 0.0],
+        //         color: [1.0, 1.0, 1.0, 1.0],
+        //     },
+        //     Vertex {
+        //         position: [0.5, -0.5, 0.0],
+        //         // tex_coords: [1.0, 1.0],
+        //         tex_coords: [1.0, 0.0],
+        //         color: [1.0, 1.0, 1.0, 1.0],
+        //     },
+        //     Vertex {
+        //         position: [0.5, 0.5, 0.0],
+        //         // tex_coords: [1.0, 0.0],
+        //         tex_coords: [1.0, 1.0],
+        //         color: [1.0, 1.0, 1.0, 1.0],
+        //     },
+        //     Vertex {
+        //         position: [-0.5, 0.5, 0.0],
+        //         // tex_coords: [0.0, 0.0],
+        //         tex_coords: [0.0, 1.0],
+        //         color: [1.0, 1.0, 1.0, 1.0],
+        //     },
+        // ];
+
+        // self.grid_resolution = grid_resolution;
+        let grid_resolution = (20, 20);
+        let (rows, cols) = grid_resolution;
+
+        // Create vertices
+        let mut vertices = Vec::with_capacity(((rows + 1) * (cols + 1)) as usize);
+
+        for y in 0..=rows {
+            for x in 0..=cols {
+                // let pos_x = -1.0 + (2.0 * x as f32 / cols as f32);
+                // let pos_y = -1.0 + (2.0 * y as f32 / rows as f32);
+
+                // Scale from -0.5 to 0.5 across the entire grid
+                let pos_x = -0.5 + (x as f32 / cols as f32);
+                let pos_y = -0.5 + (y as f32 / rows as f32);
+
+                let tex_x = x as f32 / cols as f32;
+                let tex_y = y as f32 / rows as f32;
+
+                vertices.push(Vertex {
+                    position: [pos_x, pos_y, 0.0],
+                    tex_coords: [tex_x, tex_y],
+                    color: [1.0, 1.0, 1.0, 1.0],
+                });
+            }
+        }
+
+        // Create indices for triangle strips
+        let mut indices = Vec::with_capacity((rows * cols * 6) as usize);
+        for y in 0..rows {
+            for x in 0..cols {
+                let top_left = y * (cols + 1) + x;
+                let top_right = top_left + 1;
+                let bottom_left = (y + 1) * (cols + 1) + x;
+                let bottom_right = bottom_left + 1;
+
+                indices.push(bottom_right);
+                indices.push(bottom_left);
+                indices.push(top_right);
+
+                indices.push(top_right);
+                indices.push(bottom_left);
+                indices.push(top_left);
+            }
+        }
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -208,7 +257,7 @@ impl StVideo {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        let indices: [u32; 6] = [0, 1, 2, 0, 2, 3];
+        // let indices: [u32; 6] = [0, 1, 2, 0, 2, 3];
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&indices),
@@ -256,6 +305,7 @@ impl StVideo {
             last_shift_time: None,
             last_start_point: None,
             last_end_point: None,
+            grid_resolution,
         })
     }
 
@@ -458,11 +508,6 @@ impl StVideo {
         let uv_center_x = center_point.x / video_width as f32;
         let uv_center_y = center_point.y / video_height as f32;
 
-        // println!(
-        //     "Center Point: {:?}, UV Center: ({}, {})",
-        //     center_point, uv_center_x, uv_center_y
-        // );
-
         let half_width = 0.5 / new_zoom;
         let half_height = 0.5 / new_zoom;
 
@@ -470,11 +515,6 @@ impl StVideo {
         let mut uv_max_x = uv_center_x + half_width;
         let mut uv_min_y = uv_center_y - half_height;
         let mut uv_max_y = uv_center_y + half_height;
-
-        // println!(
-        //     "Before Clamping - UV Min: ({}, {}), UV Max: ({}, {})",
-        //     uv_min_x, uv_min_y, uv_max_x, uv_max_y
-        // );
 
         // Check for clamping and adjust other UVs accordingly to prevent warping
         if uv_min_x < 0.0 {
@@ -497,23 +537,122 @@ impl StVideo {
             uv_min_y = (uv_min_y - diff).max(0.0); // Clamp min_y
         }
 
-        // println!(
-        //     "After Clamping - UV Min: ({}, {}), UV Max: ({}, {})",
-        //     uv_min_x, uv_min_y, uv_max_x, uv_max_y
-        // );
+        // self.vertices
+        //     .iter_mut()
+        //     .enumerate()
+        //     .for_each(|(i, v)| match i {
+        //         0 => v.tex_coords = [uv_min_x, uv_min_y],
+        //         1 => v.tex_coords = [uv_max_x, uv_min_y],
+        //         2 => v.tex_coords = [uv_max_x, uv_max_y],
+        //         3 => v.tex_coords = [uv_min_x, uv_max_y],
+        //         _ => {}
+        //     });
 
-        self.vertices
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, v)| match i {
-                0 => v.tex_coords = [uv_min_x, uv_min_y],
-                1 => v.tex_coords = [uv_max_x, uv_min_y],
-                2 => v.tex_coords = [uv_max_x, uv_max_y],
-                3 => v.tex_coords = [uv_min_x, uv_max_y],
-                _ => {}
-            });
+        let (rows, cols) = self.grid_resolution;
+
+        // Update UV coordinates for each vertex in place
+        for y in 0..=rows {
+            let v_ratio = y as f32 / rows as f32;
+            let uv_y = uv_min_y + (uv_max_y - uv_min_y) * v_ratio;
+
+            for x in 0..=cols {
+                let u_ratio = x as f32 / cols as f32;
+                let uv_x = uv_min_x + (uv_max_x - uv_min_x) * u_ratio;
+
+                let vertex = &mut self.vertices[y as usize * (cols as usize + 1) + x as usize];
+                vertex.tex_coords = [uv_x, uv_y];
+            }
+        }
 
         queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
+    }
+
+    // pub fn update_popout(
+    //     &mut self,
+    //     queue: &Queue,
+    //     mouse_point: Point,
+    //     popout_intensity: f32,
+    //     popout_dimensions: (f32, f32),
+    // ) {
+    //     let (video_width, video_height) = self.dimensions;
+    //     let uv_mouse_x = mouse_point.x / video_width as f32;
+    //     let uv_mouse_y = mouse_point.y / video_height as f32;
+
+    //     let mut new_vertices = &mut self.vertices;
+
+    //     let (popout_width, popout_height) = popout_dimensions;
+    //     let radius_x = popout_width / (2.0 * video_width as f32);
+    //     let radius_y = popout_height / (2.0 * video_height as f32);
+
+    //     for vertex in new_vertices.iter_mut() {
+    //         let dx = vertex.tex_coords[0] - uv_mouse_x;
+    //         let dy = vertex.tex_coords[1] - uv_mouse_y;
+
+    //         // Normalize distance based on elliptical shape
+    //         let normalized_dist = ((dx / radius_x).powi(2) + (dy / radius_y).powi(2)).sqrt();
+
+    //         if normalized_dist < 1.0 {
+    //             let effect_strength = popout_intensity * (1.0 - normalized_dist.powi(2));
+
+    //             // Calculate displacement direction
+    //             if normalized_dist > 0.0 {
+    //                 let dir_x = dx / normalized_dist;
+    //                 let dir_y = dy / normalized_dist;
+
+    //                 // Apply displacement to UV coordinates
+    //                 vertex.tex_coords[0] += dir_x * effect_strength * radius_x;
+    //                 vertex.tex_coords[1] += dir_y * effect_strength * radius_y;
+
+    //                 // Clamp UV coordinates
+    //                 vertex.tex_coords[0] = vertex.tex_coords[0].clamp(0.0, 1.0);
+    //                 vertex.tex_coords[1] = vertex.tex_coords[1].clamp(0.0, 1.0);
+    //             }
+    //         }
+    //     }
+
+    //     // Update vertex buffer
+    //     queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&new_vertices));
+    // }
+
+    pub fn update_popout(
+        &mut self,
+        queue: &Queue,
+        mouse_point: Point,
+        popout_intensity: f32,
+        popout_dimensions: (f32, f32),
+    ) {
+        let (video_width, video_height) = self.dimensions;
+        let uv_mouse_x = mouse_point.x / video_width as f32;
+        let uv_mouse_y = mouse_point.y / video_height as f32;
+
+        let mut new_vertices = &mut self.vertices;
+
+        let (popout_width, popout_height) = popout_dimensions;
+        let radius_x = popout_width / (2.0 * video_width as f32);
+        let radius_y = popout_height / (2.0 * video_height as f32);
+
+        for vertex in new_vertices.iter_mut() {
+            let dx = vertex.tex_coords[0] - uv_mouse_x;
+            let dy = vertex.tex_coords[1] - uv_mouse_y;
+
+            // Check if the vertex is within the popout area
+            if dx.abs() <= radius_x && dy.abs() <= radius_y {
+                // Normalize the coordinates to the popout area
+                let normalized_x = dx / radius_x;
+                let normalized_y = dy / radius_y;
+
+                // Apply the zoom effect by scaling the texture coordinates
+                vertex.tex_coords[0] = uv_mouse_x + normalized_x * radius_x / popout_intensity;
+                vertex.tex_coords[1] = uv_mouse_y + normalized_y * radius_y / popout_intensity;
+
+                // Clamp the texture coordinates to avoid going out of bounds
+                vertex.tex_coords[0] = vertex.tex_coords[0].clamp(0.0, 1.0);
+                vertex.tex_coords[1] = vertex.tex_coords[1].clamp(0.0, 1.0);
+            }
+        }
+
+        // Update vertex buffer
+        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&new_vertices));
     }
 
     pub fn update_opacity(&mut self, queue: &wgpu::Queue, opacity: f32) {

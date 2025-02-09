@@ -1748,6 +1748,13 @@ impl Editor {
                                             blended_center_point,
                                         );
                                         video_item.last_center_point = Some(blended_center_point);
+
+                                        video_item.update_popout(
+                                            &gpu_resources.queue,
+                                            blended_center_point,
+                                            1.5,
+                                            (150.0, 150.0),
+                                        );
                                     }
                                 }
                             }
