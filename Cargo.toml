@@ -10,8 +10,8 @@ winit = "0.29"
 futures = "0.3.30"
 uuid = { version = "1.8.0", features = ["v4"] }
 lyon_tessellation = "1.0.15"
-# floem_renderer = { path = "D:/projects/common/common-floem/renderer", version = "0.1.0" }
-floem_renderer = { git = "https://github.com/alexthegoodman/common-floem/renderer", version = "0.1.0" }
+floem_renderer = { path = "../common-floem/renderer", version = "0.1.0" }
+# floem_renderer = { git = "https://github.com/alexthegoodman/common-floem/renderer", version = "0.1.0" }
 strum = "0.26.3"
 strum_macros = "0.26"
 floem-winit = { git = "https://github.com/lapce/winit", rev = "c8d3b8fd6fa4ffd5e0f99be78aacddcf6de57bcd", features = [
@@ -50,14 +50,14 @@ windows-capture = "1.4.2"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 pollster = "0.3.0"
 tokio = { version = "1.39.0", features = ["full"] }
-# common-motion-2d-reg = { path = "D:/projects/common/common-motion-2d-reg", version = "0.1.0" }
-common-motion-2d-reg = { git = "https://github.com/alexthegoodman/common-motion-2d-reg", version = "0.1.0" }
+common-motion-2d-reg = { path = "../common-motion-2d-reg", version = "0.1.0" }
+# common-motion-2d-reg = { git = "https://github.com/alexthegoodman/common-motion-2d-reg", version = "0.1.0" }
 
-[patch."https://github.com/alexthegoodman/common-floem/renderer"]
-floem_renderer = { path = "../common-floem/renderer" }
+# [patch."https://github.com/alexthegoodman/common-floem/renderer"]
+# floem_renderer = { path = "../common-floem/renderer" }
 
-[patch."https://github.com/alexthegoodman/common-motion-2d-reg"]
-common-motion-2d-reg = { path = "../common-motion-2d-reg" }
+# [patch."https://github.com/alexthegoodman/common-motion-2d-reg"]
+# common-motion-2d-reg = { path = "../common-motion-2d-reg" }
 
 [lib]
 name = "stunts_engine"

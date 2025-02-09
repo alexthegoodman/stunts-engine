@@ -995,31 +995,6 @@ impl Editor {
 
         println!("distances length {:?}", distances.len());
 
-        // // Assign motion paths to objects based on the closest 3rd keyframe
-        // let mut assigned_keyframes = vec![false; third_keyframes.len()]; // Track which keyframes have been assigned
-        // let mut motion_path_assignments = Vec::new();
-
-        // for object_idx in 0..current_positions.len() {
-        //     let mut min_distance = f32::MAX;
-        //     let mut best_object_idx = None;
-
-        //     // Find the closest unassigned
-        //     for mp_object_idx in 0..third_keyframes.len() {
-        //         if !assigned_keyframes[mp_object_idx]
-        //             && distances[object_idx][mp_object_idx] < min_distance
-        //         {
-        //             min_distance = distances[object_idx][mp_object_idx];
-        //             best_object_idx = Some(mp_object_idx);
-        //         }
-        //     }
-
-        //     // Assign the closest keyframe to the object
-        //     if let (Some(object_idx)) = (best_object_idx) {
-        //         motion_path_assignments.push(object_idx);
-        //         assigned_keyframes[object_idx] = true; // Mark this keyframe as assigned
-        //     }
-        // }
-
         let motion_path_assignments = assign_motion_paths_to_objects(distances)
             .expect("Couldn't assign motion paths to objects");
 
@@ -1030,7 +1005,7 @@ impl Editor {
         for (object_idx, associated_object_idx) in motion_path_assignments.into_iter() {
             println!("object_idx {:?} {:?}", object_idx, associated_object_idx);
 
-            let mut position_keyframes = Vec::new();
+            let mut position_keyframes: Vec<UIKeyframe> = Vec::new();
 
             // Process keyframes for the assigned motion path
             for keyframe_time_idx in 0..keyframes_per_object {
@@ -1047,7 +1022,7 @@ impl Editor {
                 let predicted_x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
                 let predicted_y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
 
-                position_keyframes.push(UIKeyframe {
+                let keyframe = UIKeyframe {
                     id: Uuid::new_v4().to_string(),
                     time: Duration::from_millis(timestamps[keyframe_time_idx] as u64),
                     value: KeyframeValue::Position([predicted_x, predicted_y]),
@@ -1055,18 +1030,18 @@ impl Editor {
                     path_type: PathType::Linear,
                     // set the KeyType to Frame as default, with Range in place of 3rd and 4th keyframes next
                     key_type: KeyType::Frame,
-                });
+                };
+
+                // // Update path_type for previous keyframe if it exists
+                // if let Some(prev_keyframe) = position_keyframes.last_mut() {
+                //     prev_keyframe.path_type = prev_keyframe.calculate_default_curve(&keyframe);
+                // }
+
+                position_keyframes.push(keyframe);
             }
 
             // handle 6 keyframes
             if position_keyframes.len() == 6 {
-                // Ensure the 4th keyframe matches the 3rd keyframe
-                // let third_keyframe = &position_keyframes.clone()[2]; // 3rd keyframe (index 2)
-                // let fourth_keyframe = &mut position_keyframes[3]; // 4th keyframe (index 3)
-
-                // // Set the 4th keyframe's position to match the 3rd keyframe's position
-                // fourth_keyframe.value = third_keyframe.value.clone();
-
                 // set Range
                 let forth_keyframe = &position_keyframes.clone()[3];
                 let third_keyframe = &mut position_keyframes[2];
@@ -1091,6 +1066,18 @@ impl Editor {
                 position_keyframes.remove(2);
             }
 
+            let mut final_position_keyframes: Vec<UIKeyframe> = Vec::new();
+
+            // create default curves between remaining keyframes
+            for (index, keyframe) in position_keyframes.clone().iter().enumerate() {
+                // // Update path_type for previous keyframe if it exists
+                if let Some(prev_keyframe) = final_position_keyframes.last_mut() {
+                    prev_keyframe.path_type = prev_keyframe.calculate_default_curve(&keyframe);
+                }
+
+                final_position_keyframes.push(keyframe.clone());
+            }
+
             // Get the item ID based on the object index
             let item_id = self.get_item_id(object_idx);
             let object_type = self.get_object_type(object_idx);
@@ -1098,14 +1085,14 @@ impl Editor {
             println!("item_id {:?}", item_id);
 
             // Only create animation if we have valid keyframes and item ID
-            if !position_keyframes.is_empty() && item_id.is_some() {
+            if !final_position_keyframes.is_empty() && item_id.is_some() {
                 let properties = vec![
                     // Position property with predicted values
                     AnimationProperty {
                         name: "Position".to_string(),
                         property_path: "position".to_string(),
                         children: Vec::new(),
-                        keyframes: position_keyframes,
+                        keyframes: final_position_keyframes,
                         depth: 0,
                     },
                     // Default properties for rotation, scale, opacity
