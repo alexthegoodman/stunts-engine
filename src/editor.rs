@@ -1696,8 +1696,11 @@ impl Editor {
                                         }
                                     };
 
-                                    let delay_offset = 0;
-                                    let min_distance = 100.0;
+                                    let delay_offset = 0; // Potential time offset
+                                    let min_distance = 100.0; // Distance to incur a shift
+                                    let base_alpha = 0.01; // Your current default value
+                                    let max_alpha = 0.1; // Maximum blending speed
+                                    let scaling_factor = 0.005; // Controls how quickly alpha increases with distance
 
                                     // Update shift points if needed
                                     if should_update_shift {
@@ -1740,6 +1743,19 @@ impl Editor {
                                                         video_item.last_start_point =
                                                             Some(start_point);
                                                         video_item.last_end_point = Some(end_point);
+
+                                                        // Use the larger of the two distances
+                                                        let max_distance = distance.max(distance2);
+
+                                                        // Exponential smoothing that plateaus
+                                                        let dynamic_alpha = base_alpha
+                                                            + (max_alpha - base_alpha)
+                                                                * (1.0
+                                                                    - (-scaling_factor
+                                                                        * max_distance)
+                                                                        .exp());
+
+                                                        video_item.dynamic_alpha = dynamic_alpha;
                                                     }
                                                 }
                                             }
@@ -1778,8 +1794,10 @@ impl Editor {
                                         let blended_center_point = if let Some(last_center_point) =
                                             video_item.last_center_point
                                         {
-                                            let alpha = 0.01;
-                                            // let alpha = 60.0 / autofollow_delay as f32;
+                                            // need to calculate a dynamic alpha based on distance between start and and end point
+                                            // let alpha = 0.01; // this was a close value, but not quite right depending on distance
+                                            let alpha = video_item.dynamic_alpha;
+
                                             Point {
                                                 x: last_center_point.x * (1.0 - alpha)
                                                     + new_center_point.x * alpha,

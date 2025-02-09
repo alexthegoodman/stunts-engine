@@ -80,6 +80,7 @@ pub struct StVideo {
     pub source_data: Option<SourceData>,
     pub grid_resolution: (u32, u32),
     pub frame_timer: Option<FrameTimer>,
+    pub dynamic_alpha: f32,
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
     // #[cfg(target_arch = "wasm32")]
@@ -308,6 +309,7 @@ impl StVideo {
             last_end_point: None,
             grid_resolution,
             frame_timer: None,
+            dynamic_alpha: 0.01,
         })
     }
 
