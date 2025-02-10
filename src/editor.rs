@@ -154,6 +154,25 @@ pub fn string_to_f32(s: &str) -> Result<f32, std::num::ParseFloatError> {
     }
 }
 
+pub fn string_to_u32(s: &str) -> Result<u32, std::num::ParseIntError> {
+    let trimmed = s.trim();
+
+    if trimmed.is_empty() {
+        return Ok(0);
+    }
+
+    // Check if there's at least one digit in the string
+    if !trimmed.chars().any(|c| c.is_ascii_digit()) {
+        return Ok(0);
+    }
+
+    // At this point, we know there's at least one digit, so let's try to parse
+    match trimmed.parse::<u32>() {
+        Ok(num) => Ok(num),
+        Err(e) => Err(e),
+    }
+}
+
 // pub struct GuideLine {
 //     pub start: Point,
 //     pub end: Point,
@@ -275,6 +294,8 @@ pub struct Editor {
 
     // ai
     pub inference: Option<CommonMotionInference<Wgpu>>,
+    pub generation_count: u32,
+    pub generation_curved: bool,
 }
 
 use std::borrow::{Borrow, BorrowMut};
@@ -372,6 +393,8 @@ impl Editor {
             video_items: Vec::new(),
             dragging_video: None,
             motion_paths: Vec::new(),
+            generation_count: 4,
+            generation_curved: false,
             // TODO: update interactive bounds on window resize?
             interactive_bounds: BoundingBox {
                 min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
@@ -1013,6 +1036,13 @@ impl Editor {
                     * (values_per_prediction * keyframes_per_object)
                     + keyframe_time_idx * values_per_prediction;
 
+                // skip depending on chosen count
+                if self.generation_count == 4 {
+                    if keyframe_time_idx == 1 || keyframe_time_idx == 5 {
+                        continue;
+                    }
+                }
+
                 // Skip if out of bounds
                 if base_idx + 5 >= predictions.len() {
                     continue;
@@ -1069,13 +1099,19 @@ impl Editor {
             let mut final_position_keyframes: Vec<UIKeyframe> = Vec::new();
 
             // create default curves between remaining keyframes
-            for (index, keyframe) in position_keyframes.clone().iter().enumerate() {
-                // // Update path_type for previous keyframe if it exists
-                if let Some(prev_keyframe) = final_position_keyframes.last_mut() {
-                    prev_keyframe.path_type = prev_keyframe.calculate_default_curve(&keyframe);
-                }
+            if self.generation_curved {
+                for (index, keyframe) in position_keyframes.clone().iter().enumerate() {
+                    // // Update path_type for previous keyframe if it exists
+                    if let Some(prev_keyframe) = final_position_keyframes.last_mut() {
+                        prev_keyframe.path_type = prev_keyframe.calculate_default_curve(&keyframe);
+                    }
 
-                final_position_keyframes.push(keyframe.clone());
+                    final_position_keyframes.push(keyframe.clone());
+                }
+            } else {
+                for (index, keyframe) in position_keyframes.clone().iter().enumerate() {
+                    final_position_keyframes.push(keyframe.clone());
+                }
             }
 
             // Get the item ID based on the object index
