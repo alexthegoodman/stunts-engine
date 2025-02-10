@@ -513,7 +513,7 @@ impl Polygon {
                 self.fill,
                 self.stroke,
                 0.0,
-                self.layer,
+                self.layer + INTERNAL_LAYER_SPACE,
             );
 
         self.dimensions = dimensions;
@@ -564,7 +564,7 @@ impl Polygon {
                 self.fill,
                 self.stroke,
                 0.0,
-                self.layer,
+                self.layer + INTERNAL_LAYER_SPACE,
             );
 
         self.border_radius = border_radius;
@@ -603,7 +603,7 @@ impl Polygon {
                 self.fill,
                 stroke,
                 0.0,
-                self.layer,
+                self.layer + INTERNAL_LAYER_SPACE,
             );
 
         self.stroke = stroke;
@@ -624,6 +624,8 @@ impl Polygon {
         fill: [f32; 4],
         camera: &Camera,
     ) {
+        println!("Update polygon fill {:?} {:?}", self.id, fill);
+
         let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
             get_polygon_data(
                 window_size,
@@ -642,7 +644,7 @@ impl Polygon {
                 fill,
                 self.stroke,
                 0.0,
-                self.layer,
+                self.layer + INTERNAL_LAYER_SPACE,
             );
 
         self.fill = fill;

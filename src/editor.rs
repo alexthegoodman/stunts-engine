@@ -114,7 +114,8 @@ pub fn rgb_to_wgpu(r: u8, g: u8, b: u8, a: f32) -> [f32; 4] {
         r as f32 / 255.0,
         g as f32 / 255.0,
         b as f32 / 255.0,
-        a.clamp(0.0, 1.0),
+        // a.clamp(0.0, 1.0),
+        a / 255.0,
     ]
 }
 
@@ -2213,7 +2214,7 @@ impl Editor {
             polygon_config.fill,
             Stroke {
                 thickness: 2.0,
-                fill: rgb_to_wgpu(0, 0, 0, 1.0),
+                fill: rgb_to_wgpu(0, 0, 0, 255.0),
             },
             0.0,
             polygon_config.layer,
@@ -2357,6 +2358,155 @@ impl Editor {
             .expect("Couldn't draw video frame");
 
         self.video_items.push(video_item);
+    }
+
+    pub fn replace_background(&mut self, sequence_id: Uuid, fill: [f32; 4]) {
+        println!("replace background {:?} {:?}", sequence_id, fill);
+
+        let camera = self.camera.expect("Couldn't get camera");
+        let window_size = camera.window_size;
+        let model_bind_group_layout = self
+            .model_bind_group_layout
+            .as_ref()
+            .expect("Couldn't get bind group layout");
+        let group_bind_group_layout = self
+            .group_bind_group_layout
+            .as_ref()
+            .expect("Couldn't get bind group layout");
+
+        // Remove existing background
+        self.static_polygons
+            .retain(|p| p.name != "canvas_background");
+
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get gpu resources");
+
+        let canvas_polygon = Polygon::new(
+            &window_size,
+            &gpu_resources.device,
+            &gpu_resources.queue,
+            &model_bind_group_layout,
+            &group_bind_group_layout,
+            &camera,
+            vec![
+                Point { x: 0.0, y: 0.0 },
+                Point { x: 1.0, y: 0.0 },
+                Point { x: 1.0, y: 1.0 },
+                Point { x: 0.0, y: 1.0 },
+            ],
+            (800.0 as f32, 450.0 as f32),
+            Point { x: 400.0, y: 225.0 },
+            0.0,
+            0.0,
+            fill,
+            Stroke {
+                thickness: 0.0,
+                fill: rgb_to_wgpu(0, 0, 0, 255.0),
+            },
+            0.0,
+            -89, // camera far is -100
+            "canvas_background".to_string(),
+            sequence_id,
+            Uuid::nil(),
+        );
+
+        self.static_polygons.push(canvas_polygon);
+    }
+
+    pub fn update_background(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
+        // First iteration: find the index of the selected polygon
+        let polygon_index = self
+            .static_polygons
+            .iter()
+            .position(|p| p.id == selected_id && p.name == "canvas_background".to_string());
+
+        if let Some(index) = polygon_index {
+            println!("Found selected static_polygon with ID: {}", selected_id);
+
+            let camera = self.camera.expect("Couldn't get camera");
+
+            // Get the necessary data from editor
+            let viewport_width = camera.window_size.width;
+            let viewport_height = camera.window_size.height;
+            let gpu_resources = self
+                .gpu_resources
+                .as_ref()
+                .expect("Couldn't get gpu resources");
+            let device = &gpu_resources.device;
+            let queue = &gpu_resources.queue;
+
+            let window_size = WindowSize {
+                width: viewport_width as u32,
+                height: viewport_height as u32,
+            };
+
+            // Second iteration: update the selected polygon
+            if let Some(selected_polygon) = self.static_polygons.get_mut(index) {
+                match new_value {
+                    InputValue::Text(s) => match key {
+                        _ => println!("No match on input"),
+                    },
+                    InputValue::Number(n) => match key {
+                        "red" => selected_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                color_to_wgpu(n),
+                                selected_polygon.fill[1],
+                                selected_polygon.fill[2],
+                                selected_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
+                        "green" => selected_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                selected_polygon.fill[0],
+                                color_to_wgpu(n),
+                                selected_polygon.fill[2],
+                                selected_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
+                        "blue" => selected_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                selected_polygon.fill[0],
+                                selected_polygon.fill[1],
+                                color_to_wgpu(n),
+                                selected_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
+                        _ => println!("No match on input"),
+                    },
+                }
+            }
+        } else {
+            println!(
+                "No static_polygon found with the selected ID: {}",
+                selected_id
+            );
+        }
     }
 
     pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
@@ -2851,6 +3001,57 @@ impl Editor {
                         return 0.0;
                     }
                 }
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_background_red(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self
+            .static_polygons
+            .iter()
+            .position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.static_polygons.get(index) {
+                return selected_polygon.fill[0];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_background_green(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self
+            .static_polygons
+            .iter()
+            .position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.static_polygons.get(index) {
+                return selected_polygon.fill[1];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_background_blue(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self
+            .static_polygons
+            .iter()
+            .position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.static_polygons.get(index) {
+                return selected_polygon.fill[2];
+            } else {
+                return 0.0;
             }
         }
 

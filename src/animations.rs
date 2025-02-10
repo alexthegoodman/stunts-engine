@@ -23,6 +23,7 @@ pub enum ObjectType {
 pub struct Sequence {
     pub id: String,
     pub name: String,
+    pub background_fill: Option<BackgroundFill>,
     pub duration_ms: i32,                         // in milliseconds
     pub active_polygons: Vec<SavedPolygonConfig>, // used for dimensions, etc
     pub polygon_motion_paths: Vec<AnimationData>,
@@ -100,6 +101,12 @@ pub enum KeyframeValue {
     Opacity(i32), // also out of 100
     Zoom(i32),    // 100 is minimum, needs precision
     Custom(Vec<i32>),
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub enum BackgroundFill {
+    Color([i32; 4]),
+    Gradient(), // for later
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]

@@ -52,7 +52,7 @@ impl MotionPath {
         initial_position: [i32; 2],
     ) -> MotionPath {
         let (fill_r, fill_g, fill_b) = get_full_color(color_index);
-        let path_fill = rgb_to_wgpu(fill_r as u8, fill_g as u8, fill_b as u8, 1.0);
+        let path_fill = rgb_to_wgpu(fill_r as u8, fill_g as u8, fill_b as u8, 255.0);
 
         let polygon_id =
             Uuid::from_str(associated_polygon_id).expect("Couldn't convert string to uuid");
@@ -361,7 +361,7 @@ fn create_path_segment(
         fill,
         Stroke {
             thickness: 0.0,
-            fill: rgb_to_wgpu(0, 0, 0, 1.0),
+            fill: rgb_to_wgpu(0, 0, 0, 255.0),
         },
         -1.0,
         1, // positive to use INTERNAL_LAYER_SPACE
@@ -406,7 +406,7 @@ fn create_path_handle(
         fill,
         Stroke {
             thickness: 0.0,
-            fill: rgb_to_wgpu(0, 0, 0, 1.0),
+            fill: rgb_to_wgpu(0, 0, 0, 255.0),
         },
         -1.0,
         1, // positive to use INTERNAL_LAYER_SPACE
@@ -457,7 +457,7 @@ fn create_path_arrow(
         fill,
         Stroke {
             thickness: 0.0,
-            fill: rgb_to_wgpu(0, 0, 0, 1.0),
+            fill: rgb_to_wgpu(0, 0, 0, 255.0),
         },
         -1.0,
         1, // positive to use INTERNAL_LAYER_SPACE
