@@ -933,7 +933,16 @@ impl Editor {
         let mut animation_data_vec = Vec::new();
         let values_per_prediction = NUM_INFERENCE_FEATURES; // object_index, time, width, height, x, y
         let keyframes_per_object = 6; // number of keyframes per object
-        let timestamps = vec![0, 2500, 5000, 15000, 17500, 20000];
+        let timestamp_percs = vec![
+            0,
+            2500 / 20000,
+            5000 / 20000,
+            15000 / 20000,
+            17500 / 20000,
+            20000 / 20000,
+        ];
+
+        println!("timestamp_percs {:?}", timestamp_percs);
 
         // Calculate total number of objects from predictions
         let total_predictions = predictions.len();
@@ -946,6 +955,7 @@ impl Editor {
             if !polygon.hidden {
                 current_positions.push((
                     total,
+                    20000,
                     polygon.transform.position.x - CANVAS_HORIZ_OFFSET,
                     polygon.transform.position.y - CANVAS_VERT_OFFSET,
                 ));
@@ -956,6 +966,7 @@ impl Editor {
             if !text.hidden {
                 current_positions.push((
                     total,
+                    20000,
                     text.transform.position.x - CANVAS_HORIZ_OFFSET,
                     text.transform.position.y - CANVAS_VERT_OFFSET,
                 ));
@@ -966,6 +977,7 @@ impl Editor {
             if !image.hidden {
                 current_positions.push((
                     total,
+                    20000,
                     image.transform.position.x - CANVAS_HORIZ_OFFSET,
                     image.transform.position.y - CANVAS_VERT_OFFSET,
                 ));
@@ -976,6 +988,7 @@ impl Editor {
             if !video.hidden {
                 current_positions.push((
                     total,
+                    video.source_duration_ms,
                     video.transform.position.x - CANVAS_HORIZ_OFFSET,
                     video.transform.position.y - CANVAS_VERT_OFFSET,
                 ));
@@ -1007,7 +1020,9 @@ impl Editor {
 
         // Create distance vector
         let mut distances = vec![vec![f64::MAX; third_keyframes.len()]; current_positions.len()];
-        for (object_idx, (_, current_x, current_y)) in current_positions.iter().enumerate() {
+        for (object_idx, (_, duration, current_x, current_y)) in
+            current_positions.iter().enumerate()
+        {
             for (mp_object_idx, (_, predicted_x, predicted_y)) in third_keyframes.iter().enumerate()
             {
                 let dx = *predicted_x as f32 - *current_x;
@@ -1028,6 +1043,25 @@ impl Editor {
         // Create motion paths based on assignments
         for (object_idx, associated_object_idx) in motion_path_assignments.into_iter() {
             println!("object_idx {:?} {:?}", object_idx, associated_object_idx);
+
+            // Get the item ID based on the object index
+            let item_id = self.get_item_id(object_idx);
+            let object_type = self.get_object_type(object_idx);
+
+            let mut total_duration = 20000;
+            match object_type.clone().expect("Couldn't get object type") {
+                ObjectType::VideoItem => {
+                    total_duration = self
+                        .video_items
+                        .iter()
+                        .find(|v| v.id == item_id.clone().expect("Couldn't get item id"))
+                        .expect("Couldn't get video")
+                        .source_duration_ms;
+                }
+                _ => {
+                    total_duration = 20000;
+                }
+            }
 
             let mut position_keyframes: Vec<UIKeyframe> = Vec::new();
 
@@ -1055,7 +1089,9 @@ impl Editor {
 
                 let keyframe = UIKeyframe {
                     id: Uuid::new_v4().to_string(),
-                    time: Duration::from_millis(timestamps[keyframe_time_idx] as u64),
+                    time: Duration::from_millis(
+                        (timestamp_percs[keyframe_time_idx] * total_duration) as u64,
+                    ),
                     value: KeyframeValue::Position([predicted_x, predicted_y]),
                     easing: EasingType::EaseInOut,
                     path_type: PathType::Linear,
@@ -1115,10 +1151,6 @@ impl Editor {
                 }
             }
 
-            // Get the item ID based on the object index
-            let item_id = self.get_item_id(object_idx);
-            let object_type = self.get_object_type(object_idx);
-
             println!("item_id {:?}", item_id);
 
             // Only create animation if we have valid keyframes and item ID
@@ -1137,11 +1169,11 @@ impl Editor {
                         name: "Rotation".to_string(),
                         property_path: "rotation".to_string(),
                         children: Vec::new(),
-                        keyframes: timestamps
+                        keyframes: timestamp_percs
                             .iter()
                             .map(|&t| UIKeyframe {
                                 id: Uuid::new_v4().to_string(),
-                                time: Duration::from_millis(t as u64),
+                                time: Duration::from_millis((t * total_duration) as u64),
                                 value: KeyframeValue::Rotation(0),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
@@ -1155,11 +1187,11 @@ impl Editor {
                         name: "Scale".to_string(),
                         property_path: "scale".to_string(),
                         children: Vec::new(),
-                        keyframes: timestamps
+                        keyframes: timestamp_percs
                             .iter()
                             .map(|&t| UIKeyframe {
                                 id: Uuid::new_v4().to_string(),
-                                time: Duration::from_millis(t as u64),
+                                time: Duration::from_millis((t * total_duration) as u64),
                                 value: KeyframeValue::Scale(100),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
@@ -1173,11 +1205,11 @@ impl Editor {
                         name: "Opacity".to_string(),
                         property_path: "opacity".to_string(),
                         children: Vec::new(),
-                        keyframes: timestamps
+                        keyframes: timestamp_percs
                             .iter()
                             .map(|&t| UIKeyframe {
                                 id: Uuid::new_v4().to_string(),
-                                time: Duration::from_millis(t as u64),
+                                time: Duration::from_millis((t * total_duration) as u64),
                                 value: KeyframeValue::Opacity(100),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
@@ -1193,7 +1225,7 @@ impl Editor {
                     id: Uuid::new_v4().to_string(),
                     object_type: object_type.unwrap_or(ObjectType::Polygon),
                     polygon_id: item_id.unwrap(),
-                    duration: Duration::from_secs(20),
+                    duration: Duration::from_millis(total_duration as u64),
                     start_time_ms: 0,
                     position: [0, 0],
                     properties,
@@ -4163,7 +4195,7 @@ impl Editor {
             y: video_item.transform.position.y + dy,
         };
 
-        println!("move_image {:?}", new_position);
+        println!("move_video {:?}", new_position);
 
         video_item
             .transform
