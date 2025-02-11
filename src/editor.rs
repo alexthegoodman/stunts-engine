@@ -1306,6 +1306,13 @@ impl Editor {
         // let mut elapsed = 0;
         // let mut current_found = false;
 
+        let mut update_background = false;
+
+        if total_dt <= 1.0 / 60.0 {
+            println!("Update initial background...");
+            update_background = true;
+        }
+
         // Iterate through timeline sequences in order
         for ts in &sequence_timeline.timeline_sequences {
             // Skip audio tracks as we're only handling video
@@ -1382,9 +1389,39 @@ impl Editor {
                                     video.hidden = true;
                                 }
                             }
+
+                            update_background = true;
                         }
                     } else {
                         self.current_sequence_data = Some(sequence.clone());
+                    }
+                }
+            }
+        }
+
+        {
+            if update_background {
+                if let Some(current_sequence) = &self.current_sequence_data {
+                    match current_sequence
+                        .background_fill
+                        .as_ref()
+                        .expect("Couldn't get default background fill")
+                    {
+                        BackgroundFill::Color(fill) => {
+                            self.replace_background(
+                                Uuid::from_str(&current_sequence.id)
+                                    .expect("Couldn't convert string to uuid"),
+                                rgb_to_wgpu(
+                                    fill[0] as u8,
+                                    fill[1] as u8,
+                                    fill[2] as u8,
+                                    fill[3] as f32,
+                                ),
+                            );
+                        }
+                        _ => {
+                            println!("Not supported yet...");
+                        }
                     }
                 }
             }
@@ -4363,8 +4400,8 @@ use cgmath::SquareMatrix;
 use cgmath::Transform;
 
 use crate::animations::{
-    AnimationData, AnimationProperty, EasingType, KeyType, KeyframeValue, ObjectType, RangeData,
-    Sequence, UIKeyframe,
+    AnimationData, AnimationProperty, BackgroundFill, EasingType, KeyType, KeyframeValue,
+    ObjectType, RangeData, Sequence, UIKeyframe,
 };
 use crate::camera::{Camera, CameraBinding};
 use crate::capture::{MousePosition, SourceData};
