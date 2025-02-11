@@ -63,7 +63,7 @@ impl ExportPipeline {
             },
         );
 
-        camera.position = Vector2::new(0.0, -450.0);
+        camera.position = Vector2::new(85.0, -535.0);
         camera.zoom = 2.4;
 
         let viewport = Arc::new(Mutex::new(Viewport::new(
