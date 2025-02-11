@@ -408,7 +408,7 @@ impl TextRenderer {
                 self.color[0] as u8,
                 self.color[1] as u8,
                 self.color[2] as u8,
-                1.0,
+                255.0,
             );
 
             vertices.extend_from_slice(&[
@@ -473,7 +473,7 @@ impl TextRenderer {
             self.color[0] as u8,
             self.color[1] as u8,
             self.color[2] as u8,
-            opacity,
+            opacity * 255.0,
         );
 
         self.vertices.iter_mut().for_each(|v| {
