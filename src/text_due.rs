@@ -19,7 +19,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
-use crate::polygon::{Polygon, SavedPoint, Stroke};
 use crate::vertex::get_z_layer;
 use crate::{
     camera::Camera,
@@ -29,6 +28,10 @@ use crate::{
 };
 use crate::{editor::rgb_to_wgpu, transform::create_empty_group_transform};
 use crate::{editor::wgpu_to_human, polygon::INTERNAL_LAYER_SPACE};
+use crate::{
+    editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET},
+    polygon::{Polygon, SavedPoint, Stroke},
+};
 
 pub struct AtlasGlyph {
     pub uv_rect: [f32; 4], // x, y, width, height in UV coordinates
@@ -225,8 +228,8 @@ impl TextRenderer {
             Point {
                 // x: random_number_800 as f32,
                 // y: random_number_450 as f32,
-                x: text_config.position.x as f32,
-                y: text_config.position.y as f32,
+                x: text_config.position.x as f32 - CANVAS_HORIZ_OFFSET,
+                y: text_config.position.y as f32 - CANVAS_VERT_OFFSET,
             },
             // TODO: restore rotation?
             0.0,
@@ -242,7 +245,7 @@ impl TextRenderer {
                 fill: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
             },
             -2.0,
-            (transform.layer.clone() - 1.0) as i32,
+            (text_config.layer.clone() as f32 - 1.0) as i32,
             text_config.name.clone(),
             text_config.id,
             current_sequence_id.clone(),

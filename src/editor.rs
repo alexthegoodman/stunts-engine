@@ -3573,7 +3573,7 @@ impl Editor {
                 continue;
             }
 
-            println!("Checking video point");
+            // println!("Checking video point");
 
             if video_item.contains_point(&self.last_top_left, &camera) {
                 println!("Video contains point");
