@@ -19,8 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
-use crate::polygon::SavedPoint;
-use crate::polygon::INTERNAL_LAYER_SPACE;
+use crate::polygon::{Polygon, SavedPoint, Stroke};
 use crate::vertex::get_z_layer;
 use crate::{
     camera::Camera,
@@ -29,6 +28,7 @@ use crate::{
     vertex::Vertex,
 };
 use crate::{editor::rgb_to_wgpu, transform::create_empty_group_transform};
+use crate::{editor::wgpu_to_human, polygon::INTERNAL_LAYER_SPACE};
 
 pub struct AtlasGlyph {
     pub uv_rect: [f32; 4], // x, y, width, height in UV coordinates
@@ -46,6 +46,7 @@ pub struct TextRendererConfig {
     pub position: Point,
     pub layer: i32,
     pub color: [i32; 4],
+    pub background_fill: [i32; 4],
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
@@ -60,6 +61,7 @@ pub struct SavedTextRendererConfig {
     pub position: SavedPoint,
     pub layer: i32,
     pub color: [i32; 4],
+    pub background_fill: Option<[i32; 4]>,
 }
 
 pub struct TextRenderer {
@@ -88,13 +90,14 @@ pub struct TextRenderer {
     pub color: [i32; 4],
     pub font_size: i32,
     pub group_bind_group: BindGroup,
+    pub background_polygon: Polygon,
 }
 
 impl TextRenderer {
     pub fn new(
         device: &Device,
         queue: &Queue,
-        bind_group_layout: &wgpu::BindGroupLayout,
+        bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         group_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
         font_data: &[u8],
         window_size: &WindowSize,
@@ -102,6 +105,7 @@ impl TextRenderer {
         text_config: TextRendererConfig,
         id: Uuid,
         current_sequence_id: Uuid,
+        camera: &Camera,
     ) -> Self {
         // Load and initialize the font
         // TODO: inefficient to load this font per text item
@@ -200,6 +204,52 @@ impl TextRenderer {
         let (tmp_group_bind_group, tmp_group_transform) =
             create_empty_group_transform(device, group_bind_group_layout, window_size);
 
+        let mut background_polygon = Polygon::new(
+            &window_size,
+            &device,
+            &queue,
+            bind_group_layout,
+            group_bind_group_layout,
+            &camera,
+            // TODO: restoring triangles or non rectangles?
+            vec![
+                Point { x: 0.0, y: 0.0 },
+                Point { x: 1.0, y: 0.0 },
+                Point { x: 1.0, y: 1.0 },
+                Point { x: 0.0, y: 1.0 },
+            ],
+            (
+                text_config.dimensions.0 as f32,
+                text_config.dimensions.1 as f32,
+            ),
+            Point {
+                // x: random_number_800 as f32,
+                // y: random_number_450 as f32,
+                x: text_config.position.x as f32,
+                y: text_config.position.y as f32,
+            },
+            // TODO: restore rotation?
+            0.0,
+            0.0 as f32,
+            rgb_to_wgpu(
+                text_config.background_fill[0] as u8,
+                text_config.background_fill[1] as u8,
+                text_config.background_fill[2] as u8,
+                text_config.background_fill[3] as f32,
+            ),
+            Stroke {
+                thickness: 0.0 as f32,
+                fill: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
+            },
+            -2.0,
+            (transform.layer.clone() - 1.0) as i32,
+            text_config.name.clone(),
+            text_config.id,
+            current_sequence_id.clone(),
+        );
+
+        background_polygon.hidden = false;
+
         Self {
             id,
             current_sequence_id,
@@ -225,6 +275,7 @@ impl TextRenderer {
             color: text_config.color,
             font_size: text_config.font_size,
             group_bind_group: tmp_group_bind_group,
+            background_polygon,
         }
     }
 
@@ -233,6 +284,8 @@ impl TextRenderer {
         let layer_index = layer_index - INTERNAL_LAYER_SPACE;
         self.layer = layer_index;
         self.transform.layer = layer_index as f32;
+        self.background_polygon.layer = layer_index - 1;
+        self.background_polygon.transform.layer = (layer_index - 1) as f32;
     }
 
     fn add_glyph_to_atlas(
@@ -462,12 +515,7 @@ impl TextRenderer {
     // }
 
     pub fn update_opacity(&mut self, queue: &wgpu::Queue, opacity: f32) {
-        // let new_color = [
-        //     self.color[0] as f32,
-        //     self.color[1] as f32,
-        //     self.color[2] as f32,
-        //     opacity,
-        // ];
+        self.background_polygon.update_opacity(queue, opacity);
 
         let new_color = rgb_to_wgpu(
             self.color[0] as u8,
@@ -492,10 +540,19 @@ impl TextRenderer {
         dimensions: (f32, f32),
         camera: &Camera,
     ) {
+        self.background_polygon.update_data_from_dimensions(
+            window_size,
+            device,
+            queue,
+            bind_group_layout,
+            dimensions,
+            camera,
+        );
+
         self.dimensions = dimensions;
+
         // rerender text to assure wrapping
         self.render_text(device, queue);
-        // self.transform.update_uniform_buffer(&queue, &window_size);
     }
 
     pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
@@ -546,6 +603,12 @@ impl TextRenderer {
             layer: self.layer,
             color: self.color,
             font_size: self.font_size,
+            background_fill: [
+                wgpu_to_human(self.background_polygon.fill[0]) as i32,
+                wgpu_to_human(self.background_polygon.fill[1]) as i32,
+                wgpu_to_human(self.background_polygon.fill[2]) as i32,
+                wgpu_to_human(self.background_polygon.fill[3]) as i32,
+            ],
         }
     }
 
@@ -574,6 +637,7 @@ impl TextRenderer {
             config.clone(),
             config.id,
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
+            camera,
         )
     }
 }

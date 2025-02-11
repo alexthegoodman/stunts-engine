@@ -535,10 +535,12 @@ impl Editor {
                     layer: t.layer.clone(),
                     color: t.color.clone(),
                     font_size: t.font_size.clone(),
+                    background_fill: t.background_fill.unwrap_or([200, 200, 200, 255]),
                 },
                 Uuid::from_str(&t.id).expect("Couldn't convert string to uuid"),
                 Uuid::from_str(&saved_sequence.id.clone())
                     .expect("Couldn't convert string to uuid"),
+                camera,
             );
 
             restored_text.hidden = hidden;
@@ -1730,6 +1732,10 @@ impl Editor {
                                 self.text_items[object_idx]
                                     .transform
                                     .update_position([position.x, position.y], &camera.window_size);
+                                self.text_items[object_idx]
+                                    .background_polygon
+                                    .transform
+                                    .update_position([position.x, position.y], &camera.window_size);
                             }
                             ObjectType::ImageItem => {
                                 self.image_items[object_idx]
@@ -1759,6 +1765,10 @@ impl Editor {
                                 self.text_items[object_idx]
                                     .transform
                                     .update_rotation(new_rotation_rad);
+                                self.text_items[object_idx]
+                                    .background_polygon
+                                    .transform
+                                    .update_rotation(new_rotation_rad);
                             }
                             ObjectType::ImageItem => {
                                 self.image_items[object_idx]
@@ -1786,6 +1796,10 @@ impl Editor {
                             }
                             ObjectType::TextItem => {
                                 self.text_items[object_idx]
+                                    .transform
+                                    .update_scale([new_scale, new_scale]);
+                                self.text_items[object_idx]
+                                    .background_polygon
                                     .transform
                                     .update_scale([new_scale, new_scale]);
                             }
@@ -1821,6 +1835,9 @@ impl Editor {
                             }
                             ObjectType::TextItem => {
                                 self.text_items[object_idx]
+                                    .update_opacity(&gpu_resources.queue, opacity);
+                                self.text_items[object_idx]
+                                    .background_polygon
                                     .update_opacity(&gpu_resources.queue, opacity);
                             }
                             ObjectType::ImageItem => {
@@ -2360,6 +2377,7 @@ impl Editor {
             text_config,
             new_id,
             Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
+            camera,
         );
 
         text_item.render_text(&device, &queue);
@@ -3533,9 +3551,16 @@ impl Editor {
                                 },
                                 layer: text_item.layer,
                                 color: text_item.color,
-                                font_size: text_item.font_size, // border_radius: polygon.border_radius,
-                                                                // fill: polygon.fill,
-                                                                // stroke: polygon.stroke,
+                                font_size: text_item.font_size,
+                                background_fill: [
+                                    wgpu_to_human(text_item.background_polygon.fill[0]) as i32,
+                                    wgpu_to_human(text_item.background_polygon.fill[1]) as i32,
+                                    wgpu_to_human(text_item.background_polygon.fill[2]) as i32,
+                                    wgpu_to_human(text_item.background_polygon.fill[3]) as i32,
+                                ],
+                                // border_radius: polygon.border_radius,
+                                // fill: polygon.fill,
+                                // stroke: polygon.stroke,
                             },
                         );
                         self.selected_polygon_id = text_item.id; // TODO: separate property for each object type?
@@ -4150,6 +4175,10 @@ impl Editor {
         println!("move_text {:?}", new_position);
 
         text_item
+            .transform
+            .update_position([new_position.x, new_position.y], window_size);
+        text_item
+            .background_polygon
             .transform
             .update_position([new_position.x, new_position.y], window_size);
 
