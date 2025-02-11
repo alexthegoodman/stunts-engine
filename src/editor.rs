@@ -1219,6 +1219,24 @@ impl Editor {
                             .collect(),
                         depth: 0,
                     },
+                    AnimationProperty {
+                        name: "Zoom / Popout".to_string(),
+                        property_path: "zoom".to_string(),
+                        children: Vec::new(),
+                        keyframes: timestamp_percs
+                            .iter()
+                            .map(|&t| UIKeyframe {
+                                id: Uuid::new_v4().to_string(),
+                                time: Duration::from_millis((t * total_duration) as u64),
+                                value: KeyframeValue::Zoom(100),
+                                easing: EasingType::EaseInOut,
+                                path_type: PathType::Linear,
+                                // should be same as position? or safe to be independent?
+                                key_type: KeyType::Frame,
+                            })
+                            .collect(),
+                        depth: 0,
+                    },
                 ];
 
                 animation_data_vec.push(AnimationData {
