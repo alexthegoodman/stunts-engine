@@ -91,6 +91,8 @@ pub fn get_polygon_data(
     wgpu::BindGroup,
     SnTransform,
 ) {
+    println!("Get polygon data: {:?}", fill);
+
     let mut geometry: VertexBuffers<Vertex, u32> = VertexBuffers::new();
     let mut fill_tessellator = FillTessellator::new();
     let mut stroke_tessellator = StrokeTessellator::new();

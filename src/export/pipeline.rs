@@ -379,6 +379,7 @@ impl ExportPipeline {
         });
 
         // begin playback
+        export_editor.camera = Some(camera);
         let now = std::time::Instant::now();
         export_editor.video_start_playing_time = Some(now.clone());
 
@@ -433,7 +434,7 @@ impl ExportPipeline {
             .window_size_bind_group
             .as_ref()
             .expect("Couldn't get window size bind group");
-        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let camera = self.camera.as_ref().expect("Couldn't get camera"); // careful, we have a camera on editor and on self
         let texture = self.texture.as_ref().expect("Couldn't get texture");
         let frame_buffer = self
             .frame_buffer
@@ -508,6 +509,37 @@ impl ExportPipeline {
             // draw text items
             for (text_index, text_item) in editor.text_items.iter().enumerate() {
                 if !text_item.hidden {
+                    if !text_item.background_polygon.hidden {
+                        text_item
+                            .background_polygon
+                            .transform
+                            .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                        render_pass.set_bind_group(
+                            1,
+                            &text_item.background_polygon.bind_group,
+                            &[],
+                        );
+                        render_pass.set_bind_group(
+                            3,
+                            &text_item.background_polygon.group_bind_group,
+                            &[],
+                        );
+                        render_pass.set_vertex_buffer(
+                            0,
+                            text_item.background_polygon.vertex_buffer.slice(..),
+                        );
+                        render_pass.set_index_buffer(
+                            text_item.background_polygon.index_buffer.slice(..),
+                            wgpu::IndexFormat::Uint32,
+                        );
+                        render_pass.draw_indexed(
+                            0..text_item.background_polygon.indices.len() as u32,
+                            0,
+                            0..1,
+                        );
+                    }
+
                     text_item
                         .transform
                         .update_uniform_buffer(&queue, &camera.window_size);

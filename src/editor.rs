@@ -187,6 +187,9 @@ pub enum ObjectProperty {
     Red(f32),
     Green(f32),
     Blue(f32),
+    FillRed(f32),
+    FillGreen(f32),
+    FillBlue(f32),
     BorderRadius(f32),
     StrokeThickness(f32),
     StrokeRed(f32),
@@ -733,6 +736,19 @@ impl Editor {
                     .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
 
                 text.update_opacity(&gpu_resources.queue, 1.0);
+
+                text.background_polygon.transform.position.x =
+                    t.position.x as f32 + CANVAS_HORIZ_OFFSET;
+                text.background_polygon.transform.position.y =
+                    t.position.y as f32 + CANVAS_VERT_OFFSET;
+                text.background_polygon.transform.rotation = 0.0;
+
+                text.background_polygon
+                    .transform
+                    .update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
+
+                text.background_polygon
+                    .update_opacity(&gpu_resources.queue, 1.0);
 
                 // TODO: reset other properties once scale is figured out
             });
@@ -2468,7 +2484,7 @@ impl Editor {
     pub fn replace_background(&mut self, sequence_id: Uuid, fill: [f32; 4]) {
         println!("replace background {:?} {:?}", sequence_id, fill);
 
-        let camera = self.camera.expect("Couldn't get camera");
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
         let window_size = camera.window_size;
         let model_bind_group_layout = self
             .model_bind_group_layout
@@ -2530,7 +2546,7 @@ impl Editor {
         if let Some(index) = polygon_index {
             println!("Found selected static_polygon with ID: {}", selected_id);
 
-            let camera = self.camera.expect("Couldn't get camera");
+            let camera = self.camera.as_ref().expect("Couldn't get camera");
 
             // Get the necessary data from editor
             let viewport_width = camera.window_size.width;
@@ -2621,7 +2637,7 @@ impl Editor {
         if let Some(index) = polygon_index {
             println!("Found selected polygon with ID: {}", selected_id);
 
-            let camera = self.camera.expect("Couldn't get camera");
+            let camera = self.camera.as_ref().expect("Couldn't get camera");
 
             // Get the necessary data from editor
             let viewport_width = camera.window_size.width;
@@ -2813,7 +2829,7 @@ impl Editor {
         if let Some(index) = text_index {
             println!("Found selected text with ID: {}", selected_id);
 
-            let camera = self.camera.expect("Couldn't get camera");
+            let camera = self.camera.as_ref().expect("Couldn't get camera");
 
             // Get the necessary data from editor
             let viewport_width = camera.window_size.width;
@@ -2859,6 +2875,54 @@ impl Editor {
                             (selected_text.dimensions.0, n),
                             &camera,
                         ),
+                        "red_fill" => selected_text.background_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                n,
+                                selected_text.background_polygon.fill[1],
+                                selected_text.background_polygon.fill[2],
+                                selected_text.background_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
+                        "green_fill" => selected_text.background_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                selected_text.background_polygon.fill[0],
+                                n,
+                                selected_text.background_polygon.fill[2],
+                                selected_text.background_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
+                        "blue_fill" => selected_text.background_polygon.update_data_from_fill(
+                            &window_size,
+                            &device,
+                            &queue,
+                            &self
+                                .model_bind_group_layout
+                                .as_ref()
+                                .expect("Couldn't get model bind group layout"),
+                            [
+                                selected_text.background_polygon.fill[0],
+                                selected_text.background_polygon.fill[1],
+                                n,
+                                selected_text.background_polygon.fill[3],
+                            ],
+                            &camera,
+                        ),
                         _ => println!("No match on input"),
                     },
                 }
@@ -2878,7 +2942,7 @@ impl Editor {
         if let Some(index) = image_index {
             println!("Found selected image with ID: {}", selected_id);
 
-            let camera = self.camera.expect("Couldn't get camera");
+            let camera = self.camera.as_ref().expect("Couldn't get camera");
 
             // Get the necessary data from editor
             let viewport_width = camera.window_size.width;
@@ -2943,7 +3007,7 @@ impl Editor {
         if let Some(index) = video_index {
             println!("Found selected video with ID: {}", selected_id);
 
-            let camera = self.camera.expect("Couldn't get camera");
+            let camera = self.camera.as_ref().expect("Couldn't get camera");
 
             // Get the necessary data from editor
             let viewport_width = camera.window_size.width;
@@ -3106,6 +3170,48 @@ impl Editor {
                         return 0.0;
                     }
                 }
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_fill_red(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.text_items.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.text_items.get(index) {
+                return selected_polygon.background_polygon.fill[0];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_fill_green(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.text_items.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.text_items.get(index) {
+                return selected_polygon.background_polygon.fill[1];
+            } else {
+                return 0.0;
+            }
+        }
+
+        0.0
+    }
+
+    pub fn get_fill_blue(&self, selected_id: Uuid) -> f32 {
+        let polygon_index = self.text_items.iter().position(|p| p.id == selected_id);
+
+        if let Some(index) = polygon_index {
+            if let Some(selected_polygon) = self.text_items.get(index) {
+                return selected_polygon.background_polygon.fill[2];
+            } else {
+                return 0.0;
             }
         }
 
@@ -3777,7 +3883,7 @@ impl Editor {
     pub fn handle_mouse_up(&mut self) -> Option<ObjectEditConfig> {
         let mut action_edit = None;
 
-        let camera = self.camera.expect("Couldn't get camera");
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
 
         // TODO: does another bounds cause this to get stuck?
         if (self.last_screen.x < self.interactive_bounds.min.x
@@ -3972,7 +4078,7 @@ impl Editor {
     }
 
     pub fn reset_bounds(&mut self, window_size: &WindowSize) {
-        let mut camera = self.camera.expect("Couldn't get camera");
+        let mut camera = self.camera.as_mut().expect("Couldn't get camera");
 
         camera.position = Vector2::new(0.0, 0.0);
         camera.zoom = 1.0;
