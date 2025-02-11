@@ -934,12 +934,12 @@ impl Editor {
         let values_per_prediction = NUM_INFERENCE_FEATURES; // object_index, time, width, height, x, y
         let keyframes_per_object = 6; // number of keyframes per object
         let timestamp_percs = vec![
-            0,
-            2500 / 20000,
-            5000 / 20000,
-            15000 / 20000,
-            17500 / 20000,
-            20000 / 20000,
+            0.0,
+            2500.0 / 20000.0,
+            5000.0 / 20000.0,
+            15000.0 / 20000.0,
+            17500.0 / 20000.0,
+            20000.0 / 20000.0,
         ];
 
         println!("timestamp_percs {:?}", timestamp_percs);
@@ -1048,7 +1048,7 @@ impl Editor {
             let item_id = self.get_item_id(object_idx);
             let object_type = self.get_object_type(object_idx);
 
-            let mut total_duration = 20000;
+            let mut total_duration = 20000.0;
             match object_type.clone().expect("Couldn't get object type") {
                 ObjectType::VideoItem => {
                     total_duration = self
@@ -1056,10 +1056,10 @@ impl Editor {
                         .iter()
                         .find(|v| v.id == item_id.clone().expect("Couldn't get item id"))
                         .expect("Couldn't get video")
-                        .source_duration_ms;
+                        .source_duration_ms as f32;
                 }
                 _ => {
-                    total_duration = 20000;
+                    total_duration = 20000.0;
                 }
             }
 
