@@ -1173,7 +1173,7 @@ impl Editor {
 
             // Only create animation if we have valid keyframes and item ID
             if !final_position_keyframes.is_empty() && item_id.is_some() {
-                let properties = vec![
+                let mut properties = vec![
                     // Position property with predicted values
                     AnimationProperty {
                         name: "Position".to_string(),
@@ -1237,7 +1237,10 @@ impl Editor {
                             .collect(),
                         depth: 0,
                     },
-                    AnimationProperty {
+                ];
+
+                if object_type.as_ref().unwrap_or(&ObjectType::Polygon) == &ObjectType::VideoItem {
+                    properties.push(AnimationProperty {
                         name: "Zoom / Popout".to_string(),
                         property_path: "zoom".to_string(),
                         children: Vec::new(),
@@ -1254,8 +1257,8 @@ impl Editor {
                             })
                             .collect(),
                         depth: 0,
-                    },
-                ];
+                    });
+                }
 
                 animation_data_vec.push(AnimationData {
                     id: Uuid::new_v4().to_string(),
@@ -2042,7 +2045,7 @@ impl Editor {
                                 }
                             }
                             _ => {
-                                println!("Zoom not supported here");
+                                // println!("Zoom not supported here");
                             }
                         }
                     }
