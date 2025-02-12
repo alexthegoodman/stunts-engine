@@ -1282,13 +1282,19 @@ impl Editor {
         let mut animation_data_vec = Vec::new();
         let values_per_prediction = NUM_INFERENCE_FEATURES;
         let keyframes_per_object = 6;
-        let timestamp_percs = vec![
-            0.0,
-            2500.0 / 20000.0,
-            5000.0 / 20000.0,
-            15000.0 / 20000.0,
-            17500.0 / 20000.0,
-            20000.0 / 20000.0,
+        // let timestamp_percs = vec![
+        //     0.0,
+        //     2500.0 / 20000.0,
+        //     5000.0 / 20000.0,
+        //     15000.0 / 20000.0,
+        //     17500.0 / 20000.0,
+        //     20000.0 / 20000.0,
+        // ];
+
+        let timestamp_diffs = vec![
+            // from start
+            0.0, 2500.0, 5000.0, // from end
+            -5000.0, -2500.0, 0.0,
         ];
 
         // Calculate total number of objects from predictions
@@ -1396,6 +1402,17 @@ impl Editor {
                 _ => 20000.0,
             };
 
+            let timestamps = vec![
+                // from start
+                0.0,
+                2500.0,
+                5000.0,
+                // from end
+                total_duration - 5000.0,
+                total_duration - 2500.0,
+                total_duration,
+            ];
+
             // Determine which path to use
             let path_source_idx = if self.generation_choreographed {
                 longest_path.unwrap_or(object_idx)
@@ -1409,8 +1426,8 @@ impl Editor {
             let (_, _, current_x, current_y) = current_positions[object_idx];
 
             // Calculate center point for the range period
-            let range_center_time =
-                (timestamp_percs[2] + timestamp_percs[3]) / 2.0 * total_duration;
+            // let range_center_time =
+            //     (timestamp_percs[2] + timestamp_percs[3]) / 2.0 * total_duration;
             let range_center_idx = path_source_idx * (values_per_prediction * keyframes_per_object)
                 + 2 * values_per_prediction;
             let center_x = ((predictions[range_center_idx + 4] * 0.01) * 800.0).round() as i32;
@@ -1422,7 +1439,7 @@ impl Editor {
 
             // Create keyframes with the offset applied
             for keyframe_time_idx in 0..keyframes_per_object {
-                if self.generation_count == 4 && (keyframe_time_idx == 1 || keyframe_time_idx == 5)
+                if self.generation_count == 4 && (keyframe_time_idx == 1 || keyframe_time_idx == 4)
                 {
                     continue;
                 }
@@ -1439,11 +1456,18 @@ impl Editor {
                 let predicted_y =
                     ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32 + offset_y;
 
+                // Calculate timestamp based on whether it's relative to start or end
+                let timestamp = if keyframe_time_idx < 3 {
+                    // First three timestamps are relative to start
+                    timestamp_diffs[keyframe_time_idx]
+                } else {
+                    // Last three timestamps are relative to end
+                    total_duration + timestamp_diffs[keyframe_time_idx]
+                };
+
                 let keyframe = UIKeyframe {
                     id: Uuid::new_v4().to_string(),
-                    time: Duration::from_millis(
-                        (timestamp_percs[keyframe_time_idx] * total_duration) as u64,
-                    ),
+                    time: Duration::from_millis(timestamp as u64),
                     value: KeyframeValue::Position([predicted_x, predicted_y]),
                     easing: EasingType::EaseInOut,
                     path_type: PathType::Linear,
@@ -1501,11 +1525,11 @@ impl Editor {
                         name: "Rotation".to_string(),
                         property_path: "rotation".to_string(),
                         children: Vec::new(),
-                        keyframes: timestamp_percs
+                        keyframes: timestamps
                             .iter()
                             .map(|&t| UIKeyframe {
                                 id: Uuid::new_v4().to_string(),
-                                time: Duration::from_millis((t * total_duration) as u64),
+                                time: Duration::from_millis(t as u64),
                                 value: KeyframeValue::Rotation(0),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
@@ -1519,11 +1543,11 @@ impl Editor {
                         name: "Scale".to_string(),
                         property_path: "scale".to_string(),
                         children: Vec::new(),
-                        keyframes: timestamp_percs
+                        keyframes: timestamps
                             .iter()
                             .map(|&t| UIKeyframe {
                                 id: Uuid::new_v4().to_string(),
-                                time: Duration::from_millis((t * total_duration) as u64),
+                                time: Duration::from_millis(t as u64),
                                 value: KeyframeValue::Scale(100),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
@@ -1537,20 +1561,20 @@ impl Editor {
                         name: "Opacity".to_string(),
                         property_path: "opacity".to_string(),
                         children: Vec::new(),
-                        keyframes: timestamp_percs
+                        keyframes: timestamps
                             .iter()
                             .enumerate()
                             .map(|(i, &t)| {
                                 let mut opacity = 100;
                                 if self.generation_fade {
-                                    if i == 0 || i == timestamp_percs.len() - 1 {
+                                    if i == 0 || i == timestamps.len() - 1 {
                                         opacity = 0;
                                     }
                                 }
 
                                 UIKeyframe {
                                     id: Uuid::new_v4().to_string(),
-                                    time: Duration::from_millis((t * total_duration) as u64),
+                                    time: Duration::from_millis(t as u64),
                                     value: KeyframeValue::Opacity(opacity),
                                     easing: EasingType::EaseInOut,
                                     path_type: PathType::Linear,
@@ -1568,11 +1592,11 @@ impl Editor {
                         name: "Zoom / Popout".to_string(),
                         property_path: "zoom".to_string(),
                         children: Vec::new(),
-                        keyframes: timestamp_percs
+                        keyframes: timestamps
                             .iter()
                             .map(|&t| UIKeyframe {
                                 id: Uuid::new_v4().to_string(),
-                                time: Duration::from_millis((t * total_duration) as u64),
+                                time: Duration::from_millis(t as u64),
                                 value: KeyframeValue::Zoom(100),
                                 easing: EasingType::EaseInOut,
                                 path_type: PathType::Linear,
