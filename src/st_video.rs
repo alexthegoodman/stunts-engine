@@ -1,29 +1,82 @@
 use std::mem::MaybeUninit;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant, SystemTime};
 
 use cgmath::SquareMatrix;
 use cgmath::{Matrix4, Vector2};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue};
+
+#[cfg(target_os = "windows")]
 use windows::Win32::Foundation::*;
+#[cfg(target_os = "windows")]
 use windows::Win32::Media::KernelStreaming::GUID_NULL;
+#[cfg(target_os = "windows")]
 use windows::Win32::Media::MediaFoundation::*;
+#[cfg(target_os = "windows")]
 use windows::Win32::System::Com::StructuredStorage::{
     InitPropVariantFromUInt64Vector, PropVariantToInt64,
 };
+#[cfg(target_os = "windows")]
 use windows::Win32::System::Variant::{VariantClear, VariantInit, VT_I8};
+#[cfg(target_os = "windows")]
 use windows_core::{PCWSTR, PROPVARIANT};
 
+// #[cfg(target_os = "windows")]
+// use crate::capture::{MousePosition, SourceData};
+
 use crate::camera::Camera;
-use crate::capture::{MousePosition, SourceData};
 use crate::editor::{Point, WindowSize};
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array, Transform};
 use crate::vertex::Vertex;
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct RectInfo {
+    pub left: i32,
+    pub right: i32,
+    pub top: i32,
+    pub bottom: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct WindowInfo {
+    pub hwnd: usize,
+    pub title: String,
+    pub rect: RectInfo,
+}
+
+#[derive(Clone)]
+pub struct MouseTrackingState {
+    pub mouse_positions: Arc<Mutex<Vec<serde_json::Value>>>,
+    pub start_time: SystemTime,
+    pub is_tracking: Arc<AtomicBool>,
+    pub is_recording: Arc<AtomicBool>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, Copy)]
+pub struct MousePosition {
+    pub x: f32,
+    pub y: f32,
+    pub timestamp: u128,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct SourceData {
+    pub id: String,
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+    pub scale_factor: f32,
+}
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct SavedStVideoConfig {
@@ -100,9 +153,9 @@ impl StVideo {
         z_index: f32,
         new_id: String,
         current_sequence_id: Uuid,
-    ) -> Result<Self, windows::core::Error> {
+    ) -> StVideo {
         let (source_reader, duration, duration_ms, source_width, source_height, source_frame_rate) =
-            Self::initialize_media_source(path)?;
+            Self::initialize_media_source(path).expect("Couldn't create media source");
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Video Texture"),
@@ -275,7 +328,7 @@ impl StVideo {
             new_id, duration_ms, source_frame_rate
         );
 
-        Ok(Self {
+        Self {
             id: new_id,
             current_sequence_id,
             name: video_config.name,
@@ -298,7 +351,10 @@ impl StVideo {
             indices,
             hidden: false,
             layer: video_config.layer - INTERNAL_LAYER_SPACE,
+
+            #[cfg(target_os = "windows")]
             source_reader,
+
             group_bind_group: tmp_group_bind_group,
             current_zoom: 1.0,
             mouse_path: video_config.mouse_path,
@@ -312,7 +368,7 @@ impl StVideo {
             frame_timer: None,
             dynamic_alpha: 0.01,
             num_frames_drawn: 0,
-        })
+        }
     }
 
     #[cfg(target_os = "windows")]
@@ -380,9 +436,24 @@ impl StVideo {
         ))
     }
 
-    // #[cfg(target_arch = "wasm32")]
-    // fn initialize_media_source() {}
+    #[cfg(target_arch = "wasm32")]
+    fn initialize_media_source(
+        path: &Path,
+    ) -> Result<
+        (
+            i64, // replace with webcodec equivalent
+            i64,
+            i64,
+            u32,
+            u32,
+            f64,
+        ),
+        Box<dyn std::error::Error>,
+    > {
+        Ok((0, 0, 0, 0, 0, 0.0))
+    }
 
+    #[cfg(target_os = "windows")]
     fn create_source_reader(
         // &self,
         file_path: &str,
@@ -420,6 +491,7 @@ impl StVideo {
         }
     }
 
+    #[cfg(target_os = "windows")]
     pub fn draw_video_frame(&self, device: &Device, queue: &Queue) -> windows::core::Result<()> {
         unsafe {
             // println!("Drawing video frame");
@@ -483,6 +555,16 @@ impl StVideo {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn draw_video_frame(
+        &self,
+        device: &Device,
+        queue: &Queue,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
     pub fn reset_playback(&mut self) -> Result<(), windows::core::Error> {
         let time = PROPVARIANT::from(0i64);
 
@@ -490,6 +572,11 @@ impl StVideo {
             self.source_reader.SetCurrentPosition(&GUID_NULL, &time)?;
         }
 
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn reset_playback(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
@@ -712,7 +799,7 @@ impl StVideo {
     }
 }
 
-// TODO: add to Drop trait?
+#[cfg(target_os = "windows")]
 fn shutdown_media_foundation() -> Result<(), windows::core::Error> {
     unsafe {
         MFShutdown()?;
@@ -720,6 +807,7 @@ fn shutdown_media_foundation() -> Result<(), windows::core::Error> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 impl Drop for StVideo {
     fn drop(&mut self) {
         unsafe {

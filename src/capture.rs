@@ -39,48 +39,7 @@ use windows_capture::{
     settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
 };
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct RectInfo {
-    pub left: i32,
-    pub right: i32,
-    pub top: i32,
-    pub bottom: i32,
-    pub width: i32,
-    pub height: i32,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct WindowInfo {
-    pub hwnd: usize,
-    pub title: String,
-    pub rect: RectInfo,
-}
-
-#[derive(Clone)]
-pub struct MouseTrackingState {
-    pub mouse_positions: Arc<Mutex<Vec<serde_json::Value>>>,
-    pub start_time: SystemTime,
-    pub is_tracking: Arc<AtomicBool>,
-    pub is_recording: Arc<AtomicBool>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, Copy)]
-pub struct MousePosition {
-    pub x: f32,
-    pub y: f32,
-    pub timestamp: u128,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct SourceData {
-    pub id: String,
-    pub name: String,
-    pub width: u32,
-    pub height: u32,
-    pub x: i32,
-    pub y: i32,
-    pub scale_factor: f32,
-}
+use crate::st_video::{MouseTrackingState, RectInfo, WindowInfo};
 
 #[derive(Clone)]
 pub struct StCapture {

@@ -1,9 +1,7 @@
 pub mod animations;
 pub mod camera;
-pub mod capture;
 pub mod dot;
 pub mod editor;
-pub mod export;
 pub mod fonts;
 pub mod motion_path;
 pub mod polygon;
@@ -12,6 +10,13 @@ pub mod st_video;
 pub mod text;
 pub mod text_due;
 pub mod timelines;
-pub mod transcode;
 pub mod transform;
 pub mod vertex;
+
+#[cfg(target_os = "windows")]
+pub mod export;
+#[cfg(target_os = "windows")]
+pub mod transcode;
+
+#[cfg(target_os = "windows")]
+pub mod capture;

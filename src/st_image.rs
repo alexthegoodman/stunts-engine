@@ -10,7 +10,6 @@ use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
 
 use crate::camera::Camera;
-use crate::capture::MousePosition;
 use crate::editor::Point;
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array};
