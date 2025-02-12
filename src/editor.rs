@@ -300,6 +300,8 @@ pub struct Editor {
     pub inference: Option<CommonMotionInference<Wgpu>>,
     pub generation_count: u32,
     pub generation_curved: bool,
+    pub generation_choreographed: bool,
+    pub generation_fade: bool,
 }
 
 use std::borrow::{Borrow, BorrowMut};
@@ -399,6 +401,8 @@ impl Editor {
             motion_paths: Vec::new(),
             generation_count: 4,
             generation_curved: false,
+            generation_choreographed: true,
+            generation_fade: true,
             // TODO: update interactive bounds on window resize?
             interactive_bounds: BoundingBox {
                 min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
@@ -944,13 +948,340 @@ impl Editor {
         motion_path_keyframes
     }
 
+    // pub fn create_motion_paths_from_predictions(
+    //     &self,
+    //     predictions: Vec<f32>,
+    // ) -> Vec<AnimationData> {
+    //     let mut animation_data_vec = Vec::new();
+    //     let values_per_prediction = NUM_INFERENCE_FEATURES; // object_index, time, width, height, x, y
+    //     let keyframes_per_object = 6; // number of keyframes per object
+    //     let timestamp_percs = vec![
+    //         0.0,
+    //         2500.0 / 20000.0,
+    //         5000.0 / 20000.0,
+    //         15000.0 / 20000.0,
+    //         17500.0 / 20000.0,
+    //         20000.0 / 20000.0,
+    //     ];
+
+    //     println!("timestamp_percs {:?}", timestamp_percs);
+
+    //     // Calculate total number of objects from predictions
+    //     let total_predictions = predictions.len();
+    //     let num_objects = total_predictions / (values_per_prediction * keyframes_per_object);
+
+    //     // Get the current positions of all objects
+    //     let mut current_positions = Vec::new();
+    //     let mut total = 0; // use controlled total as get_item_id function filters by hidden
+    //     for (i, polygon) in self.polygons.iter().enumerate() {
+    //         if !polygon.hidden {
+    //             current_positions.push((
+    //                 total,
+    //                 20000,
+    //                 polygon.transform.position.x - CANVAS_HORIZ_OFFSET,
+    //                 polygon.transform.position.y - CANVAS_VERT_OFFSET,
+    //             ));
+    //             total = total + 1;
+    //         }
+    //     }
+    //     for (i, text) in self.text_items.iter().enumerate() {
+    //         if !text.hidden {
+    //             current_positions.push((
+    //                 total,
+    //                 20000,
+    //                 text.transform.position.x - CANVAS_HORIZ_OFFSET,
+    //                 text.transform.position.y - CANVAS_VERT_OFFSET,
+    //             ));
+    //             total = total + 1;
+    //         }
+    //     }
+    //     for (i, image) in self.image_items.iter().enumerate() {
+    //         if !image.hidden {
+    //             current_positions.push((
+    //                 total,
+    //                 20000,
+    //                 image.transform.position.x - CANVAS_HORIZ_OFFSET,
+    //                 image.transform.position.y - CANVAS_VERT_OFFSET,
+    //             ));
+    //             total = total + 1;
+    //         }
+    //     }
+    //     for (i, video) in self.video_items.iter().enumerate() {
+    //         if !video.hidden {
+    //             current_positions.push((
+    //                 total,
+    //                 video.source_duration_ms,
+    //                 video.transform.position.x - CANVAS_HORIZ_OFFSET,
+    //                 video.transform.position.y - CANVAS_VERT_OFFSET,
+    //             ));
+    //             total = total + 1;
+    //         }
+    //     }
+
+    //     println!("current_positions length {:?}", current_positions.len());
+
+    //     // Collect all 3rd keyframes (index 2) from predictions
+    //     let mut third_keyframes = Vec::new();
+    //     for object_idx in 0..num_objects {
+    //         let base_idx = object_idx * (values_per_prediction * keyframes_per_object)
+    //             + 2 * values_per_prediction; // 3rd keyframe (index 2)
+
+    //         // Skip if out of bounds
+    //         if base_idx + 5 >= predictions.len() {
+    //             continue;
+    //         }
+
+    //         // percentage based predictions (800 is canvas width, 450 is canvas height)
+    //         let predicted_x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
+    //         let predicted_y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
+
+    //         third_keyframes.push((object_idx, predicted_x, predicted_y));
+    //     }
+
+    //     println!("third_keyframes length {:?}", third_keyframes.len());
+
+    //     // Create distance vector
+    //     let mut distances = vec![vec![f64::MAX; third_keyframes.len()]; current_positions.len()];
+    //     for (object_idx, (_, duration, current_x, current_y)) in
+    //         current_positions.iter().enumerate()
+    //     {
+    //         for (mp_object_idx, (_, predicted_x, predicted_y)) in third_keyframes.iter().enumerate()
+    //         {
+    //             let dx = *predicted_x as f32 - *current_x;
+    //             let dy = *predicted_y as f32 - *current_y;
+    //             let distance = (dx * dx + dy * dy).sqrt();
+    //             distances[object_idx][mp_object_idx] = distance as f64;
+    //         }
+    //     }
+
+    //     println!("distances length {:?}", distances.len());
+
+    //     let motion_path_assignments = assign_motion_paths_to_objects(distances)
+    //         .expect("Couldn't assign motion paths to objects");
+
+    //     println!("motion_path_assignments {:?}", motion_path_assignments); // NOTE: for example, is [0,2,1] but should be [2,0,1]
+    //                                                                        // println!("assigned_keyframes length {:?}", assigned_keyframes.len());
+
+    //     // Create motion paths based on assignments
+    //     for (object_idx, associated_object_idx) in motion_path_assignments.into_iter() {
+    //         println!("object_idx {:?} {:?}", object_idx, associated_object_idx);
+
+    //         // Get the item ID based on the object index
+    //         let item_id = self.get_item_id(object_idx);
+    //         let object_type = self.get_object_type(object_idx);
+
+    //         let mut total_duration = 20000.0;
+    //         match object_type.clone().expect("Couldn't get object type") {
+    //             ObjectType::VideoItem => {
+    //                 total_duration = self
+    //                     .video_items
+    //                     .iter()
+    //                     .find(|v| v.id == item_id.clone().expect("Couldn't get item id"))
+    //                     .expect("Couldn't get video")
+    //                     .source_duration_ms as f32;
+    //             }
+    //             _ => {
+    //                 total_duration = 20000.0;
+    //             }
+    //         }
+
+    //         let mut position_keyframes: Vec<UIKeyframe> = Vec::new();
+
+    //         // Process keyframes for the assigned motion path
+    //         for keyframe_time_idx in 0..keyframes_per_object {
+    //             let base_idx = associated_object_idx
+    //                 * (values_per_prediction * keyframes_per_object)
+    //                 + keyframe_time_idx * values_per_prediction;
+
+    //             // skip depending on chosen count
+    //             if self.generation_count == 4 {
+    //                 if keyframe_time_idx == 1 || keyframe_time_idx == 5 {
+    //                     continue;
+    //                 }
+    //             }
+
+    //             // Skip if out of bounds
+    //             if base_idx + 5 >= predictions.len() {
+    //                 continue;
+    //             }
+
+    //             // percentage based predictions (800 is canvas width, 450 is canvas height)
+    //             let predicted_x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
+    //             let predicted_y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
+
+    //             let keyframe = UIKeyframe {
+    //                 id: Uuid::new_v4().to_string(),
+    //                 time: Duration::from_millis(
+    //                     (timestamp_percs[keyframe_time_idx] * total_duration) as u64,
+    //                 ),
+    //                 value: KeyframeValue::Position([predicted_x, predicted_y]),
+    //                 easing: EasingType::EaseInOut,
+    //                 path_type: PathType::Linear,
+    //                 // set the KeyType to Frame as default, with Range in place of 3rd and 4th keyframes next
+    //                 key_type: KeyType::Frame,
+    //             };
+
+    //             position_keyframes.push(keyframe);
+    //         }
+
+    //         // handle 6 keyframes
+    //         if position_keyframes.len() == 6 {
+    //             // set Range
+    //             let forth_keyframe = &position_keyframes.clone()[3];
+    //             let third_keyframe = &mut position_keyframes[2];
+
+    //             third_keyframe.key_type = KeyType::Range(RangeData {
+    //                 end_time: forth_keyframe.time,
+    //             });
+
+    //             position_keyframes.remove(3);
+    //         }
+
+    //         // handle 4 keyframes
+    //         if position_keyframes.len() == 4 {
+    //             // set Range
+    //             let mid2_keyframe = &position_keyframes.clone()[2];
+    //             let mid_keyframe = &mut position_keyframes[1];
+
+    //             mid_keyframe.key_type = KeyType::Range(RangeData {
+    //                 end_time: mid2_keyframe.time,
+    //             });
+
+    //             position_keyframes.remove(2);
+    //         }
+
+    //         let mut final_position_keyframes: Vec<UIKeyframe> = Vec::new();
+
+    //         // create default curves between remaining keyframes
+    //         if self.generation_curved {
+    //             for (index, keyframe) in position_keyframes.clone().iter().enumerate() {
+    //                 // // Update path_type for previous keyframe if it exists
+    //                 if let Some(prev_keyframe) = final_position_keyframes.last_mut() {
+    //                     prev_keyframe.path_type = prev_keyframe.calculate_default_curve(&keyframe);
+    //                 }
+
+    //                 final_position_keyframes.push(keyframe.clone());
+    //             }
+    //         } else {
+    //             for (index, keyframe) in position_keyframes.clone().iter().enumerate() {
+    //                 final_position_keyframes.push(keyframe.clone());
+    //             }
+    //         }
+
+    //         println!("item_id {:?}", item_id);
+
+    //         // Only create animation if we have valid keyframes and item ID
+    //         if !final_position_keyframes.is_empty() && item_id.is_some() {
+    //             let mut properties = vec![
+    //                 // Position property with predicted values
+    //                 AnimationProperty {
+    //                     name: "Position".to_string(),
+    //                     property_path: "position".to_string(),
+    //                     children: Vec::new(),
+    //                     keyframes: final_position_keyframes,
+    //                     depth: 0,
+    //                 },
+    //                 // Default properties for rotation, scale, opacity
+    //                 AnimationProperty {
+    //                     name: "Rotation".to_string(),
+    //                     property_path: "rotation".to_string(),
+    //                     children: Vec::new(),
+    //                     keyframes: timestamp_percs
+    //                         .iter()
+    //                         .map(|&t| UIKeyframe {
+    //                             id: Uuid::new_v4().to_string(),
+    //                             time: Duration::from_millis((t * total_duration) as u64),
+    //                             value: KeyframeValue::Rotation(0),
+    //                             easing: EasingType::EaseInOut,
+    //                             path_type: PathType::Linear,
+    //                             // should be same as position? or safe to be independent?
+    //                             key_type: KeyType::Frame,
+    //                         })
+    //                         .collect(),
+    //                     depth: 0,
+    //                 },
+    //                 AnimationProperty {
+    //                     name: "Scale".to_string(),
+    //                     property_path: "scale".to_string(),
+    //                     children: Vec::new(),
+    //                     keyframes: timestamp_percs
+    //                         .iter()
+    //                         .map(|&t| UIKeyframe {
+    //                             id: Uuid::new_v4().to_string(),
+    //                             time: Duration::from_millis((t * total_duration) as u64),
+    //                             value: KeyframeValue::Scale(100),
+    //                             easing: EasingType::EaseInOut,
+    //                             path_type: PathType::Linear,
+    //                             // should be same as position? or safe to be independent?
+    //                             key_type: KeyType::Frame,
+    //                         })
+    //                         .collect(),
+    //                     depth: 0,
+    //                 },
+    //                 AnimationProperty {
+    //                     name: "Opacity".to_string(),
+    //                     property_path: "opacity".to_string(),
+    //                     children: Vec::new(),
+    //                     keyframes: timestamp_percs
+    //                         .iter()
+    //                         .map(|&t| UIKeyframe {
+    //                             id: Uuid::new_v4().to_string(),
+    //                             time: Duration::from_millis((t * total_duration) as u64),
+    //                             value: KeyframeValue::Opacity(100),
+    //                             easing: EasingType::EaseInOut,
+    //                             path_type: PathType::Linear,
+    //                             // should be same as position? or safe to be independent?
+    //                             key_type: KeyType::Frame,
+    //                         })
+    //                         .collect(),
+    //                     depth: 0,
+    //                 },
+    //             ];
+
+    //             if object_type.as_ref().unwrap_or(&ObjectType::Polygon) == &ObjectType::VideoItem {
+    //                 properties.push(AnimationProperty {
+    //                     name: "Zoom / Popout".to_string(),
+    //                     property_path: "zoom".to_string(),
+    //                     children: Vec::new(),
+    //                     keyframes: timestamp_percs
+    //                         .iter()
+    //                         .map(|&t| UIKeyframe {
+    //                             id: Uuid::new_v4().to_string(),
+    //                             time: Duration::from_millis((t * total_duration) as u64),
+    //                             value: KeyframeValue::Zoom(100),
+    //                             easing: EasingType::EaseInOut,
+    //                             path_type: PathType::Linear,
+    //                             // should be same as position? or safe to be independent?
+    //                             key_type: KeyType::Frame,
+    //                         })
+    //                         .collect(),
+    //                     depth: 0,
+    //                 });
+    //             }
+
+    //             animation_data_vec.push(AnimationData {
+    //                 id: Uuid::new_v4().to_string(),
+    //                 object_type: object_type.unwrap_or(ObjectType::Polygon),
+    //                 polygon_id: item_id.unwrap(),
+    //                 duration: Duration::from_millis(total_duration as u64),
+    //                 start_time_ms: 0,
+    //                 position: [0, 0],
+    //                 properties,
+    //             });
+    //         }
+    //     }
+
+    //     animation_data_vec
+    // }
+
     pub fn create_motion_paths_from_predictions(
         &self,
         predictions: Vec<f32>,
+        // is_choreographed: bool,
     ) -> Vec<AnimationData> {
         let mut animation_data_vec = Vec::new();
-        let values_per_prediction = NUM_INFERENCE_FEATURES; // object_index, time, width, height, x, y
-        let keyframes_per_object = 6; // number of keyframes per object
+        let values_per_prediction = NUM_INFERENCE_FEATURES;
+        let keyframes_per_object = 6;
         let timestamp_percs = vec![
             0.0,
             2500.0 / 20000.0,
@@ -960,15 +1291,13 @@ impl Editor {
             20000.0 / 20000.0,
         ];
 
-        println!("timestamp_percs {:?}", timestamp_percs);
-
         // Calculate total number of objects from predictions
         let total_predictions = predictions.len();
         let num_objects = total_predictions / (values_per_prediction * keyframes_per_object);
 
-        // Get the current positions of all objects
+        // Get current positions of all objects
         let mut current_positions = Vec::new();
-        let mut total = 0; // use controlled total as get_item_id function filters by hidden
+        let mut total = 0;
         for (i, polygon) in self.polygons.iter().enumerate() {
             if !polygon.hidden {
                 current_positions.push((
@@ -1014,96 +1343,101 @@ impl Editor {
             }
         }
 
-        println!("current_positions length {:?}", current_positions.len());
+        // If choreographed, find the longest path
+        let mut longest_path = None;
+        if self.generation_choreographed {
+            let mut max_distance = 0.0;
+            for object_idx in 0..num_objects {
+                let mut path_length = 0.0;
+                let mut prev_x = None;
+                let mut prev_y = None;
 
-        // Collect all 3rd keyframes (index 2) from predictions
-        let mut third_keyframes = Vec::new();
-        for object_idx in 0..num_objects {
-            let base_idx = object_idx * (values_per_prediction * keyframes_per_object)
-                + 2 * values_per_prediction; // 3rd keyframe (index 2)
+                for keyframe_idx in 0..keyframes_per_object {
+                    let base_idx = object_idx * (values_per_prediction * keyframes_per_object)
+                        + keyframe_idx * values_per_prediction;
 
-            // Skip if out of bounds
-            if base_idx + 5 >= predictions.len() {
-                continue;
+                    if base_idx + 5 >= predictions.len() {
+                        continue;
+                    }
+
+                    let x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
+                    let y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
+
+                    if let (Some(px), Some(py)) = (prev_x, prev_y) {
+                        let dx = (x - px) as f32;
+                        let dy = (y - py) as f32;
+                        path_length += (dx * dx + dy * dy).sqrt();
+                    }
+
+                    prev_x = Some(x);
+                    prev_y = Some(y);
+                }
+
+                if path_length > max_distance {
+                    max_distance = path_length;
+                    longest_path = Some(object_idx);
+                }
             }
-
-            // percentage based predictions (800 is canvas width, 450 is canvas height)
-            let predicted_x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
-            let predicted_y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
-
-            third_keyframes.push((object_idx, predicted_x, predicted_y));
         }
 
-        println!("third_keyframes length {:?}", third_keyframes.len());
-
-        // Create distance vector
-        let mut distances = vec![vec![f64::MAX; third_keyframes.len()]; current_positions.len()];
-        for (object_idx, (_, duration, current_x, current_y)) in
-            current_positions.iter().enumerate()
-        {
-            for (mp_object_idx, (_, predicted_x, predicted_y)) in third_keyframes.iter().enumerate()
-            {
-                let dx = *predicted_x as f32 - *current_x;
-                let dy = *predicted_y as f32 - *current_y;
-                let distance = (dx * dx + dy * dy).sqrt();
-                distances[object_idx][mp_object_idx] = distance as f64;
-            }
-        }
-
-        println!("distances length {:?}", distances.len());
-
-        let motion_path_assignments = assign_motion_paths_to_objects(distances)
-            .expect("Couldn't assign motion paths to objects");
-
-        println!("motion_path_assignments {:?}", motion_path_assignments); // NOTE: for example, is [0,2,1] but should be [2,0,1]
-                                                                           // println!("assigned_keyframes length {:?}", assigned_keyframes.len());
-
-        // Create motion paths based on assignments
-        for (object_idx, associated_object_idx) in motion_path_assignments.into_iter() {
-            println!("object_idx {:?} {:?}", object_idx, associated_object_idx);
-
-            // Get the item ID based on the object index
+        // Process each object
+        for object_idx in 0..current_positions.len() {
             let item_id = self.get_item_id(object_idx);
             let object_type = self.get_object_type(object_idx);
 
-            let mut total_duration = 20000.0;
-            match object_type.clone().expect("Couldn't get object type") {
+            let mut total_duration = match object_type.clone().expect("Couldn't get object type") {
                 ObjectType::VideoItem => {
-                    total_duration = self
-                        .video_items
+                    self.video_items
                         .iter()
                         .find(|v| v.id == item_id.clone().expect("Couldn't get item id"))
                         .expect("Couldn't get video")
-                        .source_duration_ms as f32;
+                        .source_duration_ms as f32
                 }
-                _ => {
-                    total_duration = 20000.0;
-                }
-            }
+                _ => 20000.0,
+            };
 
-            let mut position_keyframes: Vec<UIKeyframe> = Vec::new();
+            // Determine which path to use
+            let path_source_idx = if self.generation_choreographed {
+                longest_path.unwrap_or(object_idx)
+            } else {
+                object_idx
+            };
 
-            // Process keyframes for the assigned motion path
+            let mut position_keyframes = Vec::new();
+
+            // Get the object's current position
+            let (_, _, current_x, current_y) = current_positions[object_idx];
+
+            // Calculate center point for the range period
+            let range_center_time =
+                (timestamp_percs[2] + timestamp_percs[3]) / 2.0 * total_duration;
+            let range_center_idx = path_source_idx * (values_per_prediction * keyframes_per_object)
+                + 2 * values_per_prediction;
+            let center_x = ((predictions[range_center_idx + 4] * 0.01) * 800.0).round() as i32;
+            let center_y = ((predictions[range_center_idx + 5] * 0.01) * 450.0).round() as i32;
+
+            // Calculate offset to center the path on the object
+            let offset_x = current_x as i32 - center_x;
+            let offset_y = current_y as i32 - center_y;
+
+            // Create keyframes with the offset applied
             for keyframe_time_idx in 0..keyframes_per_object {
-                let base_idx = associated_object_idx
-                    * (values_per_prediction * keyframes_per_object)
+                if self.generation_count == 4 && (keyframe_time_idx == 1 || keyframe_time_idx == 5)
+                {
+                    continue;
+                }
+
+                let base_idx = path_source_idx * (values_per_prediction * keyframes_per_object)
                     + keyframe_time_idx * values_per_prediction;
 
-                // skip depending on chosen count
-                if self.generation_count == 4 {
-                    if keyframe_time_idx == 1 || keyframe_time_idx == 5 {
-                        continue;
-                    }
-                }
-
-                // Skip if out of bounds
                 if base_idx + 5 >= predictions.len() {
                     continue;
                 }
 
-                // percentage based predictions (800 is canvas width, 450 is canvas height)
-                let predicted_x = ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32;
-                let predicted_y = ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32;
+                let predicted_x =
+                    ((predictions[base_idx + 4] * 0.01) * 800.0).round() as i32 + offset_x;
+                let predicted_y =
+                    ((predictions[base_idx + 5] * 0.01) * 450.0).round() as i32 + offset_y;
 
                 let keyframe = UIKeyframe {
                     id: Uuid::new_v4().to_string(),
@@ -1113,65 +1447,45 @@ impl Editor {
                     value: KeyframeValue::Position([predicted_x, predicted_y]),
                     easing: EasingType::EaseInOut,
                     path_type: PathType::Linear,
-                    // set the KeyType to Frame as default, with Range in place of 3rd and 4th keyframes next
                     key_type: KeyType::Frame,
                 };
-
-                // // Update path_type for previous keyframe if it exists
-                // if let Some(prev_keyframe) = position_keyframes.last_mut() {
-                //     prev_keyframe.path_type = prev_keyframe.calculate_default_curve(&keyframe);
-                // }
 
                 position_keyframes.push(keyframe);
             }
 
-            // handle 6 keyframes
+            // Handle Range keyframes
             if position_keyframes.len() == 6 {
-                // set Range
                 let forth_keyframe = &position_keyframes.clone()[3];
                 let third_keyframe = &mut position_keyframes[2];
-
                 third_keyframe.key_type = KeyType::Range(RangeData {
                     end_time: forth_keyframe.time,
                 });
-
                 position_keyframes.remove(3);
             }
 
-            // handle 4 keyframes
             if position_keyframes.len() == 4 {
-                // set Range
                 let mid2_keyframe = &position_keyframes.clone()[2];
                 let mid_keyframe = &mut position_keyframes[1];
-
                 mid_keyframe.key_type = KeyType::Range(RangeData {
                     end_time: mid2_keyframe.time,
                 });
-
                 position_keyframes.remove(2);
             }
 
+            // Create final keyframes with curves if needed
             let mut final_position_keyframes: Vec<UIKeyframe> = Vec::new();
-
-            // create default curves between remaining keyframes
             if self.generation_curved {
-                for (index, keyframe) in position_keyframes.clone().iter().enumerate() {
-                    // // Update path_type for previous keyframe if it exists
+                for keyframe in position_keyframes.iter() {
                     if let Some(prev_keyframe) = final_position_keyframes.last_mut() {
                         prev_keyframe.path_type = prev_keyframe.calculate_default_curve(&keyframe);
                     }
-
                     final_position_keyframes.push(keyframe.clone());
                 }
             } else {
-                for (index, keyframe) in position_keyframes.clone().iter().enumerate() {
-                    final_position_keyframes.push(keyframe.clone());
-                }
+                final_position_keyframes = position_keyframes;
             }
 
-            println!("item_id {:?}", item_id);
-
-            // Only create animation if we have valid keyframes and item ID
+            // Create animation data (keep existing code for creating properties)
             if !final_position_keyframes.is_empty() && item_id.is_some() {
                 let mut properties = vec![
                     // Position property with predicted values
@@ -1225,14 +1539,24 @@ impl Editor {
                         children: Vec::new(),
                         keyframes: timestamp_percs
                             .iter()
-                            .map(|&t| UIKeyframe {
-                                id: Uuid::new_v4().to_string(),
-                                time: Duration::from_millis((t * total_duration) as u64),
-                                value: KeyframeValue::Opacity(100),
-                                easing: EasingType::EaseInOut,
-                                path_type: PathType::Linear,
-                                // should be same as position? or safe to be independent?
-                                key_type: KeyType::Frame,
+                            .enumerate()
+                            .map(|(i, &t)| {
+                                let mut opacity = 100;
+                                if self.generation_fade {
+                                    if i == 0 || i == timestamp_percs.len() - 1 {
+                                        opacity = 0;
+                                    }
+                                }
+
+                                UIKeyframe {
+                                    id: Uuid::new_v4().to_string(),
+                                    time: Duration::from_millis((t * total_duration) as u64),
+                                    value: KeyframeValue::Opacity(opacity),
+                                    easing: EasingType::EaseInOut,
+                                    path_type: PathType::Linear,
+                                    // should be same as position? or safe to be independent?
+                                    key_type: KeyType::Frame,
+                                }
                             })
                             .collect(),
                         depth: 0,
