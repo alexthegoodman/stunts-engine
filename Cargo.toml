@@ -51,13 +51,19 @@ device_query = "2.1.0"
 pollster = "0.3.0"
 tokio = { version = "1.39.0", features = ["full"] }
 common-motion-2d-reg = { path = "../common-motion-2d-reg", version = "0.1.0" }
-# common-motion-2d-reg = { git = "https://github.com/alexthegoodman/common-motion-2d-reg", version = "0.1.0" }
 
-# [patch."https://github.com/alexthegoodman/common-floem/renderer"]
-# floem_renderer = { path = "../common-floem/renderer" }
-
-# [patch."https://github.com/alexthegoodman/common-motion-2d-reg"]
-# common-motion-2d-reg = { path = "../common-motion-2d-reg" }
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "Document",
+    "Window",
+    "Element",
+    "DomRect",
+    "HtmlCanvasElement",
+    "HtmlSelectElement",
+    "Gpu",
+]
 
 [lib]
 name = "stunts_engine"

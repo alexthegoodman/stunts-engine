@@ -5137,6 +5137,7 @@ dependencies = [
  "strum_macros",
  "tokio",
  "uuid",
+ "web-sys",
  "wgpu",
  "windows 0.58.0",
  "windows-capture",

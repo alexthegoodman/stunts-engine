@@ -14,7 +14,9 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use uuid::Uuid;
-use winit::window::CursorIcon;
+use winit::dpi::LogicalSize;
+use winit::event_loop;
+use winit::window::{CursorIcon, WindowBuilder};
 
 #[cfg(target_os = "windows")]
 use common_motion_2d_reg::inference::CommonMotionInference;
@@ -22,6 +24,9 @@ use common_motion_2d_reg::inference::CommonMotionInference;
 use common_motion_2d_reg::interface::load_common_motion_2d;
 #[cfg(target_os = "windows")]
 use common_motion_2d_reg::Wgpu;
+
+#[cfg(target_arch = "wasm32")]
+use web_sys::HtmlCanvasElement;
 
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -222,6 +227,116 @@ pub enum ControlMode {
     Pan,
 }
 
+// Adapted from Floem
+#[cfg(target_arch = "wasm32")]
+pub struct WebGpuResources {
+    /// The rendering surface, representing the window or screen where the graphics will be displayed.
+    /// It is the interface between wgpu and the platform's windowing system, enabling rendering
+    /// onto the screen.
+    pub surface: Option<wgpu::Surface<'static>>,
+
+    /// The adapter that represents the GPU or a rendering backend. It provides information about
+    /// the capabilities of the hardware and is used to request a logical device (`wgpu::Device`).
+    pub adapter: wgpu::Adapter,
+
+    /// The logical device that serves as an interface to the GPU. It is responsible for creating
+    /// resources such as buffers, textures, and pipelines, and manages the execution of commands.
+    /// The `device` provides a connection to the physical hardware represented by the `adapter`.
+    pub device: wgpu::Device,
+
+    /// The command queue that manages the submission of command buffers to the GPU for execution.
+    /// It is used to send rendering and computation commands to the device. The `queue` ensures
+    /// that commands are executed in the correct order and manages synchronization.
+    pub queue: wgpu::Queue,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl WebGpuResources {
+    /// Request GPU resources
+    pub async fn request(canvas: HtmlCanvasElement, window_size: WindowSize) -> Self {
+        // Create logical components (instance, adapter, device, queue, surface, etc.)
+        let dx12_compiler = wgpu::Dx12Compiler::Dxc {
+            dxil_path: None, // Specify a path to custom location
+            dxc_path: None,  // Specify a path to custom location
+        };
+
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            dx12_shader_compiler: dx12_compiler,
+            flags: wgpu::InstanceFlags::empty(),
+            gles_minor_version: wgpu::Gles3MinorVersion::Version2,
+        });
+
+        let event_loop = event_loop::EventLoop::new().unwrap();
+        let builder = WindowBuilder::new()
+            .with_inner_size(LogicalSize::new(window_size.width, window_size.height));
+        #[cfg(target_arch = "wasm32")] // necessary for web-sys
+        let builder = {
+            use winit::platform::web::WindowBuilderExtWebSys;
+            builder.with_canvas(Some(canvas))
+        };
+        let winit_window = builder.build(&event_loop).unwrap();
+
+        let surface = unsafe {
+            instance
+                .create_surface(winit_window)
+                .expect("Couldn't create GPU Surface")
+        };
+
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::default(),
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await
+            .ok_or("Failed to find an appropriate adapter")
+            .unwrap();
+
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                    memory_hints: wgpu::MemoryHints::default(),
+                },
+                None,
+            )
+            .await
+            .expect("Failed to create device");
+
+        return WebGpuResources {
+            surface: Some(surface),
+            adapter,
+            device,
+            queue,
+        };
+    }
+}
+
+/// Possible errors during GPU resource setup.
+#[derive(Debug)]
+pub enum GpuResourceError {
+    SurfaceCreationError(wgpu::CreateSurfaceError),
+    AdapterNotFoundError,
+    DeviceRequestError(wgpu::RequestDeviceError),
+}
+
+impl std::fmt::Display for GpuResourceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GpuResourceError::SurfaceCreationError(err) => {
+                write!(f, "Surface creation error: {}", err)
+            }
+            GpuResourceError::AdapterNotFoundError => {
+                write!(f, "Failed to find a suitable GPU adapter")
+            }
+            GpuResourceError::DeviceRequestError(err) => write!(f, "Device request error: {}", err),
+        }
+    }
+}
+
 pub struct Editor {
     // visual
     pub selected_polygon_id: Uuid,
@@ -250,7 +365,13 @@ pub struct Editor {
     pub handle_text_click: Option<Arc<TextItemClickHandler>>,
     pub handle_image_click: Option<Arc<ImageItemClickHandler>>,
     pub handle_video_click: Option<Arc<VideoItemClickHandler>>,
+
+    #[cfg(target_os = "windows")]
     pub gpu_resources: Option<Arc<GpuResources>>,
+
+    #[cfg(target_arch = "wasm32")]
+    pub gpu_resources: Option<Arc<WebGpuResources>>,
+
     pub window: Option<Arc<Window>>,
     pub camera: Option<Camera>,
     pub camera_binding: Option<CameraBinding>,
