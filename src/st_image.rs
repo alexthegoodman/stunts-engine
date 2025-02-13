@@ -10,7 +10,7 @@ use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
 
 use crate::camera::Camera;
-use crate::editor::Point;
+use crate::editor::{Point, CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET};
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array};
 use crate::{
@@ -352,8 +352,8 @@ impl StImage {
             path: self.path.clone(),
             dimensions: self.dimensions,
             position: Point {
-                x: self.transform.position.x - 600.0,
-                y: self.transform.position.y - 50.0,
+                x: self.transform.position.x - CANVAS_HORIZ_OFFSET,
+                y: self.transform.position.y - CANVAS_VERT_OFFSET,
             },
             layer: self.layer,
         }

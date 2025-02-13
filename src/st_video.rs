@@ -30,7 +30,7 @@ use windows_core::{PCWSTR, PROPVARIANT};
 // use crate::capture::{MousePosition, SourceData};
 
 use crate::camera::Camera;
-use crate::editor::{Point, WindowSize};
+use crate::editor::{Point, WindowSize, CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET};
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array, Transform};
 use crate::vertex::Vertex;
@@ -790,8 +790,8 @@ impl StVideo {
             path: self.path.clone(),
             dimensions: self.dimensions,
             position: Point {
-                x: self.transform.position.x - 600.0,
-                y: self.transform.position.y - 50.0,
+                x: self.transform.position.x - CANVAS_HORIZ_OFFSET,
+                y: self.transform.position.y - CANVAS_VERT_OFFSET,
             },
             layer: self.layer,
             mouse_path: self.mouse_path.clone(),

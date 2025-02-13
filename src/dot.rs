@@ -2,6 +2,7 @@ use cgmath::SquareMatrix;
 use cgmath::{Matrix4, Vector2};
 use wgpu::util::DeviceExt;
 
+use crate::editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET};
 use crate::transform::create_empty_group_transform;
 use crate::{
     camera::{self, Camera},
@@ -120,8 +121,8 @@ impl RingDot {
         camera: &Camera,
     ) -> Self {
         let point = Point {
-            x: 600.0 + point.x,
-            y: 50.0 + point.y,
+            x: CANVAS_HORIZ_OFFSET + point.x,
+            y: CANVAS_VERT_OFFSET + point.y,
         };
 
         let (vertices, indices, vertex_buffer, index_buffer) =

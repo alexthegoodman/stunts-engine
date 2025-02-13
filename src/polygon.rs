@@ -11,7 +11,10 @@ use crate::{
     dot::{
         closest_point_on_line_segment, closest_point_on_line_segment_with_info, distance, EdgePoint,
     },
-    editor::{rgb_to_wgpu, visualize_ray_intersection, BoundingBox, Point, Shape, WindowSize},
+    editor::{
+        rgb_to_wgpu, visualize_ray_intersection, BoundingBox, Point, Shape, WindowSize,
+        CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET,
+    },
     transform::{
         self, create_empty_group_transform, matrix4_to_raw_array, Transform as SnTransform,
     },
@@ -373,8 +376,8 @@ impl Polygon {
         // };
 
         let position = Point {
-            x: 600.0 + position.x,
-            y: 50.0 + position.y,
+            x: CANVAS_HORIZ_OFFSET + position.x,
+            y: CANVAS_VERT_OFFSET + position.y,
         };
 
         let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
@@ -687,8 +690,8 @@ impl Polygon {
             fill: self.fill,
             dimensions: self.dimensions,
             position: Point {
-                x: self.transform.position.x - 600.0,
-                y: self.transform.position.y - 50.0,
+                x: self.transform.position.x - CANVAS_HORIZ_OFFSET,
+                y: self.transform.position.y - CANVAS_VERT_OFFSET,
             },
             border_radius: self.border_radius,
             stroke: self.stroke,

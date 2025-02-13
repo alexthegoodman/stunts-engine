@@ -14,7 +14,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use uuid::Uuid;
-use winit::dpi::LogicalSize;
+use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event_loop;
 use winit::window::{CursorIcon, WindowBuilder};
 
@@ -32,8 +32,16 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 const NUM_INFERENCE_FEATURES: usize = 7;
+
+#[cfg(target_os = "windows")]
 pub const CANVAS_HORIZ_OFFSET: f32 = 600.0;
+#[cfg(target_os = "windows")]
 pub const CANVAS_VERT_OFFSET: f32 = 50.0;
+
+#[cfg(target_arch = "wasm32")]
+pub const CANVAS_HORIZ_OFFSET: f32 = 0.0;
+#[cfg(target_arch = "wasm32")]
+pub const CANVAS_VERT_OFFSET: f32 = 0.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct WindowSize {
@@ -269,7 +277,7 @@ impl WebGpuResources {
 
         let event_loop = event_loop::EventLoop::new().unwrap();
         let builder = WindowBuilder::new()
-            .with_inner_size(LogicalSize::new(window_size.width, window_size.height));
+            .with_inner_size(PhysicalSize::new(window_size.width, window_size.height));
         #[cfg(target_arch = "wasm32")] // necessary for web-sys
         let builder = {
             use winit::platform::web::WindowBuilderExtWebSys;
@@ -632,8 +640,8 @@ impl Editor {
             // TODO: save and restore chosen font
 
             let position = Point {
-                x: 600.0 + t.position.x as f32,
-                y: 50.0 + t.position.y as f32,
+                x: CANVAS_HORIZ_OFFSET + t.position.x as f32,
+                y: CANVAS_VERT_OFFSET + t.position.y as f32,
             };
 
             let mut restored_text = TextRenderer::new(
@@ -686,8 +694,8 @@ impl Editor {
             //     .expect("Couldn't get GPU Resources");
 
             let position = Point {
-                x: 600.0 + i.position.x as f32,
-                y: 50.0 + i.position.y as f32,
+                x: CANVAS_HORIZ_OFFSET + i.position.x as f32,
+                y: CANVAS_VERT_OFFSET + i.position.y as f32,
             };
 
             let image_config = StImageConfig {
@@ -761,8 +769,8 @@ impl Editor {
             );
 
             let position = Point {
-                x: 600.0 + i.position.x as f32,
-                y: 50.0 + i.position.y as f32,
+                x: CANVAS_HORIZ_OFFSET + i.position.x as f32,
+                y: CANVAS_VERT_OFFSET + i.position.y as f32,
             };
 
             let video_config = StVideoConfig {
@@ -929,9 +937,9 @@ impl Editor {
         let mut total = 0;
         for (i, polygon) in self.polygons.iter().enumerate() {
             if !polygon.hidden {
-                let x = polygon.transform.position.x - 600.0;
+                let x = polygon.transform.position.x - CANVAS_HORIZ_OFFSET;
                 let x = (x / 800.0) * 100.0; // testing percentage based training
-                let y = polygon.transform.position.y - 50.0;
+                let y = polygon.transform.position.y - CANVAS_VERT_OFFSET;
                 let y = (y / 450.0) * 100.0;
 
                 prompt.push_str(&total.to_string());
@@ -959,9 +967,9 @@ impl Editor {
 
         for (i, text) in self.text_items.iter().enumerate() {
             if !text.hidden {
-                let x = text.transform.position.x - 600.0;
+                let x = text.transform.position.x - CANVAS_HORIZ_OFFSET;
                 let x = (x / 800.0) * 100.0; // testing percentage based training
-                let y = text.transform.position.y - 50.0;
+                let y = text.transform.position.y - CANVAS_VERT_OFFSET;
                 let y = (y / 450.0) * 100.0;
 
                 prompt.push_str(&total.to_string());
@@ -988,9 +996,9 @@ impl Editor {
 
         for (i, image) in self.image_items.iter().enumerate() {
             if !image.hidden {
-                let x = image.transform.position.x - 600.0;
+                let x = image.transform.position.x - CANVAS_HORIZ_OFFSET;
                 let x = (x / 800.0) * 100.0; // testing percentage based training
-                let y = image.transform.position.y - 50.0;
+                let y = image.transform.position.y - CANVAS_VERT_OFFSET;
                 let y = (y / 450.0) * 100.0;
 
                 prompt.push_str(&total.to_string());
@@ -1018,9 +1026,9 @@ impl Editor {
 
         for (i, video) in self.video_items.iter().enumerate() {
             if !video.hidden {
-                let x = video.transform.position.x - 600.0;
+                let x = video.transform.position.x - CANVAS_HORIZ_OFFSET;
                 let x = (x / 800.0) * 100.0; // testing percentage based training
-                let y = video.transform.position.y - 50.0;
+                let y = video.transform.position.y - CANVAS_VERT_OFFSET;
                 let y = (y / 450.0) * 100.0;
 
                 prompt.push_str(&total.to_string());
@@ -2216,8 +2224,8 @@ impl Editor {
                         let y = self.lerp(start[1], end[1], progress);
 
                         let position = Point {
-                            x: 600.0 + x + path_group_position[0] as f32,
-                            y: 50.0 + y + path_group_position[1] as f32,
+                            x: CANVAS_HORIZ_OFFSET + x + path_group_position[0] as f32,
+                            y: CANVAS_VERT_OFFSET + y + path_group_position[1] as f32,
                         };
 
                         match animation.object_type {
@@ -3000,7 +3008,7 @@ impl Editor {
                 Point { x: 0.0, y: 1.0 },
             ],
             (800.0 as f32, 450.0 as f32),
-            Point { x: 400.0, y: 225.0 },
+            Point { x: 50.0, y: 50.0 },
             0.0,
             0.0,
             fill,
@@ -4433,8 +4441,8 @@ impl Editor {
                 let (selected_sequence_data, selected_keyframes) = on_up(
                     object_id,
                     Point {
-                        x: active_point.x - 600.0,
-                        y: active_point.y - 50.0,
+                        x: active_point.x - CANVAS_HORIZ_OFFSET,
+                        y: active_point.y - CANVAS_VERT_OFFSET,
                     },
                 );
 
@@ -4493,8 +4501,8 @@ impl Editor {
                     handle_keyframe_id,
                     handle_object_id,
                     Point {
-                        x: handle_point.x - 600.0,
-                        y: handle_point.y - 50.0,
+                        x: handle_point.x - CANVAS_HORIZ_OFFSET,
+                        y: handle_point.y - CANVAS_VERT_OFFSET,
                     },
                 );
 
