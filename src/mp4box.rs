@@ -54,16 +54,11 @@ fn set_file_start(buffer: &ArrayBuffer, offset: u32) -> Result<(), JsValue> {
 pub struct MP4FileSink {
     file: Rc<RefCell<Mp4BoxFile>>,
     offset: u32,
-    set_status: Function,
 }
 
 impl MP4FileSink {
-    pub fn new(file: Rc<RefCell<Mp4BoxFile>>, set_status: Function) -> Self {
-        MP4FileSink {
-            file,
-            offset: 0,
-            set_status,
-        }
+    pub fn new(file: Rc<RefCell<Mp4BoxFile>>) -> Self {
+        MP4FileSink { file, offset: 0 }
     }
 
     pub fn write(&mut self, chunk: Uint8Array) {
@@ -76,18 +71,10 @@ impl MP4FileSink {
 
         self.offset += buffer.byte_length();
 
-        let status = format!("fetch: {:.1} MiB", self.offset as f64 / (1024.0 * 1024.0));
-        let _ = self
-            .set_status
-            .call1(&JsValue::NULL, &JsValue::from(status));
-
         self.file.borrow().append_buffer(&buffer);
     }
 
     pub fn close(&self) {
-        let _ = self
-            .set_status
-            .call1(&JsValue::NULL, &JsValue::from("Done"));
         self.file.borrow().flush();
     }
 
@@ -131,36 +118,18 @@ impl MP4FileSink {
 
 pub struct MP4Demuxer {
     file: Rc<RefCell<Mp4BoxFile>>,
-    // on_config: Function,
-    // on_chunk: Function,
-    // set_status: Function,
-    // Add these fields to store the closures
     _ready_closure: Closure<dyn FnMut(JsValue)>,
     _samples_closure: Closure<dyn FnMut(u32, JsValue, js_sys::Array)>,
     _fetch_closure: Closure<dyn FnMut(JsValue)>,
 }
 
 impl MP4Demuxer {
-    pub fn new(uri: &str, on_config: Function, on_chunk: Function, set_status: Function) -> Self {
+    pub fn new(uri: &str, on_config: Function, on_chunk: Function) -> Self {
         let file = create_file();
         let file = Rc::new(RefCell::new(file));
-        file.borrow().set_on_error(&set_status);
 
-        // Create file_sink
-        let file_sink = MP4FileSink::new(file.clone(), set_status.clone());
-
-        // Rest of the code using file.borrow() to access Mp4BoxFile methods
-        let ready_closure = Closure::wrap(Box::new({
-            let file = file.clone();
-            move |info: JsValue| {
-                Self::on_ready(&file.borrow(), &info, &on_config, &set_status).unwrap();
-            }
-        }) as Box<dyn FnMut(JsValue)>);
-
-        // file.set_on_error(&set_status);
-
-        // Create file_sink first
-        // let file_sink = MP4FileSink::new(&file, set_status.clone());
+        // Create the sink
+        let file_sink = MP4FileSink::new(file.clone());
         let underlying_sink = file_sink.to_underlying_sink().unwrap();
         let mut strategy = QueuingStrategy::new();
         strategy.set_high_water_mark(2.0);
@@ -168,16 +137,22 @@ impl MP4Demuxer {
             WritableStream::new_with_underlying_sink_and_strategy(&underlying_sink, &strategy)
                 .unwrap();
 
-        // Then create closures
-        // let ready_closure = Closure::wrap(Box::new(move |info: JsValue| {
-        //     Self::on_ready(&file, &info, &on_config, &set_status).unwrap();
-        // }) as Box<dyn FnMut(JsValue)>);
+        // Store on_config and on_chunk in the struct
+        let ready_closure = Closure::wrap(Box::new({
+            let file = file.clone();
+            let on_config = on_config.clone();
+            // let set_status = set_status.clone();
+            move |info: JsValue| {
+                Self::on_ready(&file.borrow(), &info, &on_config).unwrap();
+            }
+        }) as Box<dyn FnMut(JsValue)>);
 
-        let samples_closure = Closure::wrap(Box::new(
+        let samples_closure = Closure::wrap(Box::new({
+            let on_chunk = on_chunk.clone();
             move |track_id: u32, reff: JsValue, samples: js_sys::Array| {
                 Self::on_samples(&on_chunk, track_id, &reff, &samples).unwrap();
-            },
-        )
+            }
+        })
             as Box<dyn FnMut(u32, JsValue, js_sys::Array)>);
 
         file.borrow()
@@ -198,9 +173,6 @@ impl MP4Demuxer {
 
         MP4Demuxer {
             file,
-            // on_config: on_config.clone(),
-            // on_chunk: on_chunk.clone(),
-            // set_status: set_status.clone(),
             _ready_closure: ready_closure,
             _samples_closure: samples_closure,
             _fetch_closure: fetch_closure,
@@ -246,10 +218,8 @@ impl MP4Demuxer {
         file: &Mp4BoxFile,
         info: &JsValue,
         on_config: &Function,
-        set_status: &Function,
+        // set_status: &Function,
     ) -> Result<(), JsValue> {
-        set_status.call1(&JsValue::NULL, &JsValue::from_str("Ready"))?;
-
         // Get the first video track.
         let video_tracks =
             Reflect::get(info, &"videoTracks".into())?.dyn_into::<js_sys::Array>()?;
@@ -320,12 +290,7 @@ impl MP4Demuxer {
 
             initializer.set_duration(1e6 * duration / timescale);
 
-            let chunk = EncodedVideoChunk::new(
-                &initializer, // if is_sync { "key" } else { "delta" },
-                              // 1e6 * cts / timescale,
-                              // 1e6 * duration / timescale,
-                              // &data,
-            )?;
+            let chunk = EncodedVideoChunk::new(&initializer)?;
 
             // Emit the chunk.
             on_chunk.call1(&JsValue::NULL, &chunk)?;

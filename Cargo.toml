@@ -76,6 +76,9 @@ features = [
     "EncodedVideoChunk",
     "EncodedVideoChunkInit",
     "EncodedVideoChunkType",
+    "VideoDecoder",
+    "VideoDecoderInit",
+    "VideoFrame",
     # WebGPU features should be grouped together
     "Gpu",
     # "GpuAdapter",
