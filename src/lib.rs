@@ -21,3 +21,6 @@ pub mod transcode;
 
 #[cfg(target_os = "windows")]
 pub mod capture;
+
+#[cfg(target_arch = "wasm32")]
+pub mod mp4box;

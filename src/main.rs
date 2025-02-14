@@ -23,6 +23,9 @@ mod transcode;
 #[cfg(target_os = "windows")]
 mod capture;
 
+#[cfg(target_arch = "wasm32")]
+mod mp4box;
+
 fn main() {
     println!("Hello, Stunts!");
 }
