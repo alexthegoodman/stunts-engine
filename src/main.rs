@@ -2,6 +2,7 @@ mod animations;
 mod camera;
 mod dot;
 mod editor;
+mod fetchers;
 mod fonts;
 mod motion_path;
 mod polygon;

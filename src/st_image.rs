@@ -25,7 +25,8 @@ pub struct StImageConfig {
     pub name: String,
     pub dimensions: (u32, u32), // overrides actual image size
     pub position: Point,
-    pub path: String,
+    // pub path: String,
+    pub url: String,
     pub layer: i32,
 }
 
@@ -34,7 +35,8 @@ pub struct SavedStImageConfig {
     pub id: String,
     pub name: String,
     pub dimensions: (u32, u32),
-    pub path: String,
+    // pub path: String,
+    pub url: String,
     pub position: SavedPoint,
     pub layer: i32,
 }
@@ -43,7 +45,8 @@ pub struct StImage {
     pub id: String,
     pub current_sequence_id: Uuid,
     pub name: String,
-    pub path: String,
+    // pub path: String,
+    pub url: String,
     pub texture: wgpu::Texture,
     pub texture_view: TextureView,
     pub transform: Transform,
@@ -62,7 +65,9 @@ impl StImage {
     pub fn new(
         device: &Device,
         queue: &Queue,
-        path: &Path,
+        // path: &Path,
+        url: String,
+        buffer: &[u8],
         image_config: StImageConfig,
         window_size: &WindowSize,
         bind_group_layout: &wgpu::BindGroupLayout,
@@ -76,7 +81,8 @@ impl StImage {
                                             // let feature = "high_quality_resize"; // slow
 
         // Load the image
-        let img = image::open(path).expect("Couldn't open image");
+        // let img = image::open(path).expect("Couldn't open image");
+        let img = image::load_from_memory(buffer).expect("Couldn't load image from buffer");
         let original_dimensions = img.dimensions();
         let dimensions = image_config.dimensions;
 
@@ -256,10 +262,7 @@ impl StImage {
             id: new_id,
             current_sequence_id,
             name: image_config.name,
-            path: path
-                .to_str()
-                .expect("Couldn't convert to string")
-                .to_string(),
+            url,
             texture,
             texture_view,
             transform,
@@ -349,7 +352,7 @@ impl StImage {
         StImageConfig {
             id: self.id.clone(),
             name: self.name.clone(),
-            path: self.path.clone(),
+            url: self.url.clone(),
             dimensions: self.dimensions,
             position: Point {
                 x: self.transform.position.x - CANVAS_HORIZ_OFFSET,
@@ -373,7 +376,9 @@ impl StImage {
             &device,
             &queue,
             // string to Path
-            Path::new(&config.path),
+            // Path::new(&config.path),
+            config.url.clone(),
+            &[], // TODO: real loading as needed
             config.clone(),
             &window_size,
             model_bind_group_layout,

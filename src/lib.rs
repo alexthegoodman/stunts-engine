@@ -2,6 +2,7 @@ pub mod animations;
 pub mod camera;
 pub mod dot;
 pub mod editor;
+pub mod fetchers;
 pub mod fonts;
 pub mod motion_path;
 pub mod polygon;
