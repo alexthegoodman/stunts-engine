@@ -36,7 +36,10 @@ use windows_capture::{
     encoder::{AudioSettingsBuilder, ContainerSettingsBuilder, VideoEncoder, VideoSettingsBuilder},
     frame::Frame,
     graphics_capture_api::InternalCaptureControl,
-    settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
+};
+use windows_capture::settings::{
+    ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
+    MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
 };
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -283,11 +286,38 @@ impl StCapture {
         if (width > 1920 || height > 1080) {
             let primary_monitor = Monitor::primary().expect("There is no primary monitor");
 
+            // windows-capture 1.4.2?
+            // let settings = Settings::new(
+            //     primary_monitor,
+            //     CursorCaptureSettings::Default,
+            //     DrawBorderSettings::Default,
+            //     ColorFormat::Rgba8,
+            //     (
+            //         output_path,
+            //         compressed_path,
+            //         1920,
+            //         1080,
+            //         self.state.is_recording.clone(),
+            //     ),
+            // );
+
+            // 1.5?
             let settings = Settings::new(
+                // Item to capture
                 primary_monitor,
+                // Capture cursor settings
                 CursorCaptureSettings::Default,
+                // Draw border settings
                 DrawBorderSettings::Default,
+                // Secondary window settings, if you want to include secondary windows in the capture
+                SecondaryWindowSettings::Default,
+                // Minimum update interval, if you want to change the frame rate limit (default is 60 FPS or 16.67 ms)
+                MinimumUpdateIntervalSettings::Default,
+                // Dirty region settings,
+                DirtyRegionSettings::Default,
+                // The desired color format for the captured frame.
                 ColorFormat::Rgba8,
+                // Additional flags for the capture settings that will be passed to the user-defined `new` function.
                 (
                     output_path,
                     compressed_path,
@@ -303,11 +333,36 @@ impl StCapture {
                 self.state.is_recording.store(false, Ordering::SeqCst);
             }
         } else {
+            // let settings = Settings::new(
+            //     target_window,
+            //     CursorCaptureSettings::Default,
+            //     DrawBorderSettings::Default,
+            //     ColorFormat::Rgba8,
+            //     (
+            //         output_path,
+            //         compressed_path,
+            //         width,
+            //         height,
+            //         self.state.is_recording.clone(),
+            //     ),
+            // );
+
             let settings = Settings::new(
+                // Item to capture
                 target_window,
+                // Capture cursor settings
                 CursorCaptureSettings::Default,
+                // Draw border settings
                 DrawBorderSettings::Default,
+                // Secondary window settings, if you want to include secondary windows in the capture
+                SecondaryWindowSettings::Default,
+                // Minimum update interval, if you want to change the frame rate limit (default is 60 FPS or 16.67 ms)
+                MinimumUpdateIntervalSettings::Default,
+                // Dirty region settings,
+                DirtyRegionSettings::Default,
+                // The desired color format for the captured frame.
                 ColorFormat::Rgba8,
+                // Additional flags for the capture settings that will be passed to the user-defined `new` function.
                 (
                     output_path,
                     compressed_path,
@@ -316,7 +371,7 @@ impl StCapture {
                     self.state.is_recording.clone(),
                 ),
             );
-
+        
             if let Err(e) = Capture::start_free_threaded(settings) {
                 eprintln!("Capture error: {}", e);
                 // Ensure is_recording is set to false if an error occurs

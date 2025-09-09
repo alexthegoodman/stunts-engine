@@ -8,7 +8,7 @@ use crate::{
     vertex::Vertex,
 };
 use cgmath::Vector2;
-use floem_renderer::gpu_resources::{self, GpuResources};
+use crate::gpu_resources::GpuResources;
 use std::sync::{Arc, Mutex};
 use wgpu::{util::DeviceExt, RenderPipeline};
 
@@ -75,7 +75,7 @@ impl ExportPipeline {
         )));
 
         // create a dedicated editor so it can be used in the async thread
-        let mut export_editor = Editor::new(viewport, None);
+        let mut export_editor = Editor::new(viewport);
 
         // continue on with wgpu items
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -342,12 +342,7 @@ impl ExportPipeline {
 
         camera_binding.update(&queue, &camera);
 
-        let gpu_resources = GpuResources {
-            surface: None,
-            adapter,
-            device,
-            queue,
-        };
+        let gpu_resources = GpuResources::new(adapter, device, queue);
 
         let gpu_resources = Arc::new(gpu_resources);
 

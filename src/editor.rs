@@ -7,12 +7,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use cgmath::{Matrix4, Point3, Vector2, Vector3, Vector4};
-use common_motion_2d_reg::inference::CommonMotionInference;
-use common_motion_2d_reg::interface::load_common_motion_2d;
-use common_motion_2d_reg::Wgpu;
-use floem_renderer::gpu_resources::{self, GpuResources};
-use floem_winit::keyboard::ModifiersState;
-use floem_winit::window::Window;
+// use common_motion_2d_reg::inference::CommonMotionInference;
+// use common_motion_2d_reg::interface::load_common_motion_2d;
+// use common_motion_2d_reg::Wgpu;
+use crate::gpu_resources::GpuResources;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
@@ -259,7 +257,6 @@ pub struct Editor {
     pub handle_image_click: Option<Arc<ImageItemClickHandler>>,
     pub handle_video_click: Option<Arc<VideoItemClickHandler>>,
     pub gpu_resources: Option<Arc<GpuResources>>,
-    pub window: Option<Arc<Window>>,
     pub camera: Option<Camera>,
     pub camera_binding: Option<CameraBinding>,
     pub model_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
@@ -297,7 +294,7 @@ pub struct Editor {
     pub previous_top_left: Point,
 
     // ai
-    pub inference: Option<CommonMotionInference<Wgpu>>,
+    // pub inference: Option<CommonMotionInference<Wgpu>>,
     pub generation_count: u32,
     pub generation_curved: bool,
     pub generation_choreographed: bool,
@@ -308,16 +305,16 @@ use std::borrow::{Borrow, BorrowMut};
 
 #[cfg(target_os = "windows")]
 pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>) -> Editor {
-    let inference = load_common_motion_2d();
+    // let inference = load_common_motion_2d();
 
-    let editor = Editor::new(viewport, Some(inference));
+    let editor = Editor::new(viewport);
 
     editor
 }
 
 #[cfg(target_arch = "wasm32")]
 pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>) -> Editor {
-    let editor = Editor::new(viewport, None);
+    let editor = Editor::new(viewport);
 
     editor
 }
@@ -331,7 +328,7 @@ pub enum InputValue {
 impl Editor {
     pub fn new(
         viewport: Arc<Mutex<Viewport>>,
-        inference: Option<CommonMotionInference<Wgpu>>,
+        // inference: Option<CommonMotionInference<Wgpu>>,
     ) -> Self {
         let viewport_unwrapped = viewport.lock().unwrap();
         let window_size = WindowSize {
@@ -343,7 +340,7 @@ impl Editor {
 
         Editor {
             font_manager,
-            inference,
+            // inference,
             selected_polygon_id: Uuid::nil(),
             polygons: Vec::new(),
             dragging_polygon: None,
@@ -355,7 +352,6 @@ impl Editor {
             handle_image_click: None,
             handle_video_click: None,
             gpu_resources: None,
-            window: None,
             camera: None,
             camera_binding: None,
             last_mouse_pos: None,
@@ -929,23 +925,25 @@ impl Editor {
 
         println!("prompt {:?}", prompt);
 
-        let inference = self.inference.as_ref().expect("Couldn't get inference");
-        let predictions: Vec<f32> = inference
-            // .infer("0, 5, 354, 154, 239, 91, \n1, 5, 544, 244, 106, 240, ".to_string());
-            .infer(prompt);
+        // let inference = self.inference.as_ref().expect("Couldn't get inference");
+        // let predictions: Vec<f32> = inference
+        //     // .infer("0, 5, 354, 154, 239, 91, \n1, 5, 544, 244, 106, 240, ".to_string());
+        //     .infer(prompt);
 
-        // predictions are 6 rows per line in the prompt, with each row containing: `object_index, time, width, height, x, y`
-        for (i, predicted) in predictions.clone().into_iter().enumerate() {
-            if i % NUM_INFERENCE_FEATURES == 0 {
-                println!();
-            }
-            print!("{}, ", predicted);
-        }
+        // // predictions are 6 rows per line in the prompt, with each row containing: `object_index, time, width, height, x, y`
+        // for (i, predicted) in predictions.clone().into_iter().enumerate() {
+        //     if i % NUM_INFERENCE_FEATURES == 0 {
+        //         println!();
+        //     }
+        //     print!("{}, ", predicted);
+        // }
 
-        // create motion paths from predictions, each prediction must be rounded
-        let motion_path_keyframes = self.create_motion_paths_from_predictions(predictions);
+        // // create motion paths from predictions, each prediction must be rounded
+        // let motion_path_keyframes = self.create_motion_paths_from_predictions(predictions);
 
-        motion_path_keyframes
+        // motion_path_keyframes
+
+        Vec::new()
     }
 
     // pub fn create_motion_paths_from_predictions(

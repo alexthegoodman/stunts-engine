@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use floem_renderer::gpu_resources;
+use crate::gpu_resources;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use super::{encode::VideoEncoder, frame_buffer::FrameCaptureBuffer, pipeline::ExportPipeline};
