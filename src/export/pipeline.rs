@@ -263,12 +263,12 @@ impl ExportPipeline {
             label: Some("Stunts Engine Export Render Pipeline"),
             layout: Some(&pipeline_layout),
             multiview: None,
-            cache: None,
+            // cache: None,
             vertex: wgpu::VertexState {
                 module: &shader_module_vert_primary,
                 entry_point: "vs_main", // name of the entry point in your vertex shader
                 buffers: &[Vertex::desc()], // Make sure your Vertex::desc() matches your vertex structure
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                // compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader_module_frag_primary,
@@ -290,7 +290,7 @@ impl ExportPipeline {
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                // compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             // primitive: wgpu::PrimitiveState::default(),
             // depth_stencil: None,

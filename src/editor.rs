@@ -264,11 +264,13 @@ pub struct Editor {
     pub window_size_bind_group_layout: Option<Arc<wgpu::BindGroupLayout>>,
     pub window_size_bind_group: Option<wgpu::BindGroup>,
     pub window_size_buffer: Option<Arc<wgpu::Buffer>>,
+    pub render_pipeline: Option<Arc<wgpu::RenderPipeline>>,
     pub on_mouse_up: Option<Arc<OnMouseUp>>,
     pub on_handle_mouse_up: Option<Arc<OnHandleMouseUp>>,
     pub on_path_mouse_up: Option<Arc<OnPathMouseUp>>,
     pub current_view: String,
     pub interactive_bounds: BoundingBox,
+    pub depth_view: Option<wgpu::TextureView>,
 
     // state
     pub is_playing: bool,
@@ -371,6 +373,7 @@ impl Editor {
             window_size_bind_group_layout: None,
             window_size_bind_group: None,
             window_size_buffer: None,
+            render_pipeline: None,
             static_polygons: Vec::new(),
             on_mouse_up: None,
             current_view: "manage_projects".to_string(),
@@ -399,6 +402,7 @@ impl Editor {
             generation_curved: false,
             generation_choreographed: true,
             generation_fade: true,
+            depth_view: None,
             // TODO: update interactive bounds on window resize?
             interactive_bounds: BoundingBox {
                 min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
