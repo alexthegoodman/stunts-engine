@@ -2656,16 +2656,26 @@ impl Editor {
 
     pub fn add_polygon(
         &mut self,
-        window_size: &WindowSize,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        camera: &Camera,
+        // window_size: &WindowSize,
+        // device: &wgpu::Device,
+        // queue: &wgpu::Queue,
+        // camera: &Camera,
         polygon_config: PolygonConfig,
         polygon_name: String,
         new_id: Uuid,
         selected_sequence_id: String,
     ) {
+        let gpu_resources = self
+            .gpu_resources
+            .as_ref()
+            .expect("Couldn't get gpu resources");
+
+        let device = &gpu_resources.device;
+        let queue = &gpu_resources.queue;
+
         let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let window_size = &camera.window_size;
+
         let mut polygon = Polygon::new(
             window_size,
             device,
