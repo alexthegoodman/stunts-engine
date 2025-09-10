@@ -24,6 +24,9 @@ use crate::editor::{Point, WindowSize};
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array, Transform};
 use crate::vertex::Vertex;
+use crate::{
+    editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET},
+};
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct SavedStVideoConfig {
@@ -703,8 +706,8 @@ impl StVideo {
             path: self.path.clone(),
             dimensions: self.dimensions,
             position: Point {
-                x: self.transform.position.x - 600.0,
-                y: self.transform.position.y - 50.0,
+                x: self.transform.position.x - CANVAS_HORIZ_OFFSET,
+                y: self.transform.position.y - CANVAS_VERT_OFFSET,
             },
             layer: self.layer,
             mouse_path: self.mouse_path.clone(),

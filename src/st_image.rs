@@ -19,6 +19,9 @@ use crate::{
     transform::Transform,
     vertex::{get_z_layer, Vertex},
 };
+use crate::{
+    editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET},
+};
 
 #[derive(Clone)]
 pub struct StImageConfig {
@@ -353,8 +356,8 @@ impl StImage {
             path: self.path.clone(),
             dimensions: self.dimensions,
             position: Point {
-                x: self.transform.position.x - 600.0,
-                y: self.transform.position.y - 50.0,
+                x: self.transform.position.x - CANVAS_HORIZ_OFFSET,
+                y: self.transform.position.y - CANVAS_VERT_OFFSET,
             },
             layer: self.layer,
         }

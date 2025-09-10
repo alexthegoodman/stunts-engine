@@ -600,8 +600,8 @@ impl TextRenderer {
             font_family: self.font_family.clone(),
             dimensions: self.dimensions,
             position: Point {
-                x: self.transform.position.x - 600.0,
-                y: self.transform.position.y - 50.0,
+                x: self.transform.position.x - CANVAS_HORIZ_OFFSET,
+                y: self.transform.position.y - CANVAS_VERT_OFFSET,
             },
             layer: self.layer,
             color: self.color,

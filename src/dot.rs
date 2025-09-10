@@ -9,6 +9,9 @@ use crate::{
     transform::{matrix4_to_raw_array, Transform},
     vertex::{get_z_layer, Vertex},
 };
+use crate::{
+    editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET},
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct EdgePoint {
@@ -120,8 +123,8 @@ impl RingDot {
         camera: &Camera,
     ) -> Self {
         let point = Point {
-            x: 600.0 + point.x,
-            y: 50.0 + point.y,
+            x: CANVAS_HORIZ_OFFSET + point.x,
+            y: CANVAS_VERT_OFFSET + point.y,
         };
 
         let (vertices, indices, vertex_buffer, index_buffer) =
