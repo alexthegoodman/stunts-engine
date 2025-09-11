@@ -24,8 +24,8 @@ use lyon_tessellation::{
     VertexBuffers,
 };
 
-pub const ARROW_HEAD_SIZE: f32 = 12.0;
-pub const ARROW_SHAFT_THICKNESS: f32 = 3.0;
+pub const ARROW_HEAD_SIZE: f32 = 24.0;
+pub const ARROW_SHAFT_THICKNESS: f32 = 8.0;
 
 impl Shape for MotionArrow {
     fn bounding_box(&self) -> BoundingBox {
@@ -206,7 +206,8 @@ pub fn get_motion_arrow_data(
     };
 
     let mut transform = SnTransform::new(
-        Vector2::new(center.x, center.y),
+        Vector2::new(0.0, 0.0),
+        // Vector2::new(center.x, center.y), // currently, the start and end pos are absolute values, so this transform offsets them
         0.0, // No rotation since arrow direction is built into geometry
         Vector2::new(1.0, 1.0),
         uniform_buffer,
