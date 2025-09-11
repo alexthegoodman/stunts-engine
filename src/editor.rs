@@ -405,11 +405,11 @@ impl Editor {
             depth_view: None,
             // TODO: update interactive bounds on window resize?
             interactive_bounds: BoundingBox {
-                min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
+                min: Point { x: 50.0, y: 50.0 }, // account for aside width, allow for some off-canvas positioning
                 max: Point {
                     x: window_size.width as f32,
                     // y: window_size.height as f32 - 350.0, // 350.0 for timeline space
-                    y: 550.0, // allow for 50.0 padding below and above the canvas
+                    y: 750.0, // allow for 50.0 padding below and above the canvas
                 },
             },
         }
