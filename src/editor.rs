@@ -249,6 +249,7 @@ pub struct Editor {
     pub video_items: Vec<StVideo>,
     pub dragging_video: Option<Uuid>,
     pub motion_paths: Vec<MotionPath>,
+    pub motion_arrows: Vec<MotionArrow>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
@@ -283,6 +284,7 @@ pub struct Editor {
     pub video_current_sequences_data: Option<Vec<Sequence>>,
     pub control_mode: ControlMode,
     pub is_panning: bool,
+    pub motion_mode: bool,
 
     // points
     pub last_mouse_pos: Option<Point>,
@@ -395,9 +397,11 @@ impl Editor {
             cursor_dot: None,
             control_mode: ControlMode::Select,
             is_panning: false,
+            motion_mode: false,
             video_items: Vec::new(),
             dragging_video: None,
             motion_paths: Vec::new(),
+            motion_arrows: Vec::new(),
             generation_count: 4,
             generation_curved: false,
             generation_choreographed: true,
@@ -3840,6 +3844,12 @@ impl Editor {
             return None;
         }
 
+        // Handle motion mode - start placing motion arrow
+        if self.motion_mode {
+            self.drag_start = Some(self.last_top_left);
+            return None;
+        }
+
         // First, check if panning
         if self.control_mode == ControlMode::Pan {
             self.is_panning = true;
@@ -4258,6 +4268,55 @@ impl Editor {
         let mut action_edit = None;
 
         let camera = self.camera.as_ref().expect("Couldn't get camera");
+
+        // Handle motion mode - complete motion arrow placement
+        if self.motion_mode {
+            if let Some(start_pos) = self.drag_start {
+                let end_pos = self.last_top_left;
+                
+                // Create motion arrow
+                if let (Some(gpu_resources), Some(camera)) = (&self.gpu_resources, &self.camera) {
+                    if let (Some(model_layout), Some(group_layout)) = 
+                        (&self.model_bind_group_layout, &self.group_bind_group_layout) {
+                        let window_size = camera.window_size;
+                        
+                        let arrow_id = Uuid::new_v4();
+                        let sequence_id = self.current_sequence_data
+                            .as_ref()
+                            .map(|seq| Uuid::parse_str(&seq.id).unwrap_or(Uuid::nil()))
+                            .unwrap_or(Uuid::nil());
+                        
+                        let motion_arrow = MotionArrow::new(
+                            &window_size,
+                            &gpu_resources.device,
+                            &gpu_resources.queue,
+                            model_layout,
+                            group_layout,
+                            camera,
+                            start_pos,
+                            end_pos,
+                            [1.0, 0.0, 0.0, 1.0], // Red arrow
+                            Stroke {
+                                fill: [0.0, 0.0, 0.0, 1.0], // Black outline
+                                thickness: 2.0,
+                            },
+                            1, // Layer
+                            "Motion Arrow".to_string(),
+                            arrow_id,
+                            sequence_id,
+                        );
+                        
+                        self.motion_arrows.push(motion_arrow);
+                        println!("Motion arrow created from ({}, {}) to ({}, {})", 
+                            start_pos.x, start_pos.y, end_pos.x, end_pos.y);
+                    }
+                }
+                
+                self.motion_mode = false;
+                self.drag_start = None;
+            }
+            return None;
+        }
 
         // TODO: does another bounds cause this to get stuck?
         if (self.last_screen.x < self.interactive_bounds.min.x
@@ -4967,6 +5026,7 @@ use crate::camera::{Camera3D as Camera, CameraBinding};
 use crate::capture::{MousePosition, SourceData};
 use crate::dot::RingDot;
 use crate::fonts::FontManager;
+use crate::motion_arrow::{MotionArrow, MotionArrowConfig};
 use crate::motion_path::{MotionPath, MotionPathConfig};
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::st_image::{StImage, StImageConfig};

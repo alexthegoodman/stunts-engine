@@ -6,6 +6,7 @@ pub mod editor;
 pub mod export;
 pub mod fonts;
 pub mod gpu_resources;
+pub mod motion_arrow;
 pub mod motion_path;
 pub mod polygon;
 pub mod st_image;
