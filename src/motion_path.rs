@@ -10,7 +10,7 @@ use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
 
 use crate::animations::{EasingType, KeyType, KeyframeValue, Sequence, UIKeyframe};
-use crate::camera::Camera;
+use crate::camera::Camera3D as Camera;
 use crate::editor::{get_full_color, interpolate_position, rgb_to_wgpu, Point};
 use crate::polygon::{Polygon, SavedPoint, Stroke, INTERNAL_LAYER_SPACE};
 use crate::transform::matrix4_to_raw_array;
@@ -262,6 +262,7 @@ impl MotionPath {
             window_size,
         );
 
+        // group_transform.layer = 100.0;
         group_transform.update_uniform_buffer(&queue, &window_size);
 
         Self {
@@ -340,7 +341,7 @@ fn create_path_segment(
     };
 
     // Create polygon using default square points
-    Polygon::new(
+    let mut polygon = Polygon::new(
         window_size,
         device,
         queue,
@@ -363,12 +364,17 @@ fn create_path_segment(
             thickness: 0.0,
             fill: rgb_to_wgpu(0, 0, 0, 255.0),
         },
-        -1.0,
-        1, // positive to use INTERNAL_LAYER_SPACE
+        // 0.0,
+        2550, // break out z index function and other layers?
         String::from("motion_path_segment"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
-    )
+    );
+
+    // polygon.transform.layer = 17.0;
+    // polygon.transform.update_uniform_buffer(queue, window_size);
+
+    polygon
 }
 
 /// Creates a path handle for dragging and showing direction
@@ -385,7 +391,9 @@ fn create_path_handle(
     fill: [f32; 4],
     rotation: f32,
 ) -> Polygon {
-    Polygon::new(
+    // println!("make handle");
+
+    let mut polygon = Polygon::new(
         window_size,
         device,
         queue,
@@ -408,12 +416,17 @@ fn create_path_handle(
             thickness: 0.0,
             fill: rgb_to_wgpu(0, 0, 0, 255.0),
         },
-        -1.0,
-        1, // positive to use INTERNAL_LAYER_SPACE
+        // 0.0,
+        2550, // break out z index function and other layers?
         String::from("motion_path_handle"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),
-    )
+    );
+
+    // polygon.transform.layer = -100.05;
+    // polygon.transform.update_uniform_buffer(queue, window_size);
+
+    polygon
 }
 
 /// Creates arrow for showing direction
@@ -459,8 +472,8 @@ fn create_path_arrow(
             thickness: 0.0,
             fill: rgb_to_wgpu(0, 0, 0, 255.0),
         },
-        -1.0,
-        1, // positive to use INTERNAL_LAYER_SPACE
+        // 0.0,
+        2550, // break out z index function and other layers?
         String::from("motion_path_arrow"),
         Uuid::new_v4(),
         Uuid::from_str(&selected_sequence_id).expect("Couldn't convert string to uuid"),

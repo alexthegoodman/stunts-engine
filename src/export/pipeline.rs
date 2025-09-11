@@ -1,13 +1,13 @@
 use crate::{
     animations::Sequence,
-    camera::{Camera, CameraBinding},
+    camera::{Camera3D as Camera, CameraBinding},
     editor::{
         Editor, Viewport, WindowSize, WindowSizeShader, CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET,
     },
     timelines::{SavedTimelineStateConfig, TimelineSequence},
     vertex::Vertex,
 };
-use cgmath::Vector2;
+use cgmath::{Vector2, Vector3};
 use crate::gpu_resources::GpuResources;
 use std::sync::{Arc, Mutex};
 use wgpu::{util::DeviceExt, RenderPipeline};
@@ -63,8 +63,8 @@ impl ExportPipeline {
             },
         );
 
-        camera.position = Vector2::new(85.0, -535.0);
-        camera.zoom = 2.4;
+        camera.position = Vector3::new(85.0, -535.0, 0.0);
+        // camera.zoom = 2.4;
 
         let viewport = Arc::new(Mutex::new(Viewport::new(
             // swap for video dimensions?
@@ -340,7 +340,7 @@ impl ExportPipeline {
 
         let view = Arc::new(view);
 
-        camera_binding.update(&queue, &camera);
+        camera_binding.update_3d(&queue, &camera);
 
         let gpu_resources = GpuResources::new(adapter, device, queue);
 

@@ -18,7 +18,7 @@ use windows::Win32::System::Com::StructuredStorage::{
 use windows::Win32::System::Variant::{VariantClear, VariantInit, VT_I8};
 use windows_core::{PCWSTR, PROPVARIANT};
 
-use crate::camera::Camera;
+use crate::camera::Camera3D as Camera;
 use crate::capture::{MousePosition, SourceData};
 use crate::editor::{Point, WindowSize};
 use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
@@ -181,7 +181,7 @@ impl StVideo {
         );
 
         // -10.0 to provide 10 spots for internal items on top of objects
-        transform.layer = video_config.layer as f32 - INTERNAL_LAYER_SPACE as f32;
+        transform.layer = video_config.layer as f32 - 0 as f32;
         transform.update_uniform_buffer(&queue, &window_size);
 
         // let vertices = [
@@ -300,7 +300,7 @@ impl StVideo {
             vertices,
             indices,
             hidden: false,
-            layer: video_config.layer - INTERNAL_LAYER_SPACE,
+            layer: video_config.layer - 0,
             source_reader,
             group_bind_group: tmp_group_bind_group,
             current_zoom: 1.0,
@@ -694,7 +694,7 @@ impl StVideo {
 
     pub fn update_layer(&mut self, layer_index: i32) {
         // -10.0 to provide 10 spots for internal items on top of objects
-        let layer_index = layer_index - INTERNAL_LAYER_SPACE;
+        let layer_index = layer_index - 0;
         self.layer = layer_index;
         self.transform.layer = layer_index as f32;
     }

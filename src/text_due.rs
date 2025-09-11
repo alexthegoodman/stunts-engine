@@ -21,7 +21,7 @@ use wgpu::util::DeviceExt;
 
 use crate::vertex::get_z_layer;
 use crate::{
-    camera::Camera,
+    camera::Camera3D as Camera,
     editor::{Point, WindowSize},
     transform::{matrix4_to_raw_array, Transform},
     vertex::Vertex,
@@ -201,7 +201,7 @@ impl TextRenderer {
         );
 
         // -10.0 to provide 10 spots for internal items on top of objects
-        transform.layer = text_config.layer as f32 - INTERNAL_LAYER_SPACE as f32;
+        transform.layer = text_config.layer as f32 - 0 as f32;
         transform.update_uniform_buffer(&queue, &window_size);
 
         let (tmp_group_bind_group, tmp_group_transform) =
@@ -244,7 +244,7 @@ impl TextRenderer {
                 thickness: 0.0 as f32,
                 fill: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
             },
-            -2.0,
+            // -2.0,
             (text_config.layer.clone() as f32 - 1.0) as i32,
             text_config.name.clone(),
             text_config.id,
@@ -274,7 +274,7 @@ impl TextRenderer {
             current_row_height: 0,
             glyph_cache: HashMap::new(),
             hidden: false,
-            layer: text_config.layer - INTERNAL_LAYER_SPACE,
+            layer: text_config.layer - 0,
             color: text_config.color,
             font_size: text_config.font_size,
             group_bind_group: tmp_group_bind_group,
@@ -284,7 +284,7 @@ impl TextRenderer {
 
     pub fn update_layer(&mut self, layer_index: i32) {
         // -10.0 to provide 10 spots for internal items on top of objects
-        let layer_index = layer_index - INTERNAL_LAYER_SPACE;
+        let layer_index = layer_index - 0;
         self.layer = layer_index;
         self.transform.layer = layer_index as f32;
         self.background_polygon.layer = layer_index - 1;
@@ -458,7 +458,8 @@ impl TextRenderer {
             let v0 = atlas_glyph.uv_rect[1];
             let v1 = v0 + atlas_glyph.uv_rect[3];
 
-            let z = get_z_layer(1.0);
+            // let z = get_z_layer(1.0);
+            let z = 0.0;
 
             let active_color = rgb_to_wgpu(
                 self.color[0] as u8,

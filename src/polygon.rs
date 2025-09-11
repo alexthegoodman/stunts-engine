@@ -7,7 +7,7 @@ use uuid::Uuid;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    camera::{self, Camera},
+    camera::{self, Camera3D as Camera},
     dot::{
         closest_point_on_line_segment, closest_point_on_line_segment_with_info, distance, EdgePoint,
     },
@@ -84,7 +84,7 @@ pub fn get_polygon_data(
     border_radius: f32,
     fill: [f32; 4],
     stroke: Stroke,
-    base_layer: f32,
+    // base_layer: f32,
     transform_layer: i32,
 ) -> (
     Vec<Vertex>,
@@ -113,7 +113,8 @@ pub fn get_polygon_data(
                 let x = vertex.position().x;
                 let y = vertex.position().y;
 
-                Vertex::new(x, y, get_z_layer(base_layer + 2.0), fill)
+                // Vertex::new(x, y, get_z_layer(base_layer + 2.0), fill)
+                Vertex::new(x, y, 0.0, fill)
             }),
         )
         .unwrap();
@@ -130,7 +131,8 @@ pub fn get_polygon_data(
                     let x = vertex.position().x;
                     let y = vertex.position().y;
 
-                    Vertex::new(x, y, get_z_layer(base_layer + 3.0), stroke.fill)
+                    // Vertex::new(x, y, get_z_layer(base_layer + 3.0), stroke.fill)
+                    Vertex::new(x, y, 0.0 + 0.001, stroke.fill)
                     // Black border
                 }),
             )
@@ -259,7 +261,8 @@ pub fn get_polygon_data(
     );
 
     // -10.0 to provide 10 spots for internal items on top of objects
-    transform.layer = transform_layer as f32 - INTERNAL_LAYER_SPACE as f32;
+    // transform.layer = transform_layer as f32 - 0 as f32; // important?
+    transform.layer = transform_layer as f32;
     transform.update_uniform_buffer(&queue, &camera.window_size);
 
     (
@@ -362,7 +365,7 @@ impl Polygon {
         border_radius: f32,
         fill: [f32; 4],
         stroke: Stroke,
-        base_layer: f32,
+        // base_layer: f32,
         transform_layer: i32,
         name: String,
         id: Uuid,
@@ -380,6 +383,8 @@ impl Polygon {
             y: CANVAS_VERT_OFFSET + position.y,
         };
 
+        // println!("new poly {:?}", transform_layer);
+
         let (vertices, indices, vertex_buffer, index_buffer, bind_group, transform) =
             get_polygon_data(
                 window_size,
@@ -394,12 +399,14 @@ impl Polygon {
                 border_radius,
                 fill,
                 stroke,
-                base_layer,
+                // base_layer,
                 transform_layer,
             );
 
+        // println!("new layer {:?}", transform.layer);
+
         // -10.0 to provide 10 spots for internal items on top of objects
-        let transform_layer = transform_layer - INTERNAL_LAYER_SPACE;
+        // let transform_layer = transform_layer - 0;
 
         let (tmp_group_bind_group, tmp_group_transform) =
             create_empty_group_transform(device, group_bind_group_layout, window_size);
@@ -442,7 +449,7 @@ impl Polygon {
 
     pub fn update_layer(&mut self, layer_index: i32) {
         // -10.0 to provide 10 spots for internal items on top of objects
-        let layer_index = layer_index - INTERNAL_LAYER_SPACE;
+        // let layer_index = layer_index - 0;
         self.layer = layer_index;
         self.transform.layer = layer_index as f32;
     }
@@ -517,8 +524,9 @@ impl Polygon {
                 self.border_radius,
                 self.fill,
                 self.stroke,
-                0.0,
-                self.layer + INTERNAL_LAYER_SPACE,
+                // 0.0,
+                // self.layer + INTERNAL_LAYER_SPACE,
+                self.layer
             );
 
         self.dimensions = dimensions;
@@ -568,9 +576,12 @@ impl Polygon {
                 border_radius,
                 self.fill,
                 self.stroke,
-                0.0,
-                self.layer + INTERNAL_LAYER_SPACE,
+                // 0.0,
+                // self.layer + INTERNAL_LAYER_SPACE,
+                self.layer
             );
+
+
 
         self.border_radius = border_radius;
         self.vertices = vertices;
@@ -607,8 +618,9 @@ impl Polygon {
                 self.border_radius,
                 self.fill,
                 stroke,
-                0.0,
-                self.layer + INTERNAL_LAYER_SPACE,
+                // 0.0,
+                // self.layer + INTERNAL_LAYER_SPACE,
+                self.layer
             );
 
         self.stroke = stroke;
@@ -648,8 +660,9 @@ impl Polygon {
                 self.border_radius,
                 fill,
                 self.stroke,
-                0.0,
-                self.layer + INTERNAL_LAYER_SPACE,
+                // 0.0,
+                // self.layer + INTERNAL_LAYER_SPACE,
+                self.layer
             );
 
         self.fill = fill;
@@ -729,7 +742,7 @@ impl Polygon {
             // [0.5, 0.8, 1.0, 1.0], // light blue with some transparency
             config.fill,
             config.stroke,
-            -2.0,
+            // -2.0,
             config.layer,
             config.name.clone(),
             config.id,

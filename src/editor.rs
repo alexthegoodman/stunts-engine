@@ -488,7 +488,7 @@ impl Editor {
                         p.stroke.fill[3] as f32,
                     ],
                 },
-                -2.0,
+                // -2.0,
                 p.layer.clone(),
                 p.name.clone(),
                 Uuid::from_str(&p.id).expect("Couldn't convert string to uuid"),
@@ -2614,7 +2614,7 @@ impl Editor {
             self.camera_binding
                 .as_mut()
                 .expect("Couldn't get camera binding")
-                .update(
+                .update_3d(
                     &gpu_resources.queue,
                     &self.camera.as_ref().expect("Couldn't get camera"),
                 );
@@ -2699,7 +2699,7 @@ impl Editor {
                 thickness: 2.0,
                 fill: rgb_to_wgpu(0, 0, 0, 255.0),
             },
-            0.0,
+            // 0.0,
             polygon_config.layer,
             polygon_name,
             new_id,
@@ -2889,7 +2889,7 @@ impl Editor {
                 thickness: 0.0,
                 fill: rgb_to_wgpu(0, 0, 0, 255.0),
             },
-            0.0,
+            // 0.0,
             -89, // camera far is -100
             "canvas_background".to_string(),
             sequence_id,
@@ -3936,7 +3936,7 @@ impl Editor {
             // println!("Checking video point");
 
             if video_item.contains_point(&self.last_top_left, &camera) {
-                println!("Video contains point");
+                // println!("Video contains point");
                 intersecting_objects
                     .push((video_item.layer, InteractionTarget::Video(video_index)));
             }
@@ -4084,11 +4084,11 @@ impl Editor {
                         Some(Uuid::from_str(&video_item.id).expect("Couldn't convert to uuid"));
                     self.drag_start = Some(self.last_top_left);
 
-                    println!("Video interaction");
+                    // println!("Video interaction");
 
                     // TODO: make DRY with below
                     if (self.handle_video_click.is_some()) {
-                        println!("Video click");
+                        // println!("Video click");
 
                         let handler_creator = self
                             .handle_video_click
@@ -4137,10 +4137,19 @@ impl Editor {
     ) {
         let camera = self.camera.as_mut().expect("Couldn't get camera");
         let mouse_pos = Point { x, y };
+        
         let ray = visualize_ray_intersection(window_size, x, y, &camera);
+
+        // let ray = screen_to_world_perspective_correct(x, y, window_size, &camera);
+
         let top_left = ray.top_left;
+
+        // println!("top_left {:?}", top_left);
+
         // let top_left = camera.screen_to_world(x, y);
         // let top_left = mouse_pos;
+
+        // let top_left = Point { x: ray[0], y: ray[1] };
 
         self.global_top_left = top_left;
         self.last_screen = Point { x, y };
@@ -4177,7 +4186,9 @@ impl Editor {
             let new_x = camera.position.x + dx;
             let new_y = camera.position.y + dy;
 
-            camera.position = Vector2::new(new_x, new_y);
+            // camera.position = Vector2::new(new_x, new_y);
+            camera.position = Vector3::new(new_x, new_y, 0.0);
+
             // self.update_camera_binding(); // call in render loop, much more efficient
             // self.interactive_bounds = BoundingBox {
             //     max: Point {
@@ -4443,8 +4454,9 @@ impl Editor {
     pub fn reset_bounds(&mut self, window_size: &WindowSize) {
         let mut camera = self.camera.as_mut().expect("Couldn't get camera");
 
-        camera.position = Vector2::new(0.0, 0.0);
-        camera.zoom = 1.0;
+        // camera.position = Vector2::new(0.0, 0.0);
+        camera.position = Vector3::new(0.0, 0.0, 0.0);
+        // camera.zoom = 1.0;
         self.update_camera_binding();
         self.interactive_bounds = BoundingBox {
             min: Point { x: 550.0, y: 0.0 }, // account for aside width, allow for some off-canvas positioning
@@ -4479,7 +4491,7 @@ impl Editor {
             y: polygon.transform.position.y + dy,
         };
 
-        println!("move_polygon {:?}", new_position);
+        // println!("move_polygon {:?}", new_position);
 
         polygon.update_data_from_position(
             window_size,
@@ -4518,7 +4530,7 @@ impl Editor {
             y: polygon.transform.position.y + dy,
         };
 
-        println!("move_polygon {:?}", new_position);
+        // println!("move_polygon {:?}", new_position);
 
         polygon.update_data_from_position(
             window_size,
@@ -4563,7 +4575,7 @@ impl Editor {
             y: polygon.transform.position.y + dy,
         };
 
-        println!("move path polygon {:?}", new_position);
+        // println!("move path polygon {:?}", new_position);
 
         polygon.update_data_from_position(
             window_size,
@@ -4602,7 +4614,7 @@ impl Editor {
             y: path.transform.position.y + dy,
         };
 
-        println!("move_path {:?}", new_position);
+        // println!("move_path {:?}", new_position);
 
         path.update_data_from_position(
             window_size,
@@ -4641,7 +4653,7 @@ impl Editor {
             y: text_item.transform.position.y + dy,
         };
 
-        println!("move_text {:?}", new_position);
+        // println!("move_text {:?}", new_position);
 
         text_item
             .transform
@@ -4678,7 +4690,7 @@ impl Editor {
             y: image_item.transform.position.y + dy,
         };
 
-        println!("move_image {:?}", new_position);
+        // println!("move_image {:?}", new_position);
 
         image_item
             .transform
@@ -4711,7 +4723,7 @@ impl Editor {
             y: video_item.transform.position.y + dy,
         };
 
-        println!("move_video {:?}", new_position);
+        // println!("move_video {:?}", new_position);
 
         video_item
             .transform
@@ -4951,7 +4963,7 @@ use crate::animations::{
     AnimationData, AnimationProperty, BackgroundFill, EasingType, KeyType, KeyframeValue,
     ObjectType, RangeData, Sequence, UIKeyframe,
 };
-use crate::camera::{Camera, CameraBinding};
+use crate::camera::{Camera3D as Camera, CameraBinding};
 use crate::capture::{MousePosition, SourceData};
 use crate::dot::RingDot;
 use crate::fonts::FontManager;
@@ -5066,9 +5078,17 @@ pub fn visualize_ray_intersection(
     screen_y: f32,
     camera: &Camera,
 ) -> Ray {
-    let scale_factor = camera.zoom;
-    let zoom_center_x = window_size.width as f32 / 2.0;
-    let zoom_center_y = window_size.height as f32 / 2.0;
+    // let scale_factor = camera.zoom;
+    let scale_factor = 1.0;
+    
+    // let wgpu_viewport_width = window_size.width as f32 - 180.0;
+    // let wgpu_viewport_height = window_size.height as f32 - 120.0;
+    let wgpu_viewport_width = window_size.width as f32;
+    let wgpu_viewport_height = window_size.height as f32;
+    let aspect = wgpu_viewport_width as f32 / wgpu_viewport_height as f32;
+
+    let zoom_center_x = wgpu_viewport_width / 2.0;
+    let zoom_center_y = wgpu_viewport_height / 2.0;
 
     // 1. Translate screen coordinates to zoom center
     let translated_screen_x = screen_x - zoom_center_x;
@@ -5085,6 +5105,11 @@ pub fn visualize_ray_intersection(
     let pan_offset_x = camera.position.x * 0.5;
     let pan_offset_y = camera.position.y * 0.5;
 
+    // let top_left: Point = Point {
+    //     x: scaled_screen_x + pan_offset_x - 90.0, //  account for wgpu viewport
+    //     y: scaled_screen_y - pan_offset_y - 60.0,
+    // };
+
     let top_left: Point = Point {
         x: scaled_screen_x + pan_offset_x,
         y: scaled_screen_y - pan_offset_y,
@@ -5092,6 +5117,77 @@ pub fn visualize_ray_intersection(
 
     Ray { top_left }
 }
+
+fn screen_to_world_perspective_correct(
+    mouse_x: f32,
+    mouse_y: f32,
+    window_size: &WindowSize,
+    camera: &Camera
+    // viewport_width: f32,
+    // viewport_height: f32,
+    // view_matrix: &Matrix4<f32>,
+    // projection_matrix: &Matrix4<f32>,
+    // target_z: f32  // World Z where you want the cursor
+) -> Vector3<f32> {
+    let target_z = 0.0;
+    let projection_matrix = camera.get_projection();
+    let view_matrix = camera.get_view();
+
+    let viewport_width = window_size.width as f32;
+    let viewport_height = window_size.height as f32;
+
+    // Convert to NDC (this IS needed for proper perspective correction)
+    let ndc_x = (mouse_x / viewport_width) * 2.0 - 1.0;
+    let ndc_y = 1.0 - (mouse_y / viewport_height) * 2.0;
+    
+    // Create ray from near to far plane
+    let near_point = Vector4::new(ndc_x, ndc_y, -1.0, 1.0);
+    let far_point = Vector4::new(ndc_x, ndc_y, 1.0, 1.0);
+    
+    let inv_view_proj = (projection_matrix * view_matrix).invert().unwrap();
+    
+    let near_world = inv_view_proj * near_point;
+    let far_world = inv_view_proj * far_point;
+    
+    let near_world = Vector3::new(
+        near_world.x / near_world.w,
+        near_world.y / near_world.w,
+        near_world.z / near_world.w,
+    );
+    let far_world = Vector3::new(
+        far_world.x / far_world.w,
+        far_world.y / far_world.w,
+        far_world.z / far_world.w,
+    );
+    
+    // Intersect ray with plane at target_z
+    let ray_dir = far_world - near_world;
+    let t = (target_z - near_world.z) / ray_dir.z;
+    
+    near_world + ray_dir * t
+}
+
+// pub fn visualize_ray_intersection(
+//     window_size: &WindowSize,
+//     screen_x: f32,
+//     screen_y: f32,
+//     camera: &Camera,
+// ) -> Ray {
+//     // let scale_factor = camera.zoom;
+//     let scale_factor = 1.0;
+//     let aspect = window_size.width as f32 / window_size.height as f32;
+
+//     let top_left: Point = Point {
+//         x: screen_x * aspect,
+//         y: screen_y * aspect,
+//     };
+
+//     Ray { top_left }
+// }
+
+// Usage:
+// let (ray_origin, ray_direction) = screen_to_world_ray(mouse_x, mouse_y, width, height, &view_matrix, &projection_matrix);
+// let cursor_position = intersect_ray_with_plane(ray_origin, ray_direction, 0.0); // Intersect with Z=0 plane
 
 // Define an enum to represent interaction targets
 pub enum InteractionTarget {

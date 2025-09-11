@@ -17,7 +17,8 @@ unsafe impl Zeroable for Vertex {}
 /// seems that -0.0001 is closer to surface than -0.0002 so layer provided needs
 /// to be smaller without being negative to be on top
 pub fn get_z_layer(layer: f32) -> f32 {
-    let z = -(layer as f32 / 1000.0);
+    // let z = (-(layer as f32 / 1000.0) + 2.5) * -1.0;
+    let z = (layer as f32 / 1000.0) - 2.5;
     z
 }
 

@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use cgmath::SquareMatrix;
 use cgmath::{Deg, Matrix3, Matrix4, Rad, Vector2, Vector3};
 use wgpu::util::DeviceExt;
+use crate::vertex::get_z_layer;
 
 use crate::editor::{Point, WindowSize};
 
@@ -52,7 +53,7 @@ impl Transform {
         let y = self.position.y;
 
         // Create individual transformation matrices
-        let translation = Matrix4::from_translation(Vector3::new(x, y, self.layer));
+        let translation = Matrix4::from_translation(Vector3::new(x, y, get_z_layer(self.layer)));
         let rotation = Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 1.0), Rad(self.rotation));
         // let scale = Matrix4::from_scale(self.scale.x);
         let scale = Matrix4::from_nonuniform_scale(self.scale.x, self.scale.y, 1.0); // Use both x and y scale

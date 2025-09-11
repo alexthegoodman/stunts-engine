@@ -4,7 +4,7 @@ use wgpu::util::DeviceExt;
 
 use crate::transform::create_empty_group_transform;
 use crate::{
-    camera::{self, Camera},
+    camera::{self, Camera3D as Camera},
     editor::{Point, WindowSize},
     transform::{matrix4_to_raw_array, Transform},
     vertex::{get_z_layer, Vertex},
@@ -326,11 +326,13 @@ pub fn draw_dot(
     let x = point.x;
     let y = point.y;
 
-    let scale_factor = camera.zoom;
+    // let scale_factor = camera.zoom;
+    let scale_factor = 1.0;
     let radius = 5.0 * scale_factor; // Just use a single radius for a solid dot
 
-    let segments = 32 as u32; // Number of segments to approximate the circle
-    let dot_z = get_z_layer(2.0);
+    let segments = 16 as u32; // Number of segments to approximate the circle
+    // let dot_z = get_z_layer(0.0) * -1.0;
+    let dot_z = 0.09;
 
     let mut vertices = Vec::with_capacity((segments + 1) as usize); // +1 for center vertex
     let mut indices: Vec<u32> = Vec::with_capacity((segments * 3) as usize); // 3 vertices per triangle

@@ -1,6 +1,6 @@
-use cgmath::{Matrix4, Point2, Point3, Vector2, Vector3, Vector4};
+use cgmath::{Matrix4, Point3, Vector2, Vector3, Rad, Deg, perspective, InnerSpace};
 
-use crate::editor::{point_to_ndc, size_to_normal, Point, WindowSize};
+use crate::editor::{size_to_normal, Point, WindowSize};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Camera {
@@ -206,6 +206,94 @@ impl Camera {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Camera3D {
+    pub position: Vector3<f32>,
+    pub target: Vector3<f32>,
+    pub up: Vector3<f32>,
+    pub fovy: Rad<f32>,
+    pub aspect: f32,
+    pub znear: f32,
+    pub zfar: f32,
+    pub window_size: WindowSize,
+}
+
+impl Camera3D {
+    pub fn new(window_size: WindowSize) -> Self {
+        Self {
+            position: Vector3::new(0.0, 0.0, 0.1),
+            target: Vector3::new(0.0, 0.0, 0.0),
+            up: Vector3::new(0.0, 1.0, 0.0),
+            fovy: Rad(std::f32::consts::FRAC_PI_4),
+            // fovy: Rad(std::f32::consts::FRAC_PI_6),
+            // fovy: Rad::from(Deg(60.0)),
+            // aspect: window_size.width as f32 / window_size.height as f32, // causes distortation, maybe wouldn't with right combo
+            aspect: 1.0,
+            znear: 0.1,
+            zfar: 1000.0,
+            window_size,
+        }
+    }
+
+    pub fn get_view_projection_matrix(&self) -> Matrix4<f32> {
+        let projection = self.get_projection();
+        let view = self.get_view();
+        projection * view
+    }
+
+    pub fn get_projection(&self) -> Matrix4<f32> {
+        perspective(self.fovy, self.aspect, self.znear, self.zfar)
+    }
+
+    pub fn get_view(&self) -> Matrix4<f32> {
+        cgmath::Matrix4::look_at_rh(
+            Point3::new(self.position.x, self.position.y, self.position.z),
+            Point3::new(self.target.x, self.target.y, self.target.z),
+            self.up,
+        )
+    }
+
+    pub fn pan(&mut self, delta: Vector2<f32>) {
+        let right = (self.target - self.position).cross(self.up).normalize();
+        let up = right.cross(self.target - self.position).normalize();
+        
+        let movement = right * delta.x + up * delta.y;
+        self.position += movement;
+        self.target += movement;
+    }
+
+    pub fn zoom(&mut self, delta: f32, _center: Point) {
+        let direction = (self.target - self.position).normalize();
+        self.position += direction * delta;
+    }
+
+    pub fn orbit(&mut self, yaw_delta: f32, pitch_delta: f32) {
+        let radius = (self.position - self.target).magnitude();
+        let current_dir = (self.position - self.target).normalize();
+        
+        // Calculate current spherical coordinates
+        let current_yaw = current_dir.z.atan2(current_dir.x);
+        let current_pitch = current_dir.y.asin();
+        
+        // Apply deltas
+        let new_yaw = current_yaw + yaw_delta;
+        let new_pitch = (current_pitch + pitch_delta).clamp(-std::f32::consts::FRAC_PI_2 + 0.01, std::f32::consts::FRAC_PI_2 - 0.01);
+        
+        // Convert back to cartesian
+        let new_dir = Vector3::new(
+            new_pitch.cos() * new_yaw.cos(),
+            new_pitch.sin(),
+            new_pitch.cos() * new_yaw.sin(),
+        );
+        
+        self.position = self.target + new_dir * radius;
+    }
+
+    pub fn set_aspect_ratio(&mut self, aspect: f32) {
+        self.aspect = aspect;
+    }
+}
+
 use bytemuck::{Pod, Zeroable};
 use cgmath::SquareMatrix;
 
@@ -223,6 +311,10 @@ impl CameraUniform {
     }
 
     pub fn update_view_proj(&mut self, camera: &Camera) {
+        self.view_proj = camera.get_view_projection_matrix().into();
+    }
+
+    pub fn update_view_proj_3d(&mut self, camera: &Camera3D) {
         self.view_proj = camera.get_view_projection_matrix().into();
     }
 }
@@ -284,6 +376,15 @@ impl CameraBinding {
 
     pub fn update(&mut self, queue: &wgpu::Queue, camera: &Camera) {
         self.uniform.update_view_proj(camera);
+        queue.write_buffer(
+            &self.buffer,
+            0,
+            bytemuck::cast_slice(&[self.uniform.view_proj]),
+        );
+    }
+
+    pub fn update_3d(&mut self, queue: &wgpu::Queue, camera: &Camera3D) {
+        self.uniform.update_view_proj_3d(camera);
         queue.write_buffer(
             &self.buffer,
             0,
