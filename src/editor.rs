@@ -701,7 +701,7 @@ impl Editor {
                                     (new_width, new_height), 
                                     &camera);
                         
-                        
+                        // TODO: should happen inside render loop for performance
                         polygon.transform.update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
                     }
                 }
@@ -5095,6 +5095,29 @@ impl Editor {
         let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
+        
+        let bounding_box = match self.get_object_bounding_box(poly_id, &ObjectType::Polygon) {
+            Some(bbox) => bbox,
+            None => return,
+        };
+
+        let handle_positions = [
+            HandlePosition::TopLeft,
+            HandlePosition::Top,
+            HandlePosition::TopRight,
+            HandlePosition::Right,
+            HandlePosition::BottomRight,
+            HandlePosition::Bottom,
+            HandlePosition::BottomLeft,
+            HandlePosition::Left,
+        ];
+
+        // Step 1: Collect handle centers for each position
+        let handle_centers: Vec<(HandlePosition, _)> = handle_positions
+            .iter()
+            .map(|position| (*position, self.get_handle_position(&bounding_box, position)))
+            .collect();
+
         let polygon = self
             .polygons
             .iter_mut()
@@ -5117,6 +5140,16 @@ impl Editor {
             new_position,
             &camera,
         );
+
+        // Step 2: Update transforms using the collected centers
+        for (position, handle_center) in handle_centers {
+            if let Some(handle) = self.resize_handles.iter_mut().find(|h| 
+                h.object_id == polygon.id && h.position == position
+            ) {
+                // handle.polygon.transform.position = handle_center;
+                handle.polygon.transform.update_position([handle_center.x, handle_center.y], &camera.window_size);
+            }
+        }
 
         self.drag_start = Some(mouse_pos);
         // self.update_guide_lines(poly_index, window_size);
