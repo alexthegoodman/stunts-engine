@@ -503,11 +503,19 @@ impl Editor {
             let handle_center = self.get_handle_position(&bounding_box, position);
             
             // Create a small square polygon for the handle
+            // bad, we want this in localized units
+            // let handle_points = vec![
+            //     Point { x: -handle_size/2.0, y: -handle_size/2.0 },
+            //     Point { x: handle_size/2.0, y: -handle_size/2.0 },
+            //     Point { x: handle_size/2.0, y: handle_size/2.0 },
+            //     Point { x: -handle_size/2.0, y: handle_size/2.0 },
+            // ];
+
             let handle_points = vec![
-                Point { x: -handle_size/2.0, y: -handle_size/2.0 },
-                Point { x: handle_size/2.0, y: -handle_size/2.0 },
-                Point { x: handle_size/2.0, y: handle_size/2.0 },
-                Point { x: -handle_size/2.0, y: handle_size/2.0 },
+                Point { x: 0.0, y: 0.0 },
+                Point { x: 1.0, y: 0.0 },
+                Point { x: 1.0, y: 1.0 },
+                Point { x: 0.0, y: 1.0 },
             ];
 
             let handle_id = Uuid::new_v4();
@@ -534,7 +542,7 @@ impl Editor {
                         thickness: 2.0,
                         fill: rgb_to_wgpu(0, 0, 0, 255.0), // black border
                     },
-                    1000, // high z-layer to render on top
+                    100, // high z-layer to render on top
                     handle_id.to_string(),
                     handle_id,
                     Uuid::nil()
@@ -584,18 +592,38 @@ impl Editor {
                 self.polygons
                     .iter()
                     .find(|p| p.id == object_id)
-                    .map(|p| p.world_bounding_box())
+                    // .map(|p| p.world_bounding_box())
+                    .map(|t| {
+                        let pos = t.transform.position; // This is center position
+                        let dims = t.dimensions;
+                        let half_width = dims.0 as f32 / 2.0;
+                        let half_height = dims.1 as f32 / 2.0;
+                        BoundingBox {
+                            min: Point { x: pos.x - half_width, y: pos.y - half_height },
+                            max: Point { x: pos.x + half_width, y: pos.y + half_height },
+                        }
+                    })
             }
             crate::animations::ObjectType::TextItem => {
                 self.text_items
                     .iter()
                     .find(|t| t.id == object_id)
+                    // .map(|t| {
+                    //     let pos = t.transform.position;
+                    //     let dims = t.dimensions;
+                    //     BoundingBox {
+                    //         min: Point { x: pos.x, y: pos.y },
+                    //         max: Point { x: pos.x + dims.0 as f32, y: pos.y + dims.1 as f32 },
+                    //     }
+                    // })
                     .map(|t| {
-                        let pos = t.transform.position;
+                        let pos = t.transform.position; // This is center position
                         let dims = t.dimensions;
+                        let half_width = dims.0 as f32 / 2.0;
+                        let half_height = dims.1 as f32 / 2.0;
                         BoundingBox {
-                            min: Point { x: pos.x, y: pos.y },
-                            max: Point { x: pos.x + dims.0 as f32, y: pos.y + dims.1 as f32 },
+                            min: Point { x: pos.x - half_width, y: pos.y - half_height },
+                            max: Point { x: pos.x + half_width, y: pos.y + half_height },
                         }
                     })
             }
@@ -604,11 +632,13 @@ impl Editor {
                     .iter()
                     .find(|i| i.id == object_id.to_string())
                     .map(|i| {
-                        let pos = i.transform.position;
+                        let pos = i.transform.position; // This is center position
                         let dims = i.dimensions;
+                        let half_width = dims.0 as f32 / 2.0;
+                        let half_height = dims.1 as f32 / 2.0;
                         BoundingBox {
-                            min: Point { x: pos.x, y: pos.y },
-                            max: Point { x: pos.x + dims.0 as f32, y: pos.y + dims.1 as f32 },
+                            min: Point { x: pos.x - half_width, y: pos.y - half_height },
+                            max: Point { x: pos.x + half_width, y: pos.y + half_height },
                         }
                     })
             }
@@ -617,11 +647,13 @@ impl Editor {
                     .iter()
                     .find(|v| v.id == object_id.to_string())
                     .map(|v| {
-                        let pos = v.transform.position;
+                        let pos = v.transform.position; // This is center position
                         let dims = v.dimensions;
+                        let half_width = dims.0 as f32 / 2.0;
+                        let half_height = dims.1 as f32 / 2.0;
                         BoundingBox {
-                            min: Point { x: pos.x, y: pos.y },
-                            max: Point { x: pos.x + dims.0 as f32, y: pos.y + dims.1 as f32 },
+                            min: Point { x: pos.x - half_width, y: pos.y - half_height },
+                            max: Point { x: pos.x + half_width, y: pos.y + half_height },
                         }
                     })
             }
@@ -631,6 +663,7 @@ impl Editor {
     pub fn handle_clicked_at_point(&self, point: &Point, camera: &Camera) -> Option<(Uuid, HandlePosition)> {
         for handle in &self.resize_handles {
             if handle.polygon.contains_point(point, camera) {
+                println!("handle clicked");
                 return Some((handle.id, handle.position));
             }
         }
@@ -639,12 +672,15 @@ impl Editor {
 
     pub fn start_handle_drag(&mut self, handle_id: Uuid, position: HandlePosition) {
         if let Some(handle) = self.resize_handles.iter().find(|h| h.id == handle_id) {
+            println!("start drag");
             self.dragging_handle = Some((handle.object_id, position));
         }
     }
 
     pub fn resize_selected_object(&mut self, mouse_delta: Point) {
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
         let gpu_resources = self.gpu_resources.as_ref().expect("Couldn't get gpu resources");
+        let bind_group_layout = self.model_bind_group_layout.as_ref().expect("Couldn't get bind group layout");
 
         // Extract the needed info first to avoid borrowing conflicts
         let resize_info = if let (Some((object_id, handle_position)), Some(selected_object)) = 
@@ -658,7 +694,33 @@ impl Editor {
             match object_type {
                 crate::animations::ObjectType::Polygon => {
                     if let Some(polygon) = self.polygons.iter_mut().find(|p| p.id == object_id) {
-                        Self::resize_polygon(polygon, &handle_position, mouse_delta);
+                        println!("resize_selected_object");
+                        let scale_factor = Self::resize_polygon(polygon, &handle_position, mouse_delta);
+                        
+                        match handle_position {
+                            HandlePosition::Right | HandlePosition::Left => {
+                                // polygon.transform.update_scale([scale_factor, 1.0]);
+                                polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
+                                    (polygon.dimensions.0 * scale_factor, polygon.dimensions.1), 
+                                    &camera);
+                            }
+                            HandlePosition::Top | HandlePosition::Bottom => {
+                                // polygon.transform.update_scale([1.0, scale_factor]);
+                                polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
+                                    (polygon.dimensions.0, polygon.dimensions.1 * scale_factor), 
+                                    &camera);
+                            }
+                            _ => {
+                                // Corner handles
+                                // polygon.transform.update_scale([scale_factor, scale_factor]);
+                                polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
+                                    (polygon.dimensions.0 * scale_factor, polygon.dimensions.1 * scale_factor), 
+                                    &camera);
+                            }
+                        }
+                        
+                        
+                        polygon.transform.update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
                     }
                 }
                 crate::animations::ObjectType::TextItem => {
@@ -683,7 +745,7 @@ impl Editor {
         }
     }
 
-    fn resize_polygon(polygon: &mut crate::polygon::Polygon, handle_position: &HandlePosition, mouse_delta: Point) {
+    fn resize_polygon(polygon: &mut crate::polygon::Polygon, handle_position: &HandlePosition, mouse_delta: Point) -> f32 {
         let scale_factor = match handle_position {
             HandlePosition::Right | HandlePosition::Left => {
                 let current_width = polygon.dimensions.0;
@@ -707,18 +769,20 @@ impl Editor {
         };
 
         // Apply scaling
-        match handle_position {
-            HandlePosition::Right | HandlePosition::Left => {
-                polygon.transform.update_scale([scale_factor, 1.0]);
-            }
-            HandlePosition::Top | HandlePosition::Bottom => {
-                polygon.transform.update_scale([1.0, scale_factor]);
-            }
-            _ => {
-                // Corner handles
-                polygon.transform.update_scale([scale_factor, scale_factor]);
-            }
-        }
+        // match handle_position {
+        //     HandlePosition::Right | HandlePosition::Left => {
+        //         polygon.transform.update_scale([scale_factor, 1.0]);
+        //     }
+        //     HandlePosition::Top | HandlePosition::Bottom => {
+        //         polygon.transform.update_scale([1.0, scale_factor]);
+        //     }
+        //     _ => {
+        //         // Corner handles
+        //         polygon.transform.update_scale([scale_factor, scale_factor]);
+        //     }
+        // }
+
+        scale_factor
     }
 
     fn resize_text_item(text_item: &mut crate::text_due::TextRenderer, handle_position: &HandlePosition, mouse_delta: Point, gpu_resources: &GpuResources) {
@@ -4597,6 +4661,18 @@ impl Editor {
             // }
         }
 
+        // handle resize handle dragging
+        if let Some((object_id, handle_position)) = self.dragging_handle {
+            if let Some(start) = self.drag_start {
+                let mouse_delta = Point {
+                    x: self.last_top_left.x - start.x,
+                    y: self.last_top_left.y - start.y,
+                };
+                
+                self.resize_selected_object(mouse_delta);
+            }
+        }
+
         // handle dragging paths
         if let Some(path_id) = self.dragging_path {
             if let Some(start) = self.drag_start {
@@ -4643,18 +4719,6 @@ impl Editor {
         if let Some(video_id) = self.dragging_video {
             if let Some(start) = self.drag_start {
                 self.move_video(self.last_top_left, start, video_id, window_size, device);
-            }
-        }
-
-        // handle resize handle dragging
-        if let Some((object_id, handle_position)) = self.dragging_handle {
-            if let Some(start) = self.drag_start {
-                let mouse_delta = Point {
-                    x: self.last_top_left.x - start.x,
-                    y: self.last_top_left.y - start.y,
-                };
-                
-                self.resize_selected_object(mouse_delta);
             }
         }
 
