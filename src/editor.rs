@@ -4704,11 +4704,16 @@ impl Editor {
         // handle resize handle dragging
         if let Some((object_id, handle_position)) = self.dragging_handle {
             if let Some(start) = self.drag_start {
-                let mouse_delta = Point {
-                    x: self.last_top_left.x - start.x,
-                    y: self.last_top_left.y - start.y,
-                };
+                // let mouse_delta = Point {
+                //     x: self.last_top_left.x - start.x,
+                //     y: self.last_top_left.y - start.y,
+                // };
                 
+                let mouse_delta = Point {
+                    x: self.last_top_left.x - self.previous_top_left.x,
+                    y: self.last_top_left.y - self.previous_top_left.y,
+                };
+
                 self.resize_selected_object(mouse_delta);
             }
         }
