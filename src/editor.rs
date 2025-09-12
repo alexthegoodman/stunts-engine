@@ -672,7 +672,7 @@ impl Editor {
 
     pub fn start_handle_drag(&mut self, handle_id: Uuid, position: HandlePosition) {
         if let Some(handle) = self.resize_handles.iter().find(|h| h.id == handle_id) {
-            println!("start drag");
+            // println!("start drag");
             self.dragging_handle = Some((handle.object_id, position));
         }
     }
@@ -694,7 +694,7 @@ impl Editor {
             match object_type {
                 crate::animations::ObjectType::Polygon => {
                     if let Some(polygon) = self.polygons.iter_mut().find(|p| p.id == object_id) {
-                        println!("resize_selected_object");
+                        // println!("resize_selected_object");
                         let (new_width, new_height) = Self::resize_polygon(polygon, &handle_position, mouse_delta);
                         
                         polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
