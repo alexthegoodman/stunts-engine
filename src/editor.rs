@@ -695,29 +695,11 @@ impl Editor {
                 crate::animations::ObjectType::Polygon => {
                     if let Some(polygon) = self.polygons.iter_mut().find(|p| p.id == object_id) {
                         println!("resize_selected_object");
-                        let scale_factor = Self::resize_polygon(polygon, &handle_position, mouse_delta);
+                        let (new_width, new_height) = Self::resize_polygon(polygon, &handle_position, mouse_delta);
                         
-                        match handle_position {
-                            HandlePosition::Right | HandlePosition::Left => {
-                                // polygon.transform.update_scale([scale_factor, 1.0]);
-                                polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
-                                    (polygon.dimensions.0 * scale_factor, polygon.dimensions.1), 
+                        polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
+                                    (new_width, new_height), 
                                     &camera);
-                            }
-                            HandlePosition::Top | HandlePosition::Bottom => {
-                                // polygon.transform.update_scale([1.0, scale_factor]);
-                                polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
-                                    (polygon.dimensions.0, polygon.dimensions.1 * scale_factor), 
-                                    &camera);
-                            }
-                            _ => {
-                                // Corner handles
-                                // polygon.transform.update_scale([scale_factor, scale_factor]);
-                                polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
-                                    (polygon.dimensions.0 * scale_factor, polygon.dimensions.1 * scale_factor), 
-                                    &camera);
-                            }
-                        }
                         
                         
                         polygon.transform.update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
@@ -745,45 +727,103 @@ impl Editor {
         }
     }
 
-    fn resize_polygon(polygon: &mut crate::polygon::Polygon, handle_position: &HandlePosition, mouse_delta: Point) -> f32 {
-        let scale_factor = match handle_position {
-            HandlePosition::Right | HandlePosition::Left => {
-                let current_width = polygon.dimensions.0;
-                let new_width = (current_width + mouse_delta.x).max(10.0);
-                new_width / current_width
+    fn resize_polygon(
+        polygon: &mut crate::polygon::Polygon,
+        handle_position: &HandlePosition,
+        mouse_delta: Point,
+    ) -> (f32, f32) {
+        let (current_width, current_height) = polygon.dimensions;
+
+        let mut new_width = current_width;
+        let mut new_height = current_height;
+
+        match handle_position {
+            HandlePosition::Right => {
+                new_width = (current_width + mouse_delta.x).max(10.0);
             }
-            HandlePosition::Top | HandlePosition::Bottom => {
-                let current_height = polygon.dimensions.1;
-                let new_height = (current_height + mouse_delta.y).max(10.0);
-                new_height / current_height
+            HandlePosition::Left => {
+                new_width = (current_width - mouse_delta.x).max(10.0);
+            }
+            HandlePosition::Bottom => {
+                new_height = (current_height + mouse_delta.y).max(10.0);
+            }
+            HandlePosition::Top => {
+                new_height = (current_height - mouse_delta.y).max(10.0);
             }
             _ => {
-                // Corner handles - maintain aspect ratio or scale both dimensions
-                let current_width = polygon.dimensions.0;
-                let current_height = polygon.dimensions.1;
-                let width_scale = (current_width + mouse_delta.x) / current_width;
-                let height_scale = (current_height + mouse_delta.y) / current_height;
-                // Use the larger scale to maintain aspect ratio
-                width_scale.abs().max(height_scale.abs()).max(0.1)
+                // Corner handles - resize both dimensions
+                new_width = (current_width + mouse_delta.x).max(10.0);
+                new_height = (current_height + mouse_delta.y).max(10.0);
             }
         };
 
-        // Apply scaling
-        // match handle_position {
-        //     HandlePosition::Right | HandlePosition::Left => {
-        //         polygon.transform.update_scale([scale_factor, 1.0]);
-        //     }
-        //     HandlePosition::Top | HandlePosition::Bottom => {
-        //         polygon.transform.update_scale([1.0, scale_factor]);
-        //     }
-        //     _ => {
-        //         // Corner handles
-        //         polygon.transform.update_scale([scale_factor, scale_factor]);
-        //     }
-        // }
-
-        scale_factor
+        (new_width, new_height)
     }
+
+
+    // fn resize_polygon(polygon: &mut crate::polygon::Polygon, handle_position: &HandlePosition, mouse_delta: Point) -> (f32, f32) {
+    //     let mut new_width = polygon.dimensions.0;
+    //     let mut new_height = polygon.dimensions.1;
+    //     match handle_position {
+    //         HandlePosition::Right | HandlePosition::Left => {
+    //             let current_width = polygon.dimensions.0;
+    //             new_width = (current_width + mouse_delta.x);
+    //         }
+    //         HandlePosition::Top | HandlePosition::Bottom => {
+    //             let current_height = polygon.dimensions.1;
+    //             new_height = (current_height + mouse_delta.y);
+    //         }
+    //         _ => {
+    //             // Corner handles - maintain aspect ratio or scale both dimensions
+    //             let current_width = polygon.dimensions.0;
+    //             let current_height = polygon.dimensions.1;
+    //             new_width = (current_width + mouse_delta.x);
+    //             new_height = (current_height + mouse_delta.y);
+    //         }
+    //     };
+
+    //     (new_width, new_height)
+    // }
+
+    // fn resize_polygon(
+    //     polygon: &mut crate::polygon::Polygon,
+    //     handle_position: &HandlePosition,
+    //     mouse_delta: Point,
+    // ) -> f32 {
+    //     let scale_factor = match handle_position {
+    //         HandlePosition::Right => {
+    //             let current_width = polygon.dimensions.0;
+    //             let new_width = (current_width + mouse_delta.x).max(10.0);
+    //             new_width / current_width
+    //         }
+    //         HandlePosition::Left => {
+    //             let current_width = polygon.dimensions.0;
+    //             let new_width = (current_width - mouse_delta.x).max(10.0);
+    //             new_width / current_width
+    //         }
+    //         HandlePosition::Bottom => {
+    //             let current_height = polygon.dimensions.1;
+    //             let new_height = (current_height + mouse_delta.y).max(10.0);
+    //             new_height / current_height
+    //         }
+    //         HandlePosition::Top => {
+    //             let current_height = polygon.dimensions.1;
+    //             let new_height = (current_height - mouse_delta.y).max(10.0);
+    //             new_height / current_height
+    //         }
+    //         _ => {
+    //             // Corner handles - maintain aspect ratio or scale both dimensions
+    //             let current_width = polygon.dimensions.0;
+    //             let current_height = polygon.dimensions.1;
+    //             let width_scale = (current_width + mouse_delta.x) / current_width;
+    //             let height_scale = (current_height + mouse_delta.y) / current_height;
+    //             width_scale.abs().max(height_scale.abs()).max(0.1)
+    //         }
+    //     };
+
+    //     scale_factor
+    // }
+
 
     fn resize_text_item(text_item: &mut crate::text_due::TextRenderer, handle_position: &HandlePosition, mouse_delta: Point, gpu_resources: &GpuResources) {
         let scale_factor = match handle_position {
