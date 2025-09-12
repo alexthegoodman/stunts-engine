@@ -250,6 +250,11 @@ pub struct Editor {
     pub dragging_video: Option<Uuid>,
     pub motion_paths: Vec<MotionPath>,
     pub motion_arrows: Vec<MotionArrow>,
+    pub canvas_hidden: bool,
+    pub motion_arrow_just_placed: bool,
+    pub last_motion_arrow_object_id: Uuid,
+    pub last_motion_arrow_object_dimensions: Option<(f32, f32)>,
+    pub last_motion_arrow_end_positions: Option<(Point, Point)>,
 
     // viewport
     pub viewport: Arc<Mutex<Viewport>>,
@@ -346,6 +351,7 @@ impl Editor {
             font_manager,
             // inference,
             selected_polygon_id: Uuid::nil(),
+            last_motion_arrow_object_id: Uuid::nil(),
             polygons: Vec::new(),
             dragging_polygon: None,
             dragging_path_assoc_path: None,
@@ -402,11 +408,15 @@ impl Editor {
             dragging_video: None,
             motion_paths: Vec::new(),
             motion_arrows: Vec::new(),
+            canvas_hidden: false,
+            motion_arrow_just_placed: false,
+            last_motion_arrow_object_dimensions: None,
             generation_count: 4,
             generation_curved: false,
             generation_choreographed: true,
             generation_fade: true,
             depth_view: None,
+            last_motion_arrow_end_positions: None,
             // TODO: update interactive bounds on window resize?
             interactive_bounds: BoundingBox {
                 min: Point { x: 50.0, y: 50.0 }, // account for aside width, allow for some off-canvas positioning
@@ -4274,6 +4284,53 @@ impl Editor {
             if let Some(start_pos) = self.drag_start {
                 let end_pos = self.last_top_left;
                 
+                // Find object dimensions at start position
+                let mut object_dimensions: Option<(f32, f32)> = None;
+                let mut object_id = Uuid::nil();
+                
+                // Check for objects at start position
+                for polygon in &self.polygons {
+                    if !polygon.hidden && polygon.contains_point(&start_pos, &camera) {
+                        object_id = polygon.id;
+                        object_dimensions = Some((polygon.dimensions.0 as f32, polygon.dimensions.1 as f32));
+                        break;
+                    }
+                }
+                
+                if object_dimensions.is_none() {
+                    for text_item in &self.text_items {
+                        if !text_item.hidden && text_item.contains_point(&start_pos, &camera) {
+                            object_id = text_item.id;
+                            object_dimensions = Some((text_item.dimensions.0 as f32, text_item.dimensions.1 as f32));
+                            break;
+                        }
+                    }
+                }
+                
+                if object_dimensions.is_none() {
+                    for image_item in &self.image_items {
+                        if !image_item.hidden && image_item.contains_point(&start_pos, &camera) {
+                            object_id = Uuid::from_str(&image_item.id).expect("Couldn't make uuid");
+                            object_dimensions = Some((image_item.dimensions.0 as f32, image_item.dimensions.1 as f32));
+                            break;
+                        }
+                    }
+                }
+                
+                if object_dimensions.is_none() {
+                    for video_item in &self.video_items {
+                        if !video_item.hidden && video_item.contains_point(&start_pos, &camera) {
+                            object_id = Uuid::from_str(&video_item.id).expect("Couldn't make uuid");
+                            object_dimensions = Some((video_item.dimensions.0 as f32, video_item.dimensions.1 as f32));
+                            break;
+                        }
+                    }
+                }
+
+                self.last_motion_arrow_object_id = object_id;
+                self.last_motion_arrow_object_dimensions = object_dimensions;
+                self.last_motion_arrow_end_positions = Some((start_pos, end_pos));
+                
                 // Create motion arrow
                 if let (Some(gpu_resources), Some(camera)) = (&self.gpu_resources, &self.camera) {
                     if let (Some(model_layout), Some(group_layout)) = 
@@ -4307,6 +4364,8 @@ impl Editor {
                         );
                         
                         self.motion_arrows.push(motion_arrow);
+                        self.canvas_hidden = true;
+                        self.motion_arrow_just_placed = true;
                         println!("Motion arrow created from ({}, {}) to ({}, {})", 
                             start_pos.x, start_pos.y, end_pos.x, end_pos.y);
                     }

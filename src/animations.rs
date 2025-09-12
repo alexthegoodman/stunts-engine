@@ -33,6 +33,7 @@ pub struct Sequence {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct AnimationData {
     pub id: String,
     /// whether a polygon, image, text, or other
@@ -49,8 +50,23 @@ pub struct AnimationData {
     pub position: [i32; 2],
 }
 
+impl Default for AnimationData {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            object_type: ObjectType::Polygon,
+            polygon_id: String::new(),
+            duration: Duration::from_secs(1),
+            start_time_ms: 0,
+            properties: Vec::new(),
+            position: [0, 0],
+        }
+    }
+}
+
 /// Represents a property that can be animated in the UI
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct AnimationProperty {
     /// Name of the property (e.g., "Position.X", "Rotation.Z")
     pub name: String,
@@ -64,6 +80,18 @@ pub struct AnimationProperty {
     pub depth: u32,
 }
 
+impl Default for AnimationProperty {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            property_path: String::new(),
+            children: Vec::new(),
+            keyframes: Vec::new(),
+            depth: 0,
+        }
+    }
+}
+
 /// Types of easing functions available for interpolation
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub enum EasingType {
@@ -75,6 +103,7 @@ pub enum EasingType {
 
 /// Represents a keyframe in the UI
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct UIKeyframe {
     /// Used to associate with this speciifc UI Keyframe
     pub id: String,
@@ -88,6 +117,19 @@ pub struct UIKeyframe {
     pub path_type: PathType,
     /// Type of keyframe (frame or range)
     pub key_type: KeyType,
+}
+
+impl Default for UIKeyframe {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            time: Duration::from_secs(0),
+            value: KeyframeValue::Position([0, 0]),
+            easing: EasingType::Linear,
+            path_type: PathType::Linear,
+            key_type: KeyType::Frame,
+        }
+    }
 }
 
 /// Possible values for keyframes
@@ -110,8 +152,17 @@ pub enum BackgroundFill {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct RangeData {
     pub end_time: Duration,
+}
+
+impl Default for RangeData {
+    fn default() -> Self {
+        Self {
+            end_time: Duration::from_secs(1),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
