@@ -228,6 +228,31 @@ pub enum ControlMode {
     Pan,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HandlePosition {
+    TopLeft,
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+    Left,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SelectedObject {
+    pub object_id: Uuid,
+    pub object_type: crate::animations::ObjectType,
+}
+
+pub struct ResizeHandle {
+    pub id: Uuid,
+    pub position: HandlePosition,
+    pub polygon: Polygon,
+    pub object_id: Uuid,
+}
+
 pub struct Editor {
     // visual
     pub selected_polygon_id: Uuid,
@@ -248,6 +273,12 @@ pub struct Editor {
     pub cursor_dot: Option<RingDot>,
     pub video_items: Vec<StVideo>,
     pub dragging_video: Option<Uuid>,
+    
+    // resize handles system
+    pub selected_object: Option<SelectedObject>,
+    pub resize_handles: Vec<ResizeHandle>,
+    pub dragging_handle: Option<(Uuid, HandlePosition)>,
+    
     pub motion_paths: Vec<MotionPath>,
     pub motion_arrows: Vec<MotionArrow>,
     pub canvas_hidden: bool,
@@ -406,6 +437,12 @@ impl Editor {
             motion_mode: false,
             video_items: Vec::new(),
             dragging_video: None,
+            
+            // resize handles system  
+            selected_object: None,
+            resize_handles: Vec::new(),
+            dragging_handle: None,
+            
             motion_paths: Vec::new(),
             motion_arrows: Vec::new(),
             canvas_hidden: false,
@@ -427,6 +464,376 @@ impl Editor {
                 },
             },
         }
+    }
+
+    pub fn create_resize_handles_for_object(
+        &mut self,
+        object_id: Uuid,
+        object_type: crate::animations::ObjectType,
+        // gpu_resources: &GpuResources,
+    ) {
+        self.clear_resize_handles();
+
+        let gpu_resources = self.gpu_resources.as_ref().expect("Couldn't get gpu resources");
+        
+        let bounding_box = match self.get_object_bounding_box(object_id, &object_type) {
+            Some(bbox) => bbox,
+            None => return,
+        };
+        
+        let window_size = if let Some(camera) = &self.camera {
+            camera.window_size
+        } else {
+            return;
+        };
+        
+        let handle_size = 8.0; // Size of resize handles in pixels
+        let handle_positions = [
+            HandlePosition::TopLeft,
+            HandlePosition::Top,
+            HandlePosition::TopRight,
+            HandlePosition::Right,
+            HandlePosition::BottomRight,
+            HandlePosition::Bottom,
+            HandlePosition::BottomLeft,
+            HandlePosition::Left,
+        ];
+
+        for position in &handle_positions {
+            let handle_center = self.get_handle_position(&bounding_box, position);
+            
+            // Create a small square polygon for the handle
+            let handle_points = vec![
+                Point { x: -handle_size/2.0, y: -handle_size/2.0 },
+                Point { x: handle_size/2.0, y: -handle_size/2.0 },
+                Point { x: handle_size/2.0, y: handle_size/2.0 },
+                Point { x: -handle_size/2.0, y: handle_size/2.0 },
+            ];
+
+            let handle_id = Uuid::new_v4();
+            
+            if let (Some(camera), Some(model_bind_group_layout), Some(group_bind_group_layout)) = (
+                &self.camera,
+                &self.model_bind_group_layout,
+                &self.group_bind_group_layout,
+            ) {
+                let handle_polygon = crate::polygon::Polygon::new(
+                    &window_size,
+                    &gpu_resources.device,
+                    &gpu_resources.queue,
+                    model_bind_group_layout,
+                    group_bind_group_layout,
+                    camera,
+                    handle_points,
+                    (handle_size, handle_size),
+                    handle_center,
+                    0.0, // rotation
+                    0.0, // border_radius
+                    [0.2, 0.6, 1.0, 1.0], // blue fill
+                    crate::polygon::Stroke {
+                        thickness: 2.0,
+                        fill: rgb_to_wgpu(0, 0, 0, 255.0), // black border
+                    },
+                    1000, // high z-layer to render on top
+                    handle_id.to_string(),
+                    handle_id,
+                    Uuid::nil()
+                );
+
+                let resize_handle = ResizeHandle {
+                    id: handle_id,
+                    position: *position,
+                    polygon: handle_polygon,
+                    object_id,
+                };
+
+                self.resize_handles.push(resize_handle);
+            }
+        }
+        
+        self.selected_object = Some(SelectedObject {
+            object_id,
+            object_type,
+        });
+    }
+
+    pub fn clear_resize_handles(&mut self) {
+        self.resize_handles.clear();
+        self.selected_object = None;
+    }
+
+    fn get_handle_position(&self, bbox: &BoundingBox, position: &HandlePosition) -> Point {
+        let mid_x = (bbox.min.x + bbox.max.x) / 2.0;
+        let mid_y = (bbox.min.y + bbox.max.y) / 2.0;
+
+        match position {
+            HandlePosition::TopLeft => Point { x: bbox.min.x, y: bbox.min.y },
+            HandlePosition::Top => Point { x: mid_x, y: bbox.min.y },
+            HandlePosition::TopRight => Point { x: bbox.max.x, y: bbox.min.y },
+            HandlePosition::Right => Point { x: bbox.max.x, y: mid_y },
+            HandlePosition::BottomRight => Point { x: bbox.max.x, y: bbox.max.y },
+            HandlePosition::Bottom => Point { x: mid_x, y: bbox.max.y },
+            HandlePosition::BottomLeft => Point { x: bbox.min.x, y: bbox.max.y },
+            HandlePosition::Left => Point { x: bbox.min.x, y: mid_y },
+        }
+    }
+
+    fn get_object_bounding_box(&self, object_id: Uuid, object_type: &crate::animations::ObjectType) -> Option<BoundingBox> {
+        match object_type {
+            crate::animations::ObjectType::Polygon => {
+                self.polygons
+                    .iter()
+                    .find(|p| p.id == object_id)
+                    .map(|p| p.world_bounding_box())
+            }
+            crate::animations::ObjectType::TextItem => {
+                self.text_items
+                    .iter()
+                    .find(|t| t.id == object_id)
+                    .map(|t| {
+                        let pos = t.transform.position;
+                        let dims = t.dimensions;
+                        BoundingBox {
+                            min: Point { x: pos.x, y: pos.y },
+                            max: Point { x: pos.x + dims.0 as f32, y: pos.y + dims.1 as f32 },
+                        }
+                    })
+            }
+            crate::animations::ObjectType::ImageItem => {
+                self.image_items
+                    .iter()
+                    .find(|i| i.id == object_id.to_string())
+                    .map(|i| {
+                        let pos = i.transform.position;
+                        let dims = i.dimensions;
+                        BoundingBox {
+                            min: Point { x: pos.x, y: pos.y },
+                            max: Point { x: pos.x + dims.0 as f32, y: pos.y + dims.1 as f32 },
+                        }
+                    })
+            }
+            crate::animations::ObjectType::VideoItem => {
+                self.video_items
+                    .iter()
+                    .find(|v| v.id == object_id.to_string())
+                    .map(|v| {
+                        let pos = v.transform.position;
+                        let dims = v.dimensions;
+                        BoundingBox {
+                            min: Point { x: pos.x, y: pos.y },
+                            max: Point { x: pos.x + dims.0 as f32, y: pos.y + dims.1 as f32 },
+                        }
+                    })
+            }
+        }
+    }
+
+    pub fn handle_clicked_at_point(&self, point: &Point, camera: &Camera) -> Option<(Uuid, HandlePosition)> {
+        for handle in &self.resize_handles {
+            if handle.polygon.contains_point(point, camera) {
+                return Some((handle.id, handle.position));
+            }
+        }
+        None
+    }
+
+    pub fn start_handle_drag(&mut self, handle_id: Uuid, position: HandlePosition) {
+        if let Some(handle) = self.resize_handles.iter().find(|h| h.id == handle_id) {
+            self.dragging_handle = Some((handle.object_id, position));
+        }
+    }
+
+    pub fn resize_selected_object(&mut self, mouse_delta: Point) {
+        let gpu_resources = self.gpu_resources.as_ref().expect("Couldn't get gpu resources");
+
+        // Extract the needed info first to avoid borrowing conflicts
+        let resize_info = if let (Some((object_id, handle_position)), Some(selected_object)) = 
+            (&self.dragging_handle, &self.selected_object) {
+            Some((*object_id, *handle_position, selected_object.object_type.clone()))
+        } else {
+            None
+        };
+
+        if let Some((object_id, handle_position, object_type)) = resize_info {
+            match object_type {
+                crate::animations::ObjectType::Polygon => {
+                    if let Some(polygon) = self.polygons.iter_mut().find(|p| p.id == object_id) {
+                        Self::resize_polygon(polygon, &handle_position, mouse_delta);
+                    }
+                }
+                crate::animations::ObjectType::TextItem => {
+                    if let Some(text) = self.text_items.iter_mut().find(|t| t.id == object_id) {
+                        Self::resize_text_item(text, &handle_position, mouse_delta, gpu_resources);
+                    }
+                }
+                crate::animations::ObjectType::ImageItem => {
+                    if let Some(image) = self.image_items.iter_mut().find(|i| i.id == object_id.to_string()) {
+                        Self::resize_image_item(image, &handle_position, mouse_delta, gpu_resources);
+                    }
+                }
+                crate::animations::ObjectType::VideoItem => {
+                    if let Some(video) = self.video_items.iter_mut().find(|v| v.id == object_id.to_string()) {
+                        Self::resize_video_item(video, &handle_position, mouse_delta, gpu_resources);
+                    }
+                }
+            }
+
+            // Recreate handles after resizing
+            self.create_resize_handles_for_object(object_id, object_type);
+        }
+    }
+
+    fn resize_polygon(polygon: &mut crate::polygon::Polygon, handle_position: &HandlePosition, mouse_delta: Point) {
+        let scale_factor = match handle_position {
+            HandlePosition::Right | HandlePosition::Left => {
+                let current_width = polygon.dimensions.0;
+                let new_width = (current_width + mouse_delta.x).max(10.0);
+                new_width / current_width
+            }
+            HandlePosition::Top | HandlePosition::Bottom => {
+                let current_height = polygon.dimensions.1;
+                let new_height = (current_height + mouse_delta.y).max(10.0);
+                new_height / current_height
+            }
+            _ => {
+                // Corner handles - maintain aspect ratio or scale both dimensions
+                let current_width = polygon.dimensions.0;
+                let current_height = polygon.dimensions.1;
+                let width_scale = (current_width + mouse_delta.x) / current_width;
+                let height_scale = (current_height + mouse_delta.y) / current_height;
+                // Use the larger scale to maintain aspect ratio
+                width_scale.abs().max(height_scale.abs()).max(0.1)
+            }
+        };
+
+        // Apply scaling
+        match handle_position {
+            HandlePosition::Right | HandlePosition::Left => {
+                polygon.transform.update_scale([scale_factor, 1.0]);
+            }
+            HandlePosition::Top | HandlePosition::Bottom => {
+                polygon.transform.update_scale([1.0, scale_factor]);
+            }
+            _ => {
+                // Corner handles
+                polygon.transform.update_scale([scale_factor, scale_factor]);
+            }
+        }
+    }
+
+    fn resize_text_item(text_item: &mut crate::text_due::TextRenderer, handle_position: &HandlePosition, mouse_delta: Point, gpu_resources: &GpuResources) {
+        let scale_factor = match handle_position {
+            HandlePosition::Right | HandlePosition::Left => {
+                let current_width = text_item.dimensions.0 as f32;
+                let new_width = (current_width + mouse_delta.x).max(10.0);
+                new_width / current_width
+            }
+            HandlePosition::Top | HandlePosition::Bottom => {
+                let current_height = text_item.dimensions.1 as f32;
+                let new_height = (current_height + mouse_delta.y).max(10.0);
+                new_height / current_height
+            }
+            _ => {
+                // Corner handles
+                let current_width = text_item.dimensions.0 as f32;
+                let current_height = text_item.dimensions.1 as f32;
+                let width_scale = (current_width + mouse_delta.x) / current_width;
+                let height_scale = (current_height + mouse_delta.y) / current_height;
+                width_scale.abs().max(height_scale.abs()).max(0.1)
+            }
+        };
+
+        // Update text scale
+        match handle_position {
+            HandlePosition::Right | HandlePosition::Left => {
+                text_item.transform.update_scale([scale_factor, 1.0]);
+            }
+            HandlePosition::Top | HandlePosition::Bottom => {
+                text_item.transform.update_scale([1.0, scale_factor]);
+            }
+            _ => {
+                text_item.transform.update_scale([scale_factor, scale_factor]);
+            }
+        }
+
+        // Rerender text with new scale
+        text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
+    }
+
+    fn resize_image_item(image_item: &mut crate::st_image::StImage, handle_position: &HandlePosition, mouse_delta: Point, _gpu_resources: &GpuResources) {
+        let scale_factor = match handle_position {
+            HandlePosition::Right | HandlePosition::Left => {
+                let current_width = image_item.dimensions.0 as f32;
+                let new_width = (current_width + mouse_delta.x).max(10.0);
+                new_width / current_width
+            }
+            HandlePosition::Top | HandlePosition::Bottom => {
+                let current_height = image_item.dimensions.1 as f32;
+                let new_height = (current_height + mouse_delta.y).max(10.0);
+                new_height / current_height
+            }
+            _ => {
+                // Corner handles
+                let current_width = image_item.dimensions.0 as f32;
+                let current_height = image_item.dimensions.1 as f32;
+                let width_scale = (current_width + mouse_delta.x) / current_width;
+                let height_scale = (current_height + mouse_delta.y) / current_height;
+                width_scale.abs().max(height_scale.abs()).max(0.1)
+            }
+        };
+
+        // Update image scale
+        match handle_position {
+            HandlePosition::Right | HandlePosition::Left => {
+                image_item.transform.update_scale([scale_factor, 1.0]);
+            }
+            HandlePosition::Top | HandlePosition::Bottom => {
+                image_item.transform.update_scale([1.0, scale_factor]);
+            }
+            _ => {
+                image_item.transform.update_scale([scale_factor, scale_factor]);
+            }
+        }
+    }
+
+    fn resize_video_item(video_item: &mut crate::st_video::StVideo, handle_position: &HandlePosition, mouse_delta: Point, _gpu_resources: &GpuResources) {
+        let scale_factor = match handle_position {
+            HandlePosition::Right | HandlePosition::Left => {
+                let current_width = video_item.dimensions.0 as f32;
+                let new_width = (current_width + mouse_delta.x).max(10.0);
+                new_width / current_width
+            }
+            HandlePosition::Top | HandlePosition::Bottom => {
+                let current_height = video_item.dimensions.1 as f32;
+                let new_height = (current_height + mouse_delta.y).max(10.0);
+                new_height / current_height
+            }
+            _ => {
+                // Corner handles
+                let current_width = video_item.dimensions.0 as f32;
+                let current_height = video_item.dimensions.1 as f32;
+                let width_scale = (current_width + mouse_delta.x) / current_width;
+                let height_scale = (current_height + mouse_delta.y) / current_height;
+                width_scale.abs().max(height_scale.abs()).max(0.1)
+            }
+        };
+
+        // Update video scale
+        match handle_position {
+            HandlePosition::Right | HandlePosition::Left => {
+                video_item.transform.update_scale([scale_factor, 1.0]);
+            }
+            HandlePosition::Top | HandlePosition::Bottom => {
+                video_item.transform.update_scale([1.0, scale_factor]);
+            }
+            _ => {
+                video_item.transform.update_scale([scale_factor, scale_factor]);
+            }
+        }
+    }
+
+    pub fn finish_handle_drag(&mut self) {
+        self.dragging_handle = None;
     }
 
     pub fn restore_sequence_objects(
@@ -3910,11 +4317,18 @@ impl Editor {
             }
         }
 
+        // First, check for resize handle clicks (highest priority)
+        if let Some((handle_id, handle_position)) = self.handle_clicked_at_point(&self.last_top_left, &camera) {
+            self.start_handle_drag(handle_id, handle_position);
+            self.drag_start = Some(self.last_top_left);
+            return None; // No undo needed for handle drag start
+        }
+
         // Finally, check for object interation
         let mut intersecting_objects: Vec<(i32, InteractionTarget)> = Vec::new();
 
         // Collect intersecting polygons
-        for (poly_index, polygon) in self.polygons.iter_mut().enumerate() {
+        for (poly_index, polygon) in self.polygons.iter().enumerate() {
             if polygon.hidden {
                 continue;
             }
@@ -3925,7 +4339,7 @@ impl Editor {
         }
 
         // Collect intersecting text items
-        for (text_index, text_item) in self.text_items.iter_mut().enumerate() {
+        for (text_index, text_item) in self.text_items.iter().enumerate() {
             if text_item.hidden {
                 continue;
             }
@@ -3936,7 +4350,7 @@ impl Editor {
         }
 
         // Collect intersecting image items
-        for (image_index, image_item) in self.image_items.iter_mut().enumerate() {
+        for (image_index, image_item) in self.image_items.iter().enumerate() {
             if image_item.hidden {
                 continue;
             }
@@ -3948,7 +4362,7 @@ impl Editor {
         }
 
         // Collect intersecting image items
-        for (video_index, video_item) in self.video_items.iter_mut().enumerate() {
+        for (video_index, video_item) in self.video_items.iter().enumerate() {
             if video_item.hidden {
                 continue;
             }
@@ -3977,10 +4391,18 @@ impl Editor {
         if let Some(target) = target {
             match target {
                 InteractionTarget::Polygon(index) => {
-                    let polygon = &mut self.polygons[index];
+                    let polygon_config = self.polygons[index].to_config();
 
-                    self.dragging_polygon = Some(polygon.id);
+                    self.dragging_polygon = Some(polygon_config.id);
                     self.drag_start = Some(self.last_top_left);
+
+                    self.selected_polygon_id = polygon_config.id;
+                        
+                    // Create resize handles for selected polygon
+                    self.create_resize_handles_for_object(
+                        polygon_config.id,
+                        crate::animations::ObjectType::Polygon
+                    );
 
                     // TODO: make DRY with below
                     if (self.handle_polygon_click.is_some()) {
@@ -3990,33 +4412,26 @@ impl Editor {
                             .expect("Couldn't get handler");
                         let mut handle_click = handler_creator().expect("Couldn't get handler");
                         handle_click(
-                            polygon.id,
-                            PolygonConfig {
-                                id: polygon.id,
-                                name: polygon.name.clone(),
-                                points: polygon.points.clone(),
-                                dimensions: polygon.dimensions,
-                                position: Point {
-                                    x: polygon.transform.position.x,
-                                    y: polygon.transform.position.y,
-                                },
-                                border_radius: polygon.border_radius,
-                                fill: polygon.fill,
-                                stroke: polygon.stroke,
-                                layer: polygon.layer,
-                            },
+                            polygon_config.id,
+                            polygon_config,
                         );
-                        self.selected_polygon_id = polygon.id;
-                        polygon.old_points = Some(polygon.points.clone());
                     }
 
                     return None; // nothing to add to undo stack
                 }
                 InteractionTarget::Text(index) => {
-                    let text_item = &mut self.text_items[index];
+                    let text_item_config = self.text_items[index].to_config();
 
-                    self.dragging_text = Some(text_item.id);
+                    self.dragging_text = Some(text_item_config.id);
                     self.drag_start = Some(self.last_top_left);
+
+                    self.selected_polygon_id = text_item_config.id; // TODO: separate property for each object type?
+                    
+                    // Create resize handles for selected text item
+                    self.create_resize_handles_for_object(
+                        text_item_config.id,
+                        crate::animations::ObjectType::TextItem
+                    );
 
                     // TODO: make DRY with below
                     if (self.handle_text_click.is_some()) {
@@ -4026,44 +4441,31 @@ impl Editor {
                             .expect("Couldn't get handler");
                         let mut handle_click = handler_creator().expect("Couldn't get handler");
                         handle_click(
-                            text_item.id,
-                            TextRendererConfig {
-                                id: text_item.id,
-                                name: text_item.name.clone(),
-                                text: text_item.text.clone(),
-                                font_family: text_item.font_family.clone(),
-                                // points: polygon.points.clone(),
-                                dimensions: text_item.dimensions,
-                                position: Point {
-                                    x: text_item.transform.position.x,
-                                    y: text_item.transform.position.y,
-                                },
-                                layer: text_item.layer,
-                                color: text_item.color,
-                                font_size: text_item.font_size,
-                                background_fill: [
-                                    wgpu_to_human(text_item.background_polygon.fill[0]) as i32,
-                                    wgpu_to_human(text_item.background_polygon.fill[1]) as i32,
-                                    wgpu_to_human(text_item.background_polygon.fill[2]) as i32,
-                                    wgpu_to_human(text_item.background_polygon.fill[3]) as i32,
-                                ],
-                                // border_radius: polygon.border_radius,
-                                // fill: polygon.fill,
-                                // stroke: polygon.stroke,
-                            },
+                            text_item_config.id,
+                            text_item_config,
                         );
-                        self.selected_polygon_id = text_item.id; // TODO: separate property for each object type?
-                                                                 // polygon.old_points = Some(polygon.points.clone());
                     }
 
                     return None; // nothing to add to undo stack
                 }
                 InteractionTarget::Image(index) => {
-                    let image_item = &mut self.image_items[index];
+                    let image_item_config = self.image_items[index].to_config();
 
                     self.dragging_image =
-                        Some(Uuid::from_str(&image_item.id).expect("Couldn't convert to uuid"));
+                        Some(Uuid::from_str(&image_item_config.id).expect("Couldn't convert to uuid"));
                     self.drag_start = Some(self.last_top_left);
+
+                    let uuid = Uuid::from_str(&image_item_config.id.clone())
+                            .expect("Couldn't convert string to uuid");
+
+                    self.selected_polygon_id = uuid; // TODO: separate property for each object type?
+                                                         // polygon.old_points = Some(polygon.points.clone());
+                        
+                    // Create resize handles for selected image item
+                    self.create_resize_handles_for_object(
+                        uuid,
+                        crate::animations::ObjectType::ImageItem
+                    );
 
                     // TODO: make DRY with below
                     if (self.handle_image_click.is_some()) {
@@ -4072,71 +4474,44 @@ impl Editor {
                             .as_ref()
                             .expect("Couldn't get handler");
                         let mut handle_click = handler_creator().expect("Couldn't get handler");
-                        let uuid = Uuid::from_str(&image_item.id.clone())
-                            .expect("Couldn't convert string to uuid");
+                        
                         handle_click(
                             uuid,
-                            StImageConfig {
-                                id: image_item.id.clone(),
-                                name: image_item.name.clone(),
-                                path: image_item.path.clone(),
-                                // points: polygon.points.clone(),
-                                dimensions: image_item.dimensions,
-                                position: Point {
-                                    x: image_item.transform.position.x,
-                                    y: image_item.transform.position.y,
-                                },
-                                layer: image_item.layer, // border_radius: polygon.border_radius,
-                                                         // fill: polygon.fill,
-                                                         // stroke: polygon.stroke,
-                            },
+                            image_item_config,
                         );
-                        self.selected_polygon_id = uuid; // TODO: separate property for each object type?
-                                                         // polygon.old_points = Some(polygon.points.clone());
                     }
 
                     return None; // nothing to add to undo stack
                 }
                 InteractionTarget::Video(index) => {
-                    let video_item = &mut self.video_items[index];
+                    let video_item_config = self.video_items[index].to_config();
 
                     self.dragging_video =
-                        Some(Uuid::from_str(&video_item.id).expect("Couldn't convert to uuid"));
+                        Some(Uuid::from_str(&video_item_config.id).expect("Couldn't convert to uuid"));
                     self.drag_start = Some(self.last_top_left);
 
-                    // println!("Video interaction");
+                    let uuid = Uuid::from_str(&video_item_config.id.clone())
+                            .expect("Couldn't convert string to uuid");
 
-                    // TODO: make DRY with below
+                    self.selected_polygon_id = uuid; // TODO: separate property for each object type?
+                    
+                    // Create resize handles for selected video item
+                    self.create_resize_handles_for_object(
+                        uuid,
+                        crate::animations::ObjectType::VideoItem
+                    );
+
                     if (self.handle_video_click.is_some()) {
-                        // println!("Video click");
-
                         let handler_creator = self
                             .handle_video_click
                             .as_ref()
                             .expect("Couldn't get handler");
                         let mut handle_click = handler_creator().expect("Couldn't get handler");
-                        let uuid = Uuid::from_str(&video_item.id.clone())
-                            .expect("Couldn't convert string to uuid");
+                        
                         handle_click(
                             uuid,
-                            StVideoConfig {
-                                id: video_item.id.clone(),
-                                name: video_item.name.clone(),
-                                path: video_item.path.clone(),
-                                // points: polygon.points.clone(),
-                                dimensions: video_item.dimensions,
-                                position: Point {
-                                    x: video_item.transform.position.x,
-                                    y: video_item.transform.position.y,
-                                },
-                                layer: video_item.layer,
-                                mouse_path: video_item.mouse_path.clone(), // border_radius: polygon.border_radius,
-                                                                           // fill: polygon.fill,
-                                                                           // stroke: polygon.stroke,
-                            },
+                            video_item_config,
                         );
-                        self.selected_polygon_id = uuid; // TODO: separate property for each object type?
-                                                         // polygon.old_points = Some(polygon.points.clone());
                     }
 
                     return None; // nothing to add to undo stack
@@ -4268,6 +4643,18 @@ impl Editor {
         if let Some(video_id) = self.dragging_video {
             if let Some(start) = self.drag_start {
                 self.move_video(self.last_top_left, start, video_id, window_size, device);
+            }
+        }
+
+        // handle resize handle dragging
+        if let Some((object_id, handle_position)) = self.dragging_handle {
+            if let Some(start) = self.drag_start {
+                let mouse_delta = Point {
+                    x: self.last_top_left.x - start.x,
+                    y: self.last_top_left.y - start.y,
+                };
+                
+                self.resize_selected_object(mouse_delta);
             }
         }
 
@@ -4558,6 +4945,7 @@ impl Editor {
         self.dragging_path = None;
         self.dragging_path_assoc_path = None;
         self.dragging_path_handle = None;
+        self.dragging_handle = None;
         self.dragging_path_object = None;
         self.dragging_path_keyframe = None;
         self.is_panning = false;
