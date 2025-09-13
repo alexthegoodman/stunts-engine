@@ -206,6 +206,9 @@ pub enum ObjectProperty {
     StrokeRed(f32),
     StrokeGreen(f32),
     StrokeBlue(f32),
+    FontFamily(String),
+    FontSize(f32),
+    Text(String),
     // Points(Vec<Point>),
 }
 
@@ -3283,6 +3286,56 @@ impl Editor {
         text_item.render_text(&device, &queue);
 
         self.text_items.push(text_item);
+    }
+
+    /// Update text item properties including font family
+    pub fn update_text_property(
+        &mut self,
+        text_id: Uuid,
+        property: ObjectProperty,
+    ) -> Result<(), String> {
+        let gpu_resources = self.gpu_resources.as_ref().expect("Couldn't get gpu resources");
+        let device = &gpu_resources.device;
+        let queue = &gpu_resources.queue;
+
+        // Find the text item by ID
+        let text_item = self.text_items.iter_mut()
+            .find(|item| item.id == text_id)
+            .ok_or("Text item not found")?;
+
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let window_size = camera.window_size;
+
+        match property {
+            ObjectProperty::FontFamily(new_font_family) => {
+                // Get the new font data
+                let font_data = self.font_manager.get_font_by_name(&new_font_family)
+                    .ok_or(format!("Font '{}' not found", new_font_family))?;
+
+                // Update the font family
+                text_item.update_font_family(font_data);
+                
+                // Re-render the text
+                text_item.render_text(device, queue);
+            },
+            ObjectProperty::FontSize(new_size) => {
+                text_item.font_size = new_size as i32;
+                text_item.render_text(device, queue);
+            },
+            ObjectProperty::Text(new_text) => {
+                text_item.text = new_text.clone();
+                text_item.render_text(device, queue);
+            },
+            // Handle other properties like position, color, etc.
+            _ => return Err("Property not supported for text items".to_string()),
+        }
+
+        Ok(())
+    }
+
+    /// Get available font names from font manager
+    pub fn get_available_fonts(&self) -> Vec<String> {
+        self.font_manager.get_available_font_names()
     }
 
     pub fn add_image_item(

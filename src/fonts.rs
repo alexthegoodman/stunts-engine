@@ -324,4 +324,9 @@ impl FontManager {
             .find(|(font_name, _, _)| font_name.eq_ignore_ascii_case(name))
             .map(|(_, bytes, _)| bytes.as_slice())
     }
+
+    /// Get a list of all available font names
+    pub fn get_available_font_names(&self) -> Vec<String> {
+        self.font_data.iter().map(|(name, _, _)| name.clone()).collect()
+    }
 }
