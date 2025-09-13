@@ -7,27 +7,33 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use cgmath::{Matrix4, Point3, Vector2, Vector3, Vector4};
-// use common_motion_2d_reg::inference::CommonMotionInference;
-// use common_motion_2d_reg::interface::load_common_motion_2d;
-// use common_motion_2d_reg::Wgpu;
 use crate::gpu_resources::GpuResources;
+
+use cgmath::SquareMatrix;
+use cgmath::Transform;
+
+use crate::animations::{
+    AnimationData, AnimationProperty, BackgroundFill, EasingType, KeyType, KeyframeValue,
+    ObjectType, RangeData, Sequence, UIKeyframe,
+};
+use crate::camera::{Camera3D as Camera, CameraBinding};
+use crate::capture::{MousePosition, SourceData};
+use crate::dot::RingDot;
+use crate::fonts::FontManager;
+use crate::motion_arrow::{MotionArrow, MotionArrowConfig};
+use crate::motion_path::{MotionPath, MotionPathConfig};
+use crate::polygon::{Polygon, PolygonConfig, Stroke};
+use crate::st_image::{StImage, StImageConfig};
+use crate::st_video::{FrameTimer, StVideo, StVideoConfig};
+use crate::text_due::{TextRenderer, TextRendererConfig};
+use crate::timelines::{SavedTimelineStateConfig, TrackType};
+use crate::transform::{angle_between_points, degrees_between_points};
+
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use uuid::Uuid;
 use winit::window::CursorIcon;
-
-// use crate::basic::{color_to_wgpu, string_to_f32, BoundingBox, Shape};
-// use crate::brush::{BrushProperties, BrushStroke};
-// use crate::camera::{self, Camera, CameraBinding};
-// use crate::guideline::point_to_ndc;
-// use crate::polygon::{PolygonConfig, Stroke};
-// use crate::{
-//     basic::Point,
-//     basic::WindowSize,
-//     dot::{distance, EdgePoint},
-//     polygon::Polygon,
-// };
 
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -35,6 +41,13 @@ use strum_macros::EnumIter;
 const NUM_INFERENCE_FEATURES: usize = 7;
 pub const CANVAS_HORIZ_OFFSET: f32 = 0.0;
 pub const CANVAS_VERT_OFFSET: f32 = 0.0;
+
+enum ResizableObject {
+    Polygon(Polygon),
+    Video(StVideo),
+    Image(StImage),
+    Text(TextRenderer),
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct WindowSize {
@@ -695,7 +708,7 @@ impl Editor {
                 crate::animations::ObjectType::Polygon => {
                     if let Some(polygon) = self.polygons.iter_mut().find(|p| p.id == object_id) {
                         // println!("resize_selected_object");
-                        let (new_width, new_height) = Self::resize_polygon(polygon, &handle_position, mouse_delta);
+                        let (new_width, new_height) = Self::resize_object((polygon.dimensions.0 as f32, polygon.dimensions.1 as f32), &handle_position, mouse_delta);
                         
                         polygon.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
                                     (new_width, new_height), 
@@ -707,17 +720,38 @@ impl Editor {
                 }
                 crate::animations::ObjectType::TextItem => {
                     if let Some(text) = self.text_items.iter_mut().find(|t| t.id == object_id) {
-                        Self::resize_text_item(text, &handle_position, mouse_delta, gpu_resources);
+                       let (new_width, new_height) = Self::resize_object((text.dimensions.0 as f32, text.dimensions.1 as f32), &handle_position, mouse_delta);
+
+                       text.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
+                                    (new_width, new_height), 
+                                    &camera);
+
+                        // TODO: should happen inside render loop for performance
+                        text.transform.update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
                     }
                 }
                 crate::animations::ObjectType::ImageItem => {
                     if let Some(image) = self.image_items.iter_mut().find(|i| i.id == object_id.to_string()) {
-                        Self::resize_image_item(image, &handle_position, mouse_delta, gpu_resources);
+                        let (new_width, new_height) = Self::resize_object((image.dimensions.0 as f32, image.dimensions.1 as f32), &handle_position, mouse_delta);
+
+                        image.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
+                                    (new_width, new_height), 
+                                    &camera);
+
+                        // TODO: should happen inside render loop for performance
+                        image.transform.update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
                     }
                 }
                 crate::animations::ObjectType::VideoItem => {
                     if let Some(video) = self.video_items.iter_mut().find(|v| v.id == object_id.to_string()) {
-                        Self::resize_video_item(video, &handle_position, mouse_delta, gpu_resources);
+                       let (new_width, new_height) = Self::resize_object((video.dimensions.0 as f32, video.dimensions.1 as f32), &handle_position, mouse_delta);
+
+                       video.update_data_from_dimensions(&camera.window_size, &gpu_resources.device, &gpu_resources.queue, &bind_group_layout, 
+                                    (new_width, new_height), 
+                                    &camera);
+
+                        // TODO: should happen inside render loop for performance
+                        video.transform.update_uniform_buffer(&gpu_resources.queue, &camera.window_size);
                     }
                 }
             }
@@ -727,12 +761,12 @@ impl Editor {
         }
     }
 
-    fn resize_polygon(
-        polygon: &mut crate::polygon::Polygon,
+    fn resize_object(
+        dimensions: (f32, f32), // or StVideo, StImage, TextRenderer
         handle_position: &HandlePosition,
         mouse_delta: Point,
     ) -> (f32, f32) {
-        let (current_width, current_height) = polygon.dimensions;
+        let (current_width, current_height) = dimensions;
 
         let mut new_width = current_width;
         let mut new_height = current_height;
@@ -760,181 +794,143 @@ impl Editor {
         (new_width, new_height)
     }
 
-
-    // fn resize_polygon(polygon: &mut crate::polygon::Polygon, handle_position: &HandlePosition, mouse_delta: Point) -> (f32, f32) {
-    //     let mut new_width = polygon.dimensions.0;
-    //     let mut new_height = polygon.dimensions.1;
-    //     match handle_position {
-    //         HandlePosition::Right | HandlePosition::Left => {
-    //             let current_width = polygon.dimensions.0;
-    //             new_width = (current_width + mouse_delta.x);
-    //         }
-    //         HandlePosition::Top | HandlePosition::Bottom => {
-    //             let current_height = polygon.dimensions.1;
-    //             new_height = (current_height + mouse_delta.y);
-    //         }
-    //         _ => {
-    //             // Corner handles - maintain aspect ratio or scale both dimensions
-    //             let current_width = polygon.dimensions.0;
-    //             let current_height = polygon.dimensions.1;
-    //             new_width = (current_width + mouse_delta.x);
-    //             new_height = (current_height + mouse_delta.y);
-    //         }
-    //     };
-
-    //     (new_width, new_height)
-    // }
-
-    // fn resize_polygon(
-    //     polygon: &mut crate::polygon::Polygon,
-    //     handle_position: &HandlePosition,
-    //     mouse_delta: Point,
-    // ) -> f32 {
+    // fn resize_text_item(text_item: &mut crate::text_due::TextRenderer, handle_position: &HandlePosition, mouse_delta: Point, gpu_resources: &GpuResources) {
     //     let scale_factor = match handle_position {
-    //         HandlePosition::Right => {
-    //             let current_width = polygon.dimensions.0;
+    //         HandlePosition::Right | HandlePosition::Left => {
+    //             let current_width = text_item.dimensions.0 as f32;
     //             let new_width = (current_width + mouse_delta.x).max(10.0);
     //             new_width / current_width
     //         }
-    //         HandlePosition::Left => {
-    //             let current_width = polygon.dimensions.0;
-    //             let new_width = (current_width - mouse_delta.x).max(10.0);
-    //             new_width / current_width
-    //         }
-    //         HandlePosition::Bottom => {
-    //             let current_height = polygon.dimensions.1;
+    //         HandlePosition::Top | HandlePosition::Bottom => {
+    //             let current_height = text_item.dimensions.1 as f32;
     //             let new_height = (current_height + mouse_delta.y).max(10.0);
     //             new_height / current_height
     //         }
-    //         HandlePosition::Top => {
-    //             let current_height = polygon.dimensions.1;
-    //             let new_height = (current_height - mouse_delta.y).max(10.0);
-    //             new_height / current_height
-    //         }
     //         _ => {
-    //             // Corner handles - maintain aspect ratio or scale both dimensions
-    //             let current_width = polygon.dimensions.0;
-    //             let current_height = polygon.dimensions.1;
+    //             // Corner handles
+    //             let current_width = text_item.dimensions.0 as f32;
+    //             let current_height = text_item.dimensions.1 as f32;
     //             let width_scale = (current_width + mouse_delta.x) / current_width;
     //             let height_scale = (current_height + mouse_delta.y) / current_height;
     //             width_scale.abs().max(height_scale.abs()).max(0.1)
     //         }
     //     };
 
-    //     scale_factor
+    //     // Update text scale
+    //     match handle_position {
+    //         HandlePosition::Right | HandlePosition::Left => {
+    //             text_item.transform.update_scale([scale_factor, 1.0]);
+    //         }
+    //         HandlePosition::Top | HandlePosition::Bottom => {
+    //             text_item.transform.update_scale([1.0, scale_factor]);
+    //         }
+    //         _ => {
+    //             text_item.transform.update_scale([scale_factor, scale_factor]);
+    //         }
+    //     }
+
+    //     // Rerender text with new scale
+    //     text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
     // }
 
+    // fn resize_image_item(image_item: &mut crate::st_image::StImage, handle_position: &HandlePosition, mouse_delta: Point, _gpu_resources: &GpuResources) {
+    //     // let scale_factor = match handle_position {
+    //     //     HandlePosition::Right | HandlePosition::Left => {
+    //     //         let current_width = image_item.dimensions.0 as f32;
+    //     //         let new_width = (current_width + mouse_delta.x).max(10.0);
+    //     //         new_width / current_width
+    //     //     }
+    //     //     HandlePosition::Top | HandlePosition::Bottom => {
+    //     //         let current_height = image_item.dimensions.1 as f32;
+    //     //         let new_height = (current_height + mouse_delta.y).max(10.0);
+    //     //         new_height / current_height
+    //     //     }
+    //     //     _ => {
+    //     //         // Corner handles
+    //     //         let current_width = image_item.dimensions.0 as f32;
+    //     //         let current_height = image_item.dimensions.1 as f32;
+    //     //         let width_scale = (current_width + mouse_delta.x) / current_width;
+    //     //         let height_scale = (current_height + mouse_delta.y) / current_height;
+    //     //         width_scale.abs().max(height_scale.abs()).max(0.1)
+    //     //     }
+    //     // };
 
-    fn resize_text_item(text_item: &mut crate::text_due::TextRenderer, handle_position: &HandlePosition, mouse_delta: Point, gpu_resources: &GpuResources) {
-        let scale_factor = match handle_position {
-            HandlePosition::Right | HandlePosition::Left => {
-                let current_width = text_item.dimensions.0 as f32;
-                let new_width = (current_width + mouse_delta.x).max(10.0);
-                new_width / current_width
-            }
-            HandlePosition::Top | HandlePosition::Bottom => {
-                let current_height = text_item.dimensions.1 as f32;
-                let new_height = (current_height + mouse_delta.y).max(10.0);
-                new_height / current_height
-            }
-            _ => {
-                // Corner handles
-                let current_width = text_item.dimensions.0 as f32;
-                let current_height = text_item.dimensions.1 as f32;
-                let width_scale = (current_width + mouse_delta.x) / current_width;
-                let height_scale = (current_height + mouse_delta.y) / current_height;
-                width_scale.abs().max(height_scale.abs()).max(0.1)
-            }
-        };
+    //     // // Update image scale
+    //     // match handle_position {
+    //     //     HandlePosition::Right | HandlePosition::Left => {
+    //     //         image_item.transform.update_scale([scale_factor, 1.0]);
+    //     //     }
+    //     //     HandlePosition::Top | HandlePosition::Bottom => {
+    //     //         image_item.transform.update_scale([1.0, scale_factor]);
+    //     //     }
+    //     //     _ => {
+    //     //         image_item.transform.update_scale([scale_factor, scale_factor]);
+    //     //     }
+    //     // }
 
-        // Update text scale
-        match handle_position {
-            HandlePosition::Right | HandlePosition::Left => {
-                text_item.transform.update_scale([scale_factor, 1.0]);
-            }
-            HandlePosition::Top | HandlePosition::Bottom => {
-                text_item.transform.update_scale([1.0, scale_factor]);
-            }
-            _ => {
-                text_item.transform.update_scale([scale_factor, scale_factor]);
-            }
-        }
+    //     let (current_width, current_height) = image_item.dimensions;
 
-        // Rerender text with new scale
-        text_item.render_text(&gpu_resources.device, &gpu_resources.queue);
-    }
+    //     let mut new_width = current_width;
+    //     let mut new_height = current_height;
 
-    fn resize_image_item(image_item: &mut crate::st_image::StImage, handle_position: &HandlePosition, mouse_delta: Point, _gpu_resources: &GpuResources) {
-        let scale_factor = match handle_position {
-            HandlePosition::Right | HandlePosition::Left => {
-                let current_width = image_item.dimensions.0 as f32;
-                let new_width = (current_width + mouse_delta.x).max(10.0);
-                new_width / current_width
-            }
-            HandlePosition::Top | HandlePosition::Bottom => {
-                let current_height = image_item.dimensions.1 as f32;
-                let new_height = (current_height + mouse_delta.y).max(10.0);
-                new_height / current_height
-            }
-            _ => {
-                // Corner handles
-                let current_width = image_item.dimensions.0 as f32;
-                let current_height = image_item.dimensions.1 as f32;
-                let width_scale = (current_width + mouse_delta.x) / current_width;
-                let height_scale = (current_height + mouse_delta.y) / current_height;
-                width_scale.abs().max(height_scale.abs()).max(0.1)
-            }
-        };
+    //     match handle_position {
+    //         HandlePosition::Right => {
+    //             new_width = (current_width + mouse_delta.x).max(10.0);
+    //         }
+    //         HandlePosition::Left => {
+    //             new_width = (current_width - mouse_delta.x).max(10.0);
+    //         }
+    //         HandlePosition::Bottom => {
+    //             new_height = (current_height + mouse_delta.y).max(10.0);
+    //         }
+    //         HandlePosition::Top => {
+    //             new_height = (current_height - mouse_delta.y).max(10.0);
+    //         }
+    //         _ => {
+    //             // Corner handles - resize both dimensions
+    //             new_width = (current_width + mouse_delta.x).max(10.0);
+    //             new_height = (current_height + mouse_delta.y).max(10.0);
+    //         }
+    //     };
 
-        // Update image scale
-        match handle_position {
-            HandlePosition::Right | HandlePosition::Left => {
-                image_item.transform.update_scale([scale_factor, 1.0]);
-            }
-            HandlePosition::Top | HandlePosition::Bottom => {
-                image_item.transform.update_scale([1.0, scale_factor]);
-            }
-            _ => {
-                image_item.transform.update_scale([scale_factor, scale_factor]);
-            }
-        }
-    }
+    //     (new_width, new_height)
+    // }
 
-    fn resize_video_item(video_item: &mut crate::st_video::StVideo, handle_position: &HandlePosition, mouse_delta: Point, _gpu_resources: &GpuResources) {
-        let scale_factor = match handle_position {
-            HandlePosition::Right | HandlePosition::Left => {
-                let current_width = video_item.dimensions.0 as f32;
-                let new_width = (current_width + mouse_delta.x).max(10.0);
-                new_width / current_width
-            }
-            HandlePosition::Top | HandlePosition::Bottom => {
-                let current_height = video_item.dimensions.1 as f32;
-                let new_height = (current_height + mouse_delta.y).max(10.0);
-                new_height / current_height
-            }
-            _ => {
-                // Corner handles
-                let current_width = video_item.dimensions.0 as f32;
-                let current_height = video_item.dimensions.1 as f32;
-                let width_scale = (current_width + mouse_delta.x) / current_width;
-                let height_scale = (current_height + mouse_delta.y) / current_height;
-                width_scale.abs().max(height_scale.abs()).max(0.1)
-            }
-        };
+    // fn resize_video_item(video_item: &mut crate::st_video::StVideo, handle_position: &HandlePosition, mouse_delta: Point, _gpu_resources: &GpuResources) {
+    //     let scale_factor = match handle_position {
+    //         HandlePosition::Right | HandlePosition::Left => {
+    //             let current_width = video_item.dimensions.0 as f32;
+    //             let new_width = (current_width + mouse_delta.x).max(10.0);
+    //             new_width / current_width
+    //         }
+    //         HandlePosition::Top | HandlePosition::Bottom => {
+    //             let current_height = video_item.dimensions.1 as f32;
+    //             let new_height = (current_height + mouse_delta.y).max(10.0);
+    //             new_height / current_height
+    //         }
+    //         _ => {
+    //             // Corner handles
+    //             let current_width = video_item.dimensions.0 as f32;
+    //             let current_height = video_item.dimensions.1 as f32;
+    //             let width_scale = (current_width + mouse_delta.x) / current_width;
+    //             let height_scale = (current_height + mouse_delta.y) / current_height;
+    //             width_scale.abs().max(height_scale.abs()).max(0.1)
+    //         }
+    //     };
 
-        // Update video scale
-        match handle_position {
-            HandlePosition::Right | HandlePosition::Left => {
-                video_item.transform.update_scale([scale_factor, 1.0]);
-            }
-            HandlePosition::Top | HandlePosition::Bottom => {
-                video_item.transform.update_scale([1.0, scale_factor]);
-            }
-            _ => {
-                video_item.transform.update_scale([scale_factor, scale_factor]);
-            }
-        }
-    }
+    //     // Update video scale
+    //     match handle_position {
+    //         HandlePosition::Right | HandlePosition::Left => {
+    //             video_item.transform.update_scale([scale_factor, 1.0]);
+    //         }
+    //         HandlePosition::Top | HandlePosition::Bottom => {
+    //             video_item.transform.update_scale([1.0, scale_factor]);
+    //         }
+    //         _ => {
+    //             video_item.transform.update_scale([scale_factor, scale_factor]);
+    //         }
+    //     }
+    // }
 
     pub fn finish_handle_drag(&mut self) {
         self.dragging_handle = None;
@@ -5708,25 +5704,7 @@ impl Ray {
     }
 }
 
-use cgmath::SquareMatrix;
-use cgmath::Transform;
 
-use crate::animations::{
-    AnimationData, AnimationProperty, BackgroundFill, EasingType, KeyType, KeyframeValue,
-    ObjectType, RangeData, Sequence, UIKeyframe,
-};
-use crate::camera::{Camera3D as Camera, CameraBinding};
-use crate::capture::{MousePosition, SourceData};
-use crate::dot::RingDot;
-use crate::fonts::FontManager;
-use crate::motion_arrow::{MotionArrow, MotionArrowConfig};
-use crate::motion_path::{MotionPath, MotionPathConfig};
-use crate::polygon::{Polygon, PolygonConfig, Stroke};
-use crate::st_image::{StImage, StImageConfig};
-use crate::st_video::{FrameTimer, StVideo, StVideoConfig};
-use crate::text_due::{TextRenderer, TextRendererConfig};
-use crate::timelines::{SavedTimelineStateConfig, TrackType};
-use crate::transform::{angle_between_points, degrees_between_points};
 
 // old
 // pub fn visualize_ray_intersection(

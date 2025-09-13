@@ -304,6 +304,20 @@ impl StImage {
         self.transform.update_uniform_buffer(&queue, &window_size);
     }
 
+    pub fn update_data_from_scale(
+        &mut self,
+        window_size: &WindowSize,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        scale_factor: f32, // total scale relative to 100 (100%)
+        camera: &Camera,
+    ) {
+        // for "low" quality resize
+        self.transform.update_scale([self.dimensions.0 as f32 * (scale_factor / 100.0), self.dimensions.1 as f32 * (scale_factor / 100.0)]);
+        self.transform.update_uniform_buffer(&queue, &window_size);
+    }
+
     pub fn update_layer(&mut self, layer_index: i32) {
         // -10.0 to provide 10 spots for internal items on top of objects
         let layer_index = layer_index - 0;
