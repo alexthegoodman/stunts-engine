@@ -4794,7 +4794,20 @@ impl Editor {
         // handle dragging to move objects (polygons, images, text, etc)
         if let Some(poly_id) = self.dragging_polygon {
             if let Some(start) = self.drag_start {
+                
+
                 self.move_polygon(self.last_top_left, start, poly_id, window_size, device);
+
+                if let Some(path) = self.motion_paths.iter()
+                    .find(|p| p.source_polygon_id == poly_id) {
+                    self.move_path(
+                        self.last_top_left,
+                        start,
+                        path.id,
+                        window_size,
+                        device,
+                    );
+                }
             }
         }
 
@@ -5144,6 +5157,8 @@ impl Editor {
         let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
+
+        
         
         let bounding_box = match self.get_object_bounding_box(poly_id, &ObjectType::Polygon) {
             Some(bbox) => bbox,
@@ -5167,6 +5182,8 @@ impl Editor {
             .map(|position| (*position, self.get_handle_position(&bounding_box, position)))
             .collect();
 
+        
+
         let polygon = self
             .polygons
             .iter_mut()
@@ -5189,6 +5206,8 @@ impl Editor {
             new_position,
             &camera,
         );
+
+        
 
         // Step 2: Update transforms using the collected centers
         for (position, handle_center) in handle_centers {
@@ -5296,6 +5315,7 @@ impl Editor {
         window_size: &WindowSize,
         device: &wgpu::Device,
     ) {
+        // println!("move_path {:?} {:?}", self.dragging_path_handle, self.dragging_polygon);
         let camera = self.camera.as_ref().expect("Couldn't get camera");
         let aspect_ratio = camera.window_size.width as f32 / camera.window_size.height as f32;
         let dx = mouse_pos.x - start.x;
@@ -5311,7 +5331,7 @@ impl Editor {
             y: path.transform.position.y + dy,
         };
 
-        // println!("move_path {:?}", new_position);
+        // println!("move_path {:?} {:?} {:?}", new_position,path.id, path.source_polygon_id);
 
         path.update_data_from_position(
             window_size,

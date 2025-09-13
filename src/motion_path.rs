@@ -34,6 +34,7 @@ pub struct MotionPath {
     // pub dimensions: (u32, u32),
     pub bind_group: wgpu::BindGroup,
     pub static_polygons: Vec<Polygon>,
+    pub source_polygon_id: Uuid,
 }
 
 impl MotionPath {
@@ -201,6 +202,7 @@ impl MotionPath {
                     );
 
                     segment.source_path_id = Some(new_id);
+                    segment.source_polygon_id = Some(polygon_id);
 
                     segment.update_group_position(initial_position);
 
@@ -271,6 +273,7 @@ impl MotionPath {
             // dimensions: dynamic_dimensions,
             bind_group,
             static_polygons,
+            source_polygon_id: polygon_id,
         }
     }
 
