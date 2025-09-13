@@ -5809,6 +5809,8 @@ impl Editor {
 
     /// Syncs object position from its current transform to both current_sequence_data and saved_state
     pub fn sync_object_position_to_saved_data(&mut self, object_id: Uuid, object_type: ObjectType) {
+        let current_sequence_id = self.current_sequence_data.as_ref().expect("Couldn't get sequence data").id.clone();
+
         match object_type {
             ObjectType::Polygon => {
                 if let Some(polygon) = self.polygons.iter().find(|p| p.id == object_id) {
@@ -5825,29 +5827,33 @@ impl Editor {
                             saved_polygon.position.x = current_pos[0];
                             saved_polygon.position.y = current_pos[1];
                         }
-                        
-                        // Update associated motion path in AnimationData
-                        if let Some(animation_data) = current_sequence.polygon_motion_paths
-                            .iter_mut()
-                            .find(|a| a.polygon_id == object_id.to_string()) {
-                            animation_data.position = current_pos;
+
+                        // get self.motion_paths path.source_polygon_id which matches polygon.id, grab its transform.position, and set that on animated_data
+                        if let Some(path) = self.motion_paths.iter()
+                            .find(|p| p.source_polygon_id == object_id) {
+                            let current_pos = [
+                                path.transform.position.x as i32,
+                                path.transform.position.y as i32
+                            ];
+
+                            // Update associated motion path in AnimationData
+                            if let Some(animation_data) = current_sequence.polygon_motion_paths
+                                .iter_mut()
+                                .find(|a| a.polygon_id == object_id.to_string()) {
+                                animation_data.position = current_pos;
+                            }
                         }
                     }
                     
                     // Update saved_state
                     if let Some(saved_state) = &mut self.saved_state {
                         for sequence in &mut saved_state.sequences {
-                            if let Some(saved_polygon) = sequence.active_polygons
-                                .iter_mut()
-                                .find(|p| p.id == object_id.to_string()) {
-                                saved_polygon.position.x = current_pos[0];
-                                saved_polygon.position.y = current_pos[1];
-                            }
-                            
-                            if let Some(animation_data) = sequence.polygon_motion_paths
-                                .iter_mut()
-                                .find(|a| a.polygon_id == object_id.to_string()) {
-                                animation_data.position = current_pos;
+                            if sequence.id == current_sequence_id {
+                                // Update the sequence with the current_sequence_data
+                                if let Some(current_sequence) = &self.current_sequence_data {
+                                    *sequence = current_sequence.clone();
+                                }
+                                break;
                             }
                         }
                     }
@@ -5868,16 +5874,32 @@ impl Editor {
                             saved_text.position.x = current_pos[0];
                             saved_text.position.y = current_pos[1];
                         }
+                        // get self.motion_paths path.source_polygon_id which matches polygon.id, grab its transform.position, and set that on animated_data
+                        if let Some(path) = self.motion_paths.iter()
+                            .find(|p| p.source_polygon_id == object_id) {
+                            let current_pos = [
+                                path.transform.position.x as i32,
+                                path.transform.position.y as i32
+                            ];
+
+                            // Update associated motion path in AnimationData
+                            if let Some(animation_data) = current_sequence.polygon_motion_paths
+                                .iter_mut()
+                                .find(|a| a.polygon_id == object_id.to_string()) {
+                                animation_data.position = current_pos;
+                            }
+                        }
                     }
                     
-                    // Update saved_state
+                                       // Update saved_state
                     if let Some(saved_state) = &mut self.saved_state {
                         for sequence in &mut saved_state.sequences {
-                            if let Some(saved_text) = sequence.active_text_items
-                                .iter_mut()
-                                .find(|t| t.id == object_id.to_string()) {
-                                saved_text.position.x = current_pos[0];
-                                saved_text.position.y = current_pos[1];
+                            if sequence.id == current_sequence_id {
+                                // Update the sequence with the current_sequence_data
+                                if let Some(current_sequence) = &self.current_sequence_data {
+                                    *sequence = current_sequence.clone();
+                                }
+                                break;
                             }
                         }
                     }
@@ -5898,19 +5920,36 @@ impl Editor {
                             saved_image.position.x = current_pos[0];
                             saved_image.position.y = current_pos[1];
                         }
-                    }
-                    
-                    // Update saved_state
-                    if let Some(saved_state) = &mut self.saved_state {
-                        for sequence in &mut saved_state.sequences {
-                            if let Some(saved_image) = sequence.active_image_items
+                        // get self.motion_paths path.source_polygon_id which matches polygon.id, grab its transform.position, and set that on animated_data
+                        if let Some(path) = self.motion_paths.iter()
+                            .find(|p| p.source_polygon_id == object_id) {
+                            let current_pos = [
+                                path.transform.position.x as i32,
+                                path.transform.position.y as i32
+                            ];
+
+                            // Update associated motion path in AnimationData
+                            if let Some(animation_data) = current_sequence.polygon_motion_paths
                                 .iter_mut()
-                                .find(|i| i.id == object_id.to_string()) {
-                                saved_image.position.x = current_pos[0];
-                                saved_image.position.y = current_pos[1];
+                                .find(|a| a.polygon_id == object_id.to_string()) {
+                                animation_data.position = current_pos;
                             }
                         }
                     }
+                    
+                                        // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if sequence.id == current_sequence_id {
+                                // Update the sequence with the current_sequence_data
+                                if let Some(current_sequence) = &self.current_sequence_data {
+                                    *sequence = current_sequence.clone();
+                                }
+                                break;
+                            }
+                        }
+                    }
+
                 }
             },
             ObjectType::VideoItem => {
@@ -5928,19 +5967,36 @@ impl Editor {
                             saved_video.position.x = current_pos[0];
                             saved_video.position.y = current_pos[1];
                         }
-                    }
-                    
-                    // Update saved_state
-                    if let Some(saved_state) = &mut self.saved_state {
-                        for sequence in &mut saved_state.sequences {
-                            if let Some(saved_video) = sequence.active_video_items
+                        // get self.motion_paths path.source_polygon_id which matches polygon.id, grab its transform.position, and set that on animated_data
+                        if let Some(path) = self.motion_paths.iter()
+                            .find(|p| p.source_polygon_id == object_id) {
+                            let current_pos = [
+                                path.transform.position.x as i32,
+                                path.transform.position.y as i32
+                            ];
+
+                            // Update associated motion path in AnimationData
+                            if let Some(animation_data) = current_sequence.polygon_motion_paths
                                 .iter_mut()
-                                .find(|v| v.id == object_id.to_string()) {
-                                saved_video.position.x = current_pos[0];
-                                saved_video.position.y = current_pos[1];
+                                .find(|a| a.polygon_id == object_id.to_string()) {
+                                animation_data.position = current_pos;
                             }
                         }
                     }
+                    
+                                        // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if sequence.id == current_sequence_id {
+                                // Update the sequence with the current_sequence_data
+                                if let Some(current_sequence) = &self.current_sequence_data {
+                                    *sequence = current_sequence.clone();
+                                }
+                                break;
+                            }
+                        }
+                    }
+
                 }
             },
         }
