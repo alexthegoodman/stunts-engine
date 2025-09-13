@@ -5287,7 +5287,7 @@ impl Editor {
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
 
-        let bounding_box = match self.get_object_bounding_box(text_id, &ObjectType::Polygon) {
+        let bounding_box = match self.get_object_bounding_box(text_id, &ObjectType::TextItem) {
             Some(bbox) => bbox,
             None => return,
         };
@@ -5359,7 +5359,7 @@ impl Editor {
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
 
-        let bounding_box = match self.get_object_bounding_box(image_id, &ObjectType::Polygon) {
+        let bounding_box = match self.get_object_bounding_box(image_id, &ObjectType::ImageItem) {
             Some(bbox) => bbox,
             None => return,
         };
@@ -5427,7 +5427,7 @@ impl Editor {
         let dx = mouse_pos.x - start.x;
         let dy = mouse_pos.y - start.y;
 
-        let bounding_box = match self.get_object_bounding_box(video_id, &ObjectType::Polygon) {
+        let bounding_box = match self.get_object_bounding_box(video_id, &ObjectType::VideoItem) {
             Some(bbox) => bbox,
             None => return,
         };

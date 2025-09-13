@@ -60,6 +60,7 @@ pub struct StImage {
     pub hidden: bool,
     pub layer: i32,
     pub group_bind_group: wgpu::BindGroup,
+    pub original_dimensions: (u32, u32),
 }
 
 impl StImage {
@@ -83,6 +84,9 @@ impl StImage {
         let img = image::open(path).expect("Couldn't open image");
         let original_dimensions = img.dimensions();
         let dimensions = image_config.dimensions;
+
+        // store dimensions as orginal_dimensions?
+        // self.orginal_dimensions = dimensions;
 
         // Option 1: Resize image data before creating texture
         let img = if (feature == "high_quality_resize") {
@@ -276,6 +280,7 @@ impl StImage {
             hidden: false,
             layer: image_config.layer - 0,
             group_bind_group: tmp_group_bind_group,
+            original_dimensions: dimensions
         }
     }
 
@@ -333,32 +338,77 @@ impl StImage {
         self.dimensions
     }
 
+    // pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
+    //     let untranslated = Point {
+    //         x: point.x - (self.transform.position.x),
+    //         y: point.y - self.transform.position.y,
+    //     };
+
+    //     untranslated.x >= -0.5 * self.dimensions.0 as f32
+    //         && untranslated.x <= 0.5 * self.dimensions.0 as f32
+    //         && untranslated.y >= -0.5 * self.dimensions.1 as f32
+    //         && untranslated.y <= 0.5 * self.dimensions.1 as f32
+    // }
+
     pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
         let untranslated = Point {
             x: point.x - (self.transform.position.x),
             y: point.y - self.transform.position.y,
         };
 
-        untranslated.x >= -0.5 * self.dimensions.0 as f32
-            && untranslated.x <= 0.5 * self.dimensions.0 as f32
-            && untranslated.y >= -0.5 * self.dimensions.1 as f32
-            && untranslated.y <= 0.5 * self.dimensions.1 as f32
+        // let untranslated = self.to_local_space(*point, camera);
+
+        let (width, height) = self.dimensions;
+
+        let scaled_width = self.transform.scale.x;
+        let scaled_height = self.transform.scale.y;
+
+        println!("contains point {:?} {:?} {:?}", untranslated, scaled_height, scaled_width);
+
+        // Check if the point is within -0.5 to 0.5 range
+        untranslated.x >= -0.5 * scaled_width as f32
+            && untranslated.x <= 0.5 * scaled_width as f32
+            && untranslated.y >= -0.5 * scaled_height as f32
+            && untranslated.y <= 0.5 * scaled_height as f32
     }
 
+    // pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
+    //     let untranslated = Point {
+    //         x: world_point.x - (self.transform.position.x),
+    //         y: world_point.y - self.transform.position.y,
+    //     };
+
+    //     println!("untranslated {:?} {:?}", self.name, untranslated);
+
+    //     let local_point = Point {
+    //         x: untranslated.x / (self.dimensions.0 as f32),
+    //         y: untranslated.y / (self.dimensions.1 as f32),
+    //     };
+
+    //     println!("local_point {:?} {:?}", self.name, local_point);
+
+    //     local_point
+    // }
+
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
+        // First untranslate the point relative to polygon's position
         let untranslated = Point {
-            x: world_point.x - (self.transform.position.x),
+            x: world_point.x - self.transform.position.x,
             y: world_point.y - self.transform.position.y,
         };
 
-        println!("untranslated {:?} {:?}", self.name, untranslated);
-
-        let local_point = Point {
-            x: untranslated.x / (self.dimensions.0 as f32),
-            y: untranslated.y / (self.dimensions.1 as f32),
+        // Apply inverse rotation
+        let rotation_rad = -self.transform.rotation; // Negative for inverse rotation
+        let rotated = Point {
+            x: untranslated.x * rotation_rad.cos() - untranslated.y * rotation_rad.sin(),
+            y: untranslated.x * rotation_rad.sin() + untranslated.y * rotation_rad.cos(),
         };
 
-        println!("local_point {:?} {:?}", self.name, local_point);
+        // Center the point and scale to normalized coordinates
+        let local_point = Point {
+            x: (rotated.x + (self.dimensions.0 as f32 / 2.0)) / self.dimensions.0 as f32,
+            y: (rotated.y + (self.dimensions.1 as f32 / 2.0)) / self.dimensions.1 as f32, 
+        };
 
         local_point
     }

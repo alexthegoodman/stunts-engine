@@ -85,6 +85,7 @@ pub struct StVideo {
     pub frame_timer: Option<FrameTimer>,
     pub dynamic_alpha: f32,
     pub num_frames_drawn: u32,
+    pub original_dimensions: (u32, u32),
     #[cfg(target_os = "windows")]
     pub source_reader: IMFSourceReader,
     // #[cfg(target_arch = "wasm32")]
@@ -315,6 +316,7 @@ impl StVideo {
             frame_timer: None,
             dynamic_alpha: 0.01,
             num_frames_drawn: 0,
+            original_dimensions: video_config.dimensions
         })
     }
 
@@ -675,21 +677,21 @@ impl StVideo {
     }
 
     pub fn contains_point(&self, point: &Point, camera: &Camera) -> bool {
-        // let local_point = self.to_local_space(*point, camera);
         let untranslated = Point {
             x: point.x - (self.transform.position.x),
             y: point.y - self.transform.position.y,
         };
 
-        // Get the bounds of the rectangle based on dimensions
-        // Since dimensions are (width, height), the rectangle extends from (0,0) to (width, height)
         let (width, height) = self.dimensions;
 
+        let scaled_width = self.transform.scale.x;
+        let scaled_height = self.transform.scale.y;
+        
         // Check if the point is within -0.5 to 0.5 range
-        untranslated.x >= -0.5 * self.dimensions.0 as f32
-            && untranslated.x <= 0.5 * self.dimensions.0 as f32
-            && untranslated.y >= -0.5 * self.dimensions.1 as f32
-            && untranslated.y <= 0.5 * self.dimensions.1 as f32
+        untranslated.x >= -0.5 * scaled_width as f32
+            && untranslated.x <= 0.5 * scaled_width as f32
+            && untranslated.y >= -0.5 * scaled_height as f32
+            && untranslated.y <= 0.5 * scaled_height as f32
     }
 
     pub fn update_layer(&mut self, layer_index: i32) {
