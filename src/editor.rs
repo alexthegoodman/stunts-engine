@@ -4935,7 +4935,6 @@ impl Editor {
             return None;
         }
 
-        // TODO: does another bounds cause this to get stuck?
         if (self.last_screen.x < self.interactive_bounds.min.x
             || self.last_screen.x > self.interactive_bounds.max.x
             || self.last_screen.y < self.interactive_bounds.min.y
@@ -4944,168 +4943,137 @@ impl Editor {
             return None;
         }
 
-        // handle object on mouse up
-        let mut object_id = Uuid::nil();
-        let mut active_point = None;
+
+        // // handle object on mouse up
         if let Some(poly_id) = self.dragging_polygon {
-            object_id = poly_id;
-            let active_polygon = self
-                .polygons
-                .iter()
-                .find(|p| p.id == poly_id)
-                .expect("Couldn't find polygon");
-            active_point = Some(Point {
-                x: active_polygon.transform.position.x,
-                y: active_polygon.transform.position.y,
-            });
+            // TODO: set updated current_sequence_data, both polygon position based on polygon.transform (which is up to date) as well as its associated motion path position stored on AnimationData
+            // maybe need one universal function that syncs real object position into its respective object in current_sequence_data and respective path / AnimationData
+            // TODO: maybe need a function for deriving SavedState from the to_config function of each object, so that way we don't need to duplicate SavedState in EditorState
         } else if let Some(image_id) = self.dragging_image {
-            object_id = image_id;
-            let active_image = self
-                .image_items
-                .iter()
-                .find(|i| i.id == image_id.to_string())
-                .expect("Couldn't find image");
-            active_point = Some(Point {
-                x: active_image.transform.position.x,
-                y: active_image.transform.position.y,
-            });
+
         } else if let Some(text_id) = self.dragging_text {
-            object_id = text_id;
-            let active_text = self
-                .text_items
-                .iter()
-                .find(|t| t.id == text_id)
-                .expect("Couldn't find text");
-            active_point = Some(Point {
-                x: active_text.transform.position.x,
-                y: active_text.transform.position.y,
-            });
+
         } else if let Some(video_id) = self.dragging_video {
-            object_id = video_id;
-            let active_video = self
-                .video_items
-                .iter()
-                .find(|t| t.id == video_id.to_string())
-                .expect("Couldn't find video");
-            active_point = Some(Point {
-                x: active_video.transform.position.x,
-                y: active_video.transform.position.y,
-            });
-        }
 
-        if object_id != Uuid::nil() && active_point.is_some() {
-            if let Some(on_mouse_up_creator) = &self.on_mouse_up {
-                let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+        } else if let Some(path_id) = self.dragging_path {
 
-                let active_point = active_point.expect("Couldn't get active point");
-                let (selected_sequence_data, selected_keyframes) = on_up(
-                    object_id,
-                    Point {
-                        x: active_point.x - CANVAS_HORIZ_OFFSET,
-                        y: active_point.y - CANVAS_VERT_OFFSET,
-                    },
-                );
+        } else if let Some(handle_id) = self.dragging_path_handle {
 
-                // need some way of seeing if keyframe selected
-                // perhaps need some way of opening keyframes explicitly
-                // perhaps a toggle between keyframes and layout
-                if selected_keyframes.len() > 0 {
-                    self.update_motion_paths(&selected_sequence_data);
-                    println!("Motion Paths updated!");
-                }
-            }
-        }
+        } 
 
-        // handle handle on mouse up
-        let handle_id = if let Some(poly_id) = self.dragging_path_handle {
-            poly_id
-        } else {
-            Uuid::nil()
-        };
+        // if object_id != Uuid::nil() && active_point.is_some() {
+        //     if let Some(on_mouse_up_creator) = &self.on_mouse_up {
+        //         let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
 
-        let mut handle_point = None;
-        if handle_id != Uuid::nil() {
-            let active_handle = self
-                .motion_paths
-                .iter()
-                .flat_map(|m| &m.static_polygons)
-                .find(|p| p.id == handle_id)
-                .expect("Couldn't find handle");
-            handle_point = Some(Point {
-                x: active_handle.transform.position.x,
-                y: active_handle.transform.position.y,
-            })
-        }
+        //         let active_point = active_point.expect("Couldn't get active point");
+        //         let (selected_sequence_data, selected_keyframes) = on_up(
+        //             object_id,
+        //             Point {
+        //                 x: active_point.x - CANVAS_HORIZ_OFFSET,
+        //                 y: active_point.y - CANVAS_VERT_OFFSET,
+        //             },
+        //         );
 
-        // the object (polygon, text image, etc) related to this motion path handle
-        let handle_object_id = if let Some(poly_id) = self.dragging_path_object {
-            poly_id
-        } else {
-            Uuid::nil()
-        };
+        //         // need some way of seeing if keyframe selected
+        //         // perhaps need some way of opening keyframes explicitly
+        //         // perhaps a toggle between keyframes and layout
+        //         if selected_keyframes.len() > 0 {
+        //             self.update_motion_paths(&selected_sequence_data);
+        //             println!("Motion Paths updated!");
+        //         }
+        //     }
+        // }
 
-        // the keyframe associated with this motion path handle
-        let handle_keyframe_id = if let Some(kf_id) = self.dragging_path_keyframe {
-            kf_id
-        } else {
-            Uuid::nil()
-        };
+        // // handle handle on mouse up
+        // let handle_id = if let Some(poly_id) = self.dragging_path_handle {
+        //     poly_id
+        // } else {
+        //     Uuid::nil()
+        // };
 
-        if handle_keyframe_id != Uuid::nil() && handle_point.is_some() {
-            // need to update saved state and motion paths, handle polygon position already updated
-            if let Some(on_mouse_up_creator) = &self.on_handle_mouse_up {
-                let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+        // let mut handle_point = None;
+        // if handle_id != Uuid::nil() {
+        //     let active_handle = self
+        //         .motion_paths
+        //         .iter()
+        //         .flat_map(|m| &m.static_polygons)
+        //         .find(|p| p.id == handle_id)
+        //         .expect("Couldn't find handle");
+        //     handle_point = Some(Point {
+        //         x: active_handle.transform.position.x,
+        //         y: active_handle.transform.position.y,
+        //     })
+        // }
 
-                let handle_point = handle_point.expect("Couldn't get handle point");
-                let (selected_sequence_data, selected_keyframes) = on_up(
-                    handle_keyframe_id,
-                    handle_object_id,
-                    Point {
-                        x: handle_point.x - CANVAS_HORIZ_OFFSET,
-                        y: handle_point.y - CANVAS_VERT_OFFSET,
-                    },
-                );
+        // // the object (polygon, text image, etc) related to this motion path handle
+        // let handle_object_id = if let Some(poly_id) = self.dragging_path_object {
+        //     poly_id
+        // } else {
+        //     Uuid::nil()
+        // };
 
-                // always updated when handle is moved
-                self.update_motion_paths(&selected_sequence_data);
-                println!("Motion Paths updated!");
-            }
-        }
+        // // the keyframe associated with this motion path handle
+        // let handle_keyframe_id = if let Some(kf_id) = self.dragging_path_keyframe {
+        //     kf_id
+        // } else {
+        //     Uuid::nil()
+        // };
 
-        // handle path mouse up
-        if let Some(path_id) = self.dragging_path {
-            let active_path = self
-                .motion_paths
-                .iter()
-                .find(|p| p.id == path_id)
-                .expect("Couldn't find path");
-            let path_point = Point {
-                x: active_path.transform.position.x,
-                y: active_path.transform.position.y,
-            };
+        // if handle_keyframe_id != Uuid::nil() && handle_point.is_some() {
+        //     // need to update saved state and motion paths, handle polygon position already updated
+        //     if let Some(on_mouse_up_creator) = &self.on_handle_mouse_up {
+        //         let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
 
-            if let Some(on_mouse_up_creator) = &self.on_path_mouse_up {
-                let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+        //         let handle_point = handle_point.expect("Couldn't get handle point");
+        //         let (selected_sequence_data, selected_keyframes) = on_up(
+        //             handle_keyframe_id,
+        //             handle_object_id,
+        //             Point {
+        //                 x: handle_point.x - CANVAS_HORIZ_OFFSET,
+        //                 y: handle_point.y - CANVAS_VERT_OFFSET,
+        //             },
+        //         );
 
-                let (selected_sequence_data, selected_keyframes) = on_up(
-                    path_id,
-                    // Point {
-                    //     x: path_point.x - 600.0,
-                    //     y: path_point.y - 50.0,
-                    // },
-                    // no offset needed because all relative?
-                    Point {
-                        x: path_point.x,
-                        y: path_point.y,
-                    },
-                );
+        //         // always updated when handle is moved
+        //         self.update_motion_paths(&selected_sequence_data);
+        //         println!("Motion Paths updated!");
+        //     }
+        // }
 
-                // always updated when handle is moved
-                // not necessary to update motion paths here? seems redundant
-                // self.update_motion_paths(&selected_sequence_data);
-                // println!("Motion Paths updated!");
-            }
-        }
+        // // handle path mouse up
+        // if let Some(path_id) = self.dragging_path {
+        //     let active_path = self
+        //         .motion_paths
+        //         .iter()
+        //         .find(|p| p.id == path_id)
+        //         .expect("Couldn't find path");
+        //     let path_point = Point {
+        //         x: active_path.transform.position.x,
+        //         y: active_path.transform.position.y,
+        //     };
+
+        //     if let Some(on_mouse_up_creator) = &self.on_path_mouse_up {
+        //         let mut on_up = on_mouse_up_creator().expect("Couldn't get on handler");
+
+        //         let (selected_sequence_data, selected_keyframes) = on_up(
+        //             path_id,
+        //             // Point {
+        //             //     x: path_point.x - 600.0,
+        //             //     y: path_point.y - 50.0,
+        //             // },
+        //             // no offset needed because all relative?
+        //             Point {
+        //                 x: path_point.x,
+        //                 y: path_point.y,
+        //             },
+        //         );
+
+        //         // always updated when handle is moved
+        //         // not necessary to update motion paths here? seems redundant
+        //         // self.update_motion_paths(&selected_sequence_data);
+        //         // println!("Motion Paths updated!");
+        //     }
+        // }
 
         // reset variables
         self.dragging_polygon = None;
