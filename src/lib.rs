@@ -9,6 +9,7 @@ pub mod gpu_resources;
 pub mod motion_arrow;
 pub mod motion_path;
 pub mod polygon;
+pub mod saved_state;
 pub mod st_image;
 pub mod st_video;
 pub mod text;

@@ -27,6 +27,7 @@ image = "0.25.5"
 rand = "0.8.5"
 munkres = "0.5.2"
 device_query = "2.1.0"
+directories = "5.0.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.58", features = [

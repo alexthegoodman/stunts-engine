@@ -23,11 +23,13 @@ use crate::fonts::FontManager;
 use crate::motion_arrow::{MotionArrow, MotionArrowConfig};
 use crate::motion_path::{MotionPath, MotionPathConfig};
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
+use crate::saved_state::SavedState;
 use crate::st_image::{StImage, StImageConfig};
 use crate::st_video::{FrameTimer, StVideo, StVideoConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
 use crate::timelines::{SavedTimelineStateConfig, TrackType};
 use crate::transform::{angle_between_points, degrees_between_points};
+use crate::saved_state::save_saved_state_raw;
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -289,6 +291,7 @@ pub struct Editor {
     pub cursor_dot: Option<RingDot>,
     pub video_items: Vec<StVideo>,
     pub dragging_video: Option<Uuid>,
+    pub saved_state: Option<SavedState>,
     
     // resize handles system
     pub selected_object: Option<SelectedObject>,
@@ -453,6 +456,7 @@ impl Editor {
             motion_mode: false,
             video_items: Vec::new(),
             dragging_video: None,
+            saved_state: None,
             
             // resize handles system  
             selected_object: None,
@@ -3598,158 +3602,270 @@ impl Editor {
                         _ => println!("No match on input"),
                     },
                     InputValue::Number(n) => match key {
-                        "width" => selected_polygon.update_data_from_dimensions(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            (n, selected_polygon.dimensions.1),
-                            &camera,
-                        ),
-                        "height" => selected_polygon.update_data_from_dimensions(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            (selected_polygon.dimensions.0, n),
-                            &camera,
-                        ),
-                        "border_radius" => selected_polygon.update_data_from_border_radius(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            n,
-                            &camera,
-                        ),
-                        "red" => selected_polygon.update_data_from_fill(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            [
-                                color_to_wgpu(n),
-                                selected_polygon.fill[1],
-                                selected_polygon.fill[2],
-                                selected_polygon.fill[3],
-                            ],
-                            &camera,
-                        ),
-                        "green" => selected_polygon.update_data_from_fill(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            [
-                                selected_polygon.fill[0],
-                                color_to_wgpu(n),
-                                selected_polygon.fill[2],
-                                selected_polygon.fill[3],
-                            ],
-                            &camera,
-                        ),
-                        "blue" => selected_polygon.update_data_from_fill(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            [
-                                selected_polygon.fill[0],
-                                selected_polygon.fill[1],
-                                color_to_wgpu(n),
-                                selected_polygon.fill[3],
-                            ],
-                            &camera,
-                        ),
-                        "stroke_thickness" => selected_polygon.update_data_from_stroke(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            Stroke {
-                                thickness: n,
-                                fill: selected_polygon.stroke.fill,
-                            },
-                            &camera,
-                        ),
-                        "stroke_red" => selected_polygon.update_data_from_stroke(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            Stroke {
-                                thickness: selected_polygon.stroke.thickness,
-                                fill: [
+                        "width" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                // if s.id == selected_sequence_id.get() { // would be more efficient for many sequences
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.dimensions = (n as i32, p.dimensions.1);
+                                    }
+                                });
+                                // }
+                            });
+
+                            selected_polygon.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                (n, selected_polygon.dimensions.1),
+                                &camera,
+                            )
+                        },
+                        "height" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.dimensions = (p.dimensions.0, n as i32);
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                (selected_polygon.dimensions.0, n),
+                                &camera,
+                            )
+                        },
+                        "border_radius" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.border_radius = n as i32;
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_border_radius(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                n,
+                                &camera,
+                            )
+                        },
+                        "red" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.fill[0] = color_to_wgpu(n) as i32;
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_fill(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                [
                                     color_to_wgpu(n),
-                                    selected_polygon.stroke.fill[1],
-                                    selected_polygon.stroke.fill[2],
-                                    selected_polygon.stroke.fill[3],
+                                    selected_polygon.fill[1],
+                                    selected_polygon.fill[2],
+                                    selected_polygon.fill[3],
                                 ],
-                            },
-                            &camera,
-                        ),
-                        "stroke_green" => selected_polygon.update_data_from_stroke(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            Stroke {
-                                thickness: selected_polygon.stroke.thickness,
-                                fill: [
-                                    selected_polygon.stroke.fill[0],
+                                &camera,
+                            )
+                        },
+                        "green" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.fill[1] = color_to_wgpu(n) as i32;
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_fill(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                [
+                                    selected_polygon.fill[0],
                                     color_to_wgpu(n),
-                                    selected_polygon.stroke.fill[2],
-                                    selected_polygon.stroke.fill[3],
+                                    selected_polygon.fill[2],
+                                    selected_polygon.fill[3],
                                 ],
-                            },
-                            &camera,
-                        ),
-                        "stroke_blue" => selected_polygon.update_data_from_stroke(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            Stroke {
-                                thickness: selected_polygon.stroke.thickness,
-                                fill: [
-                                    selected_polygon.stroke.fill[0],
-                                    selected_polygon.stroke.fill[1],
+                                &camera,
+                            )
+                        },
+                        "blue" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.fill[2] = color_to_wgpu(n) as i32;
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_fill(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                [
+                                    selected_polygon.fill[0],
+                                    selected_polygon.fill[1],
                                     color_to_wgpu(n),
-                                    selected_polygon.stroke.fill[3],
+                                    selected_polygon.fill[3],
                                 ],
-                            },
-                            &camera,
-                        ),
+                                &camera,
+                            )
+                        },
+                        "stroke_thickness" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.stroke.thickness = n as i32;
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_stroke(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                Stroke {
+                                    thickness: n,
+                                    fill: selected_polygon.stroke.fill,
+                                },
+                                &camera,
+                            )
+                        },
+                        "stroke_red" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.stroke.fill[0] = color_to_wgpu(n) as i32;
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_stroke(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                Stroke {
+                                    thickness: selected_polygon.stroke.thickness,
+                                    fill: [
+                                        color_to_wgpu(n),
+                                        selected_polygon.stroke.fill[1],
+                                        selected_polygon.stroke.fill[2],
+                                        selected_polygon.stroke.fill[3],
+                                    ],
+                                },
+                                &camera,
+                            )
+                        },
+                        "stroke_green" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.stroke.fill[1] = color_to_wgpu(n) as i32;
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_stroke(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                Stroke {
+                                    thickness: selected_polygon.stroke.thickness,
+                                    fill: [
+                                        selected_polygon.stroke.fill[0],
+                                        color_to_wgpu(n),
+                                        selected_polygon.stroke.fill[2],
+                                        selected_polygon.stroke.fill[3],
+                                    ],
+                                },
+                                &camera,
+                            )
+                        },
+                        "stroke_blue" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_polygons.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.stroke.fill[2] = color_to_wgpu(n) as i32;
+                                    }
+                                });
+                            });
+
+                            selected_polygon.update_data_from_stroke(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                Stroke {
+                                    thickness: selected_polygon.stroke.thickness,
+                                    fill: [
+                                        selected_polygon.stroke.fill[0],
+                                        selected_polygon.stroke.fill[1],
+                                        color_to_wgpu(n),
+                                        selected_polygon.stroke.fill[3],
+                                    ],
+                                },
+                                &camera,
+                            )
+                        },
                         _ => println!("No match on input"),
                     },
                 }
@@ -3757,6 +3873,8 @@ impl Editor {
         } else {
             println!("No polygon found with the selected ID: {}", selected_id);
         }
+
+        save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
     }
 
     pub fn update_text(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
@@ -3790,76 +3908,139 @@ impl Editor {
                         _ => println!("No match on input"),
                     },
                     InputValue::Number(n) => match key {
-                        "width" => selected_text.update_data_from_dimensions(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            (n, selected_text.dimensions.1),
-                            &camera,
-                        ),
-                        "height" => selected_text.update_data_from_dimensions(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            (selected_text.dimensions.0, n),
-                            &camera,
-                        ),
-                        "red_fill" => selected_text.background_polygon.update_data_from_fill(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            [
-                                n,
-                                selected_text.background_polygon.fill[1],
-                                selected_text.background_polygon.fill[2],
-                                selected_text.background_polygon.fill[3],
-                            ],
-                            &camera,
-                        ),
-                        "green_fill" => selected_text.background_polygon.update_data_from_fill(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            [
-                                selected_text.background_polygon.fill[0],
-                                n,
-                                selected_text.background_polygon.fill[2],
-                                selected_text.background_polygon.fill[3],
-                            ],
-                            &camera,
-                        ),
-                        "blue_fill" => selected_text.background_polygon.update_data_from_fill(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            [
-                                selected_text.background_polygon.fill[0],
-                                selected_text.background_polygon.fill[1],
-                                n,
-                                selected_text.background_polygon.fill[3],
-                            ],
-                            &camera,
-                        ),
+                        "width" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                // if s.id == selected_sequence_id.get() { // would be more efficient for many sequences
+                                s.active_text_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.dimensions = (n as i32, p.dimensions.1);
+                                    }
+                                });
+                                // }
+                            });
+
+                            selected_text.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                (n, selected_text.dimensions.1),
+                                &camera,
+                            )
+                        },
+                        "height" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_text_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.dimensions = (p.dimensions.0, n as i32);
+                                    }
+                                });
+                            });
+
+                            selected_text.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                (selected_text.dimensions.0, n),
+                                &camera,
+                            )
+                        },
+                        "red_fill" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_text_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        if let Some(ref mut background_fill) = p.background_fill {
+                                            background_fill[0] = n as i32;
+                                        }
+                                    }
+                                });
+                            });
+
+                            selected_text.background_polygon.update_data_from_fill(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                [
+                                    n,
+                                    selected_text.background_polygon.fill[1],
+                                    selected_text.background_polygon.fill[2],
+                                    selected_text.background_polygon.fill[3],
+                                ],
+                                &camera,
+                            )
+                        },
+                        "green_fill" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_text_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        if let Some(ref mut background_fill) = p.background_fill {
+                                            background_fill[1] = n as i32;
+                                        }
+                                    }
+                                });
+                            });
+
+                            selected_text.background_polygon.update_data_from_fill(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                [
+                                    selected_text.background_polygon.fill[0],
+                                    n,
+                                    selected_text.background_polygon.fill[2],
+                                    selected_text.background_polygon.fill[3],
+                                ],
+                                &camera,
+                            )
+                        },
+                        "blue_fill" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_text_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        if let Some(ref mut background_fill) = p.background_fill {
+                                            background_fill[2] = n as i32;
+                                        }
+                                    }
+                                });
+                            });
+
+                            selected_text.background_polygon.update_data_from_fill(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                [
+                                    selected_text.background_polygon.fill[0],
+                                    selected_text.background_polygon.fill[1],
+                                    n,
+                                    selected_text.background_polygon.fill[3],
+                                ],
+                                &camera,
+                            )
+                        },
                         _ => println!("No match on input"),
                     },
                 }
@@ -3867,6 +4048,8 @@ impl Editor {
         } else {
             println!("No text found with the selected ID: {}", selected_id);
         }
+
+        save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
     }
 
     pub fn update_image(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
@@ -3903,28 +4086,52 @@ impl Editor {
                         _ => println!("No match on input"),
                     },
                     InputValue::Number(n) => match key {
-                        "width" => selected_image.update_data_from_dimensions(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            (n as f32, selected_image.dimensions.1 as f32),
-                            &camera,
-                        ),
-                        "height" => selected_image.update_data_from_dimensions(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            (selected_image.dimensions.0 as f32, n as f32),
-                            &camera,
-                        ),
+                        "width" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                // if s.id == selected_sequence_id.get() { // would be more efficient for many sequences
+                                s.active_image_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.dimensions = (n as u32, p.dimensions.1);
+                                    }
+                                });
+                                // }
+                            });
+
+                            selected_image.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                (n as f32, selected_image.dimensions.1 as f32),
+                                &camera,
+                            )
+                        },
+                        "height" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_image_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.dimensions = (p.dimensions.0, n as u32);
+                                    }
+                                });
+                            });
+
+                            selected_image.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                (selected_image.dimensions.0 as f32, n as f32),
+                                &camera,
+                            )
+                        },
                         _ => println!("No match on input"),
                     },
                 }
@@ -3932,6 +4139,8 @@ impl Editor {
         } else {
             println!("No image found with the selected ID: {}", selected_id);
         }
+
+        save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
     }
 
     pub fn update_video(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
@@ -3968,28 +4177,52 @@ impl Editor {
                         _ => println!("No match on input"),
                     },
                     InputValue::Number(n) => match key {
-                        "width" => selected_video.update_data_from_dimensions(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            (n as f32, selected_video.dimensions.1 as f32),
-                            &camera,
-                        ),
-                        "height" => selected_video.update_data_from_dimensions(
-                            &window_size,
-                            &device,
-                            &queue,
-                            &self
-                                .model_bind_group_layout
-                                .as_ref()
-                                .expect("Couldn't get model bind group layout"),
-                            (selected_video.dimensions.0 as f32, n as f32),
-                            &camera,
-                        ),
+                        "width" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                // if s.id == selected_sequence_id.get() { // would be more efficient for many sequences
+                                s.active_video_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.dimensions = (n as u32, p.dimensions.1);
+                                    }
+                                });
+                                // }
+                            });
+                                
+                            selected_video.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                (n as f32, selected_video.dimensions.1 as f32),
+                                &camera,
+                            )
+                        },
+                        "height" => {
+                            let saved_state = self.saved_state.as_mut().expect("Couldn't get saved_state");
+                            saved_state.sequences.iter_mut().for_each(|s| {
+                                s.active_video_items.iter_mut().for_each(|p| {
+                                    if p.id == selected_id.to_string() {
+                                        p.dimensions = (p.dimensions.0, n as u32);
+                                    }
+                                });
+                            });
+
+                            selected_video.update_data_from_dimensions(
+                                &window_size,
+                                &device,
+                                &queue,
+                                &self
+                                    .model_bind_group_layout
+                                    .as_ref()
+                                    .expect("Couldn't get model bind group layout"),
+                                (selected_video.dimensions.0 as f32, n as f32),
+                                &camera,
+                            )
+                        },
                         _ => println!("No match on input"),
                     },
                 }
@@ -3997,6 +4230,8 @@ impl Editor {
         } else {
             println!("No image found with the selected ID: {}", selected_id);
         }
+
+        save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
     }
 
     pub fn get_object_width(&self, selected_id: Uuid, object_type: ObjectType) -> f32 {
@@ -4458,15 +4693,16 @@ impl Editor {
                         return None; // nothing to add to undo stack
                     }
                 }
-                if polygon.name == "motion_path_segment".to_string() {
-                    if polygon.contains_point(&self.last_top_left, &camera) {
-                        self.dragging_path = Some(path.id);
-                        self.dragging_path_object = polygon.source_polygon_id;
-                        self.drag_start = Some(self.last_top_left);
+                // disable because dragging along with selected object makes this redundant and confusing
+                // if polygon.name == "motion_path_segment".to_string() {
+                //     if polygon.contains_point(&self.last_top_left, &camera) {
+                //         self.dragging_path = Some(path.id);
+                //         self.dragging_path_object = polygon.source_polygon_id;
+                //         self.drag_start = Some(self.last_top_left);
 
-                        return None; // nothing to add to undo stack
-                    }
-                }
+                //         return None; // nothing to add to undo stack
+                //     }
+                // }
             }
         }
 
@@ -4944,16 +5180,17 @@ impl Editor {
         }
 
 
-        // // handle object on mouse up
+        // handle object on mouse up
         if let Some(poly_id) = self.dragging_polygon {
-            // TODO: set updated current_sequence_data, both polygon position based on polygon.transform (which is up to date) as well as its associated motion path position stored on AnimationData
-            // maybe need one universal function that syncs real object position into its respective object in current_sequence_data and respective path / AnimationData
-            // TODO: maybe need a function for deriving SavedState from the to_config function of each object, so that way we don't need to duplicate SavedState in EditorState
+            self.sync_object_position_to_saved_data(poly_id, ObjectType::Polygon);
         } else if let Some(image_id) = self.dragging_image {
-
+            let uuid_image_id = image_id;
+            self.sync_object_position_to_saved_data(uuid_image_id, ObjectType::ImageItem);
         } else if let Some(text_id) = self.dragging_text {
-
+            self.sync_object_position_to_saved_data(text_id, ObjectType::TextItem);
         } else if let Some(video_id) = self.dragging_video {
+            let uuid_video_id = video_id;
+            self.sync_object_position_to_saved_data(uuid_video_id, ObjectType::VideoItem);
 
         } else if let Some(path_id) = self.dragging_path {
 
@@ -5568,6 +5805,145 @@ impl Editor {
         });
 
         self.depth_view = Some(depth_texture.create_view(&wgpu::TextureViewDescriptor::default()));
+    }
+
+    /// Syncs object position from its current transform to both current_sequence_data and saved_state
+    pub fn sync_object_position_to_saved_data(&mut self, object_id: Uuid, object_type: ObjectType) {
+        match object_type {
+            ObjectType::Polygon => {
+                if let Some(polygon) = self.polygons.iter().find(|p| p.id == object_id) {
+                    let current_pos = [
+                        polygon.transform.position.x as i32,
+                        polygon.transform.position.y as i32
+                    ];
+                    
+                    // Update current_sequence_data
+                    if let Some(current_sequence) = &mut self.current_sequence_data {
+                        if let Some(saved_polygon) = current_sequence.active_polygons
+                            .iter_mut()
+                            .find(|p| p.id == object_id.to_string()) {
+                            saved_polygon.position.x = current_pos[0];
+                            saved_polygon.position.y = current_pos[1];
+                        }
+                        
+                        // Update associated motion path in AnimationData
+                        if let Some(animation_data) = current_sequence.polygon_motion_paths
+                            .iter_mut()
+                            .find(|a| a.polygon_id == object_id.to_string()) {
+                            animation_data.position = current_pos;
+                        }
+                    }
+                    
+                    // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if let Some(saved_polygon) = sequence.active_polygons
+                                .iter_mut()
+                                .find(|p| p.id == object_id.to_string()) {
+                                saved_polygon.position.x = current_pos[0];
+                                saved_polygon.position.y = current_pos[1];
+                            }
+                            
+                            if let Some(animation_data) = sequence.polygon_motion_paths
+                                .iter_mut()
+                                .find(|a| a.polygon_id == object_id.to_string()) {
+                                animation_data.position = current_pos;
+                            }
+                        }
+                    }
+                }
+            },
+            ObjectType::TextItem => {
+                if let Some(text_item) = self.text_items.iter().find(|t| t.id == object_id) {
+                    let current_pos = [
+                        text_item.transform.position.x as i32,
+                        text_item.transform.position.y as i32
+                    ];
+                    
+                    // Update current_sequence_data
+                    if let Some(current_sequence) = &mut self.current_sequence_data {
+                        if let Some(saved_text) = current_sequence.active_text_items
+                            .iter_mut()
+                            .find(|t| t.id == object_id.to_string()) {
+                            saved_text.position.x = current_pos[0];
+                            saved_text.position.y = current_pos[1];
+                        }
+                    }
+                    
+                    // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if let Some(saved_text) = sequence.active_text_items
+                                .iter_mut()
+                                .find(|t| t.id == object_id.to_string()) {
+                                saved_text.position.x = current_pos[0];
+                                saved_text.position.y = current_pos[1];
+                            }
+                        }
+                    }
+                }
+            },
+            ObjectType::ImageItem => {
+                if let Some(image_item) = self.image_items.iter().find(|i| i.id == object_id.to_string()) {
+                    let current_pos = [
+                        image_item.transform.position.x as i32,
+                        image_item.transform.position.y as i32
+                    ];
+                    
+                    // Update current_sequence_data
+                    if let Some(current_sequence) = &mut self.current_sequence_data {
+                        if let Some(saved_image) = current_sequence.active_image_items
+                            .iter_mut()
+                            .find(|i| i.id == object_id.to_string()) {
+                            saved_image.position.x = current_pos[0];
+                            saved_image.position.y = current_pos[1];
+                        }
+                    }
+                    
+                    // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if let Some(saved_image) = sequence.active_image_items
+                                .iter_mut()
+                                .find(|i| i.id == object_id.to_string()) {
+                                saved_image.position.x = current_pos[0];
+                                saved_image.position.y = current_pos[1];
+                            }
+                        }
+                    }
+                }
+            },
+            ObjectType::VideoItem => {
+                if let Some(video_item) = self.video_items.iter().find(|v| v.id == object_id.to_string()) {
+                    let current_pos = [
+                        video_item.transform.position.x as i32,
+                        video_item.transform.position.y as i32
+                    ];
+                    
+                    // Update current_sequence_data
+                    if let Some(current_sequence) = &mut self.current_sequence_data {
+                        if let Some(saved_video) = current_sequence.active_video_items
+                            .iter_mut()
+                            .find(|v| v.id == object_id.to_string()) {
+                            saved_video.position.x = current_pos[0];
+                            saved_video.position.y = current_pos[1];
+                        }
+                    }
+                    
+                    // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if let Some(saved_video) = sequence.active_video_items
+                                .iter_mut()
+                                .find(|v| v.id == object_id.to_string()) {
+                                saved_video.position.x = current_pos[0];
+                                saved_video.position.y = current_pos[1];
+                            }
+                        }
+                    }
+                }
+            },
+        }
     }
 }
 
