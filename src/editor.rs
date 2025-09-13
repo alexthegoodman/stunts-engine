@@ -5509,6 +5509,25 @@ impl Editor {
         // Remove existing motion paths
         self.motion_paths.clear();
     }
+
+    pub fn recreate_depth_view(&mut self, gpu_resources: &GpuResources, width: u32, height: u32) {
+        let depth_texture = gpu_resources.device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24Plus,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            label: Some("Stunts Engine Depth Texture"),
+            view_formats: &[],
+        });
+
+        self.depth_view = Some(depth_texture.create_view(&wgpu::TextureViewDescriptor::default()));
+    }
 }
 
 // Helper function to create default properties with constant values
