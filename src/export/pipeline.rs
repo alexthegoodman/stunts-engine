@@ -11,6 +11,7 @@ use cgmath::{Vector2, Vector3};
 use crate::gpu_resources::GpuResources;
 use std::sync::{Arc, Mutex};
 use wgpu::{util::DeviceExt, RenderPipeline};
+use crate::vertex::get_z_layer;
 
 use super::frame_buffer::FrameCaptureBuffer;
 
@@ -64,8 +65,13 @@ impl ExportPipeline {
             },
         );
 
-        camera.position = Vector3::new(85.0, -535.0, 0.0);
-        // camera.zoom = 2.4;
+        // Center camera on viewport center with appropriate zoom
+        let center_x = video_width as f32 / 2.0;
+        let center_y = video_height as f32 / 2.0;
+        let zoom_level = 0.05; // Adjust as needed
+        
+        camera.birds_eye_zoom_on_point(-0.44, -0.40, 1.25); 
+        // camera.position = Vector3::new(-0.5, -0.5, 1.4);
 
         let viewport = Arc::new(Mutex::new(Viewport::new(
             // swap for video dimensions?

@@ -1,6 +1,7 @@
 use cgmath::{Matrix4, Point3, Vector2, Vector3, Rad, Deg, perspective, InnerSpace};
 
 use crate::editor::{size_to_normal, Point, WindowSize};
+use crate::vertex::get_z_layer;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Camera {
@@ -221,7 +222,8 @@ pub struct Camera3D {
 impl Camera3D {
     pub fn new(window_size: WindowSize) -> Self {
         Self {
-            position: Vector3::new(0.0, 0.0, 0.1),
+            // position: Vector3::new(0.0, 0.0, 0.1),
+            position: Vector3::new(0.0, 0.0, 2.6),
             target: Vector3::new(0.0, 0.0, 0.0),
             up: Vector3::new(0.0, 1.0, 0.0),
             fovy: Rad(std::f32::consts::FRAC_PI_4),
@@ -291,6 +293,27 @@ impl Camera3D {
 
     pub fn set_aspect_ratio(&mut self, aspect: f32) {
         self.aspect = aspect;
+    }
+
+    // pub fn birds_eye_zoom_on_point(&mut self, point_x: f32, point_y: f32, zoom_level: f32) {
+    //     // Set target to the point we want to focus on (content is around z=-2.5)
+    //     self.target = Vector3::new(point_x, point_y, -2.5);
+        
+    //     // Position camera above znear (0.1) but close enough to see content
+    //     // Higher zoom_level = closer = more zoomed in
+    //     let base_distance = 10.0; // Safe distance from znear
+    //     let distance = base_distance / zoom_level.max(0.1); // Prevent division by zero
+        
+    //     self.position = Vector3::new(point_x, point_y, distance);
+        
+    //     // Ensure we're looking straight down
+    //     self.up = Vector3::new(0.0, 1.0, 0.0);
+    // }
+    pub fn birds_eye_zoom_on_point(&mut self, point_x: f32, point_y: f32, zoom_level: f32) {
+        self.target = Vector3::new(point_x, point_y, 0.0);
+        // Closer distance = more zoomed in
+        // let zoom_level = get_z_layer(zoom_level); // zoom_level > 1 = closer
+        self.position = Vector3::new(point_x, point_y, zoom_level);
     }
 }
 

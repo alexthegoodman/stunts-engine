@@ -3480,8 +3480,10 @@ impl Editor {
                 Point { x: 1.0, y: 1.0 },
                 Point { x: 0.0, y: 1.0 },
             ],
-            (800.0 as f32, 450.0 as f32),
-            Point { x: 400.0, y: 225.0 },
+            // (800.0 as f32, 450.0 as f32),
+            // Point { x: 400.0, y: 225.0 },
+            (1000.0 as f32, 600.0 as f32),
+            Point { x: 500.0, y: 350.0 },
             0.0,
             0.0,
             fill,
@@ -3490,7 +3492,7 @@ impl Editor {
                 fill: rgb_to_wgpu(0, 0, 0, 255.0),
             },
             // 0.0,
-            -89, // camera far is -100
+            1, // camera far is -100
             "canvas_background".to_string(),
             sequence_id,
             Uuid::nil(),
