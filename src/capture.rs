@@ -18,6 +18,7 @@ use std::io::BufReader;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
 use std::thread;
 use std::time;
 use std::time::Instant;
@@ -85,10 +86,10 @@ pub struct SourceData {
     pub scale_factor: f32,
 }
 
-#[derive(Clone)]
 pub struct StCapture {
     pub state: MouseTrackingState,
     pub capture_dir: PathBuf,
+    pub video_completion_callback: Option<Arc<dyn Fn(String) + Send + Sync + 'static>>,
 }
 
 impl StCapture {
@@ -100,7 +101,18 @@ impl StCapture {
             is_recording: Arc::new(AtomicBool::new(false)),
         };
 
-        return Self { state, capture_dir };
+        return Self { 
+            state, 
+            capture_dir, 
+            video_completion_callback: None 
+        };
+    }
+
+    pub fn set_video_completion_callback<F>(&mut self, callback: F) 
+    where
+        F: Fn(String) + Send + Sync + 'static,
+    {
+        self.video_completion_callback = Some(Arc::new(callback));
     }
 
     pub fn save_source_data(
@@ -281,6 +293,9 @@ impl StCapture {
             .unwrap()
             .to_string();
 
+        // Clone the callback Arc for use in the capture settings
+        let callback_clone = self.video_completion_callback.clone();
+
         // hardcode hd for testing to avoid miscolored recording,
         // TBD: scale to fullscreen width / height for users
         if (width > 1920 || height > 1080) {
@@ -324,6 +339,7 @@ impl StCapture {
                     1920,
                     1080,
                     self.state.is_recording.clone(),
+                    callback_clone,
                 ),
             );
 
@@ -333,19 +349,8 @@ impl StCapture {
                 self.state.is_recording.store(false, Ordering::SeqCst);
             }
         } else {
-            // let settings = Settings::new(
-            //     target_window,
-            //     CursorCaptureSettings::Default,
-            //     DrawBorderSettings::Default,
-            //     ColorFormat::Rgba8,
-            //     (
-            //         output_path,
-            //         compressed_path,
-            //         width,
-            //         height,
-            //         self.state.is_recording.clone(),
-            //     ),
-            // );
+            // Create another callback clone for the else branch
+            let callback_clone2 = self.video_completion_callback.clone();
 
             let settings = Settings::new(
                 // Item to capture
@@ -369,6 +374,7 @@ impl StCapture {
                     width,
                     height,
                     self.state.is_recording.clone(),
+                    callback_clone2,
                 ),
             );
         
@@ -501,14 +507,15 @@ struct Capture {
     is_recording: Arc<AtomicBool>,
     output_path: String,
     compressed_path: String,
+    completion_callback: Option<Arc<dyn Fn(String) + Send + Sync + 'static>>,
 }
 
 impl GraphicsCaptureApiHandler for Capture {
-    type Flags = (String, String, u32, u32, Arc<AtomicBool>);
+    type Flags = (String, String, u32, u32, Arc<AtomicBool>, Option<Arc<dyn Fn(String) + Send + Sync + 'static>>);
     type Error = Box<dyn std::error::Error + Send + Sync>;
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
-        let (output_path, compressed_path, width, height, is_recording) = ctx.flags;
+        let (output_path, compressed_path, width, height, is_recording, completion_callback) = ctx.flags;
         let encoder = VideoEncoder::new(
             VideoSettingsBuilder::new(width, height).sub_type(VideoSettingsSubType::H264),
             AudioSettingsBuilder::default().disabled(true),
@@ -521,6 +528,7 @@ impl GraphicsCaptureApiHandler for Capture {
             is_recording,
             output_path,
             compressed_path,
+            completion_callback,
         })
     }
 
@@ -540,8 +548,11 @@ impl GraphicsCaptureApiHandler for Capture {
             if let Some(encoder) = self.encoder.take() {
                 println!("Encoder finish...");
                 encoder.finish()?;
-                // TODO: call a callback here like self.completelyFinishedSaving() if exists, supply as Flag
-                // ultimately, hook in the callback at line 1570 in stunts-native main.rs, so the AddVideo command is sent only at right time
+                
+                // Call the completion callback if it exists
+                if let Some(ref callback) = self.completion_callback {
+                    callback(self.output_path.clone());
+                }
             }
             capture_control.stop();
         }
