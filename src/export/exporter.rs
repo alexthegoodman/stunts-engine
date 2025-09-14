@@ -34,6 +34,7 @@ impl Exporter {
         video_height: u32,
         total_duration_s: f64,
         progress_tx: UnboundedSender<ExportProgress>,
+        project_id: String,
     ) -> Result<Arc<u32>, String> {
         println!("Preparing wgpu pipeline...");
         let mut wgpu_pipeline = ExportPipeline::new();
@@ -44,6 +45,7 @@ impl Exporter {
                 saved_timeline_state_config,
                 video_width,
                 video_height,
+                project_id,
             )
             .await;
 

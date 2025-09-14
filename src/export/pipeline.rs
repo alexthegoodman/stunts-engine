@@ -54,6 +54,7 @@ impl ExportPipeline {
         video_current_sequence_timeline: SavedTimelineStateConfig,
         video_width: u32,
         video_height: u32,
+        project_id: String,
     ) {
         let mut camera = Camera::new(
             //window_size
@@ -75,7 +76,7 @@ impl ExportPipeline {
         )));
 
         // create a dedicated editor so it can be used in the async thread
-        let mut export_editor = Editor::new(viewport);
+        let mut export_editor = Editor::new(viewport, project_id.clone());
 
         // continue on with wgpu items
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {

@@ -282,7 +282,7 @@ impl StCapture {
             .to_string();
 
         // hardcode hd for testing to avoid miscolored recording,
-        // TODO: scale to fullscreen width / height for users
+        // TBD: scale to fullscreen width / height for users
         if (width > 1920 || height > 1080) {
             let primary_monitor = Monitor::primary().expect("There is no primary monitor");
 
@@ -540,6 +540,8 @@ impl GraphicsCaptureApiHandler for Capture {
             if let Some(encoder) = self.encoder.take() {
                 println!("Encoder finish...");
                 encoder.finish()?;
+                // TODO: call a callback here like self.completelyFinishedSaving() if exists, supply as Flag
+                // ultimately, hook in the callback at line 1570 in stunts-native main.rs, so the AddVideo command is sent only at right time
             }
             capture_control.stop();
         }

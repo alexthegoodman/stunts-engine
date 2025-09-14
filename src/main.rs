@@ -16,6 +16,8 @@ mod timelines;
 mod transcode;
 mod transform;
 mod vertex;
+mod gpu_resources;
+mod saved_state;
 
 fn main() {
     println!("Hello, Stunts!");

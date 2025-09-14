@@ -30,6 +30,9 @@ use crate::text_due::{TextRenderer, TextRendererConfig};
 use crate::timelines::{SavedTimelineStateConfig, TrackType};
 use crate::transform::{angle_between_points, degrees_between_points};
 use crate::saved_state::save_saved_state_raw;
+use crate::{
+    capture::{StCapture, get_sources, WindowInfo},
+};
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -273,6 +276,7 @@ pub struct ResizeHandle {
 
 pub struct Editor {
     // visual
+    pub st_capture: StCapture,
     pub selected_polygon_id: Uuid,
     pub polygons: Vec<Polygon>,
     pub dragging_polygon: Option<Uuid>,
@@ -363,17 +367,17 @@ pub struct Editor {
 use std::borrow::{Borrow, BorrowMut};
 
 #[cfg(target_os = "windows")]
-pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>) -> Editor {
+pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>, project_id: String) -> Editor {
     // let inference = load_common_motion_2d();
 
-    let editor = Editor::new(viewport);
+    let editor = Editor::new(viewport, project_id.clone());
 
     editor
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>) -> Editor {
-    let editor = Editor::new(viewport);
+pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>, project_id: String) -> Editor {
+    let editor = Editor::new(viewport, project_id.clone());
 
     editor
 }
@@ -387,7 +391,7 @@ pub enum InputValue {
 impl Editor {
     pub fn new(
         viewport: Arc<Mutex<Viewport>>,
-        // inference: Option<CommonMotionInference<Wgpu>>,
+        project_id: String
     ) -> Self {
         let viewport_unwrapped = viewport.lock().unwrap();
         let window_size = WindowSize {
@@ -397,7 +401,22 @@ impl Editor {
 
         let font_manager = FontManager::new();
 
+        // Create capture directory for this project
+        let project_path = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join("captures")
+            .join(project_id);
+
+        if let Err(e) = std::fs::create_dir_all(&project_path) {
+            println!("Failed to create capture directory: {}", e);
+            // return Ok(());,
+        }
+
+        // Initialize StCapture - this handles the non-Send+Sync Windows capture types
+        let mut st_capture = StCapture::new(project_path);
+
         Editor {
+            st_capture,
             font_manager,
             // inference,
             selected_polygon_id: Uuid::nil(),
