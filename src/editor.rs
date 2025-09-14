@@ -32,6 +32,7 @@ use crate::transform::{angle_between_points, degrees_between_points};
 use crate::saved_state::save_saved_state_raw;
 use crate::{
     capture::{StCapture, get_sources, WindowInfo},
+    export::exporter::Exporter,
 };
 
 use rand::Rng;
@@ -277,6 +278,7 @@ pub struct ResizeHandle {
 pub struct Editor {
     // visual
     pub st_capture: StCapture,
+    pub exporter: Option<Exporter>,
     pub selected_polygon_id: Uuid,
     pub polygons: Vec<Polygon>,
     pub dragging_polygon: Option<Uuid>,
@@ -417,6 +419,7 @@ impl Editor {
 
         Editor {
             st_capture,
+            exporter: None,
             font_manager,
             // inference,
             selected_polygon_id: Uuid::nil(),
