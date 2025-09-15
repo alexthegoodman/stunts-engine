@@ -68,8 +68,7 @@ pub fn save_saved_state_raw(saved_state: SavedState) {
 
     println!("Saving saved state... {}", save_path.display());
 
-    // disabled for testing
-    // fs::write(&save_path, json).expect("Couldn't write saved state");
+    fs::write(&save_path, json).expect("Couldn't write saved state");
 
     drop(saved_state);
 
