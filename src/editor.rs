@@ -5054,8 +5054,6 @@ impl Editor {
         // handle dragging to move objects (polygons, images, text, etc)
         if let Some(poly_id) = self.dragging_polygon {
             if let Some(start) = self.drag_start {
-                
-
                 self.move_polygon(self.last_top_left, start, poly_id, window_size, device);
 
                 if let Some(path) = self.motion_paths.iter()
@@ -5074,18 +5072,51 @@ impl Editor {
         if let Some(text_id) = self.dragging_text {
             if let Some(start) = self.drag_start {
                 self.move_text(self.last_top_left, start, text_id, window_size, device);
+
+                if let Some(path) = self.motion_paths.iter()
+                    .find(|p| p.source_polygon_id == text_id) {
+                    self.move_path(
+                        self.last_top_left,
+                        start,
+                        path.id,
+                        window_size,
+                        device,
+                    );
+                }
             }
         }
 
         if let Some(image_id) = self.dragging_image {
             if let Some(start) = self.drag_start {
                 self.move_image(self.last_top_left, start, image_id, window_size, device);
+
+                if let Some(path) = self.motion_paths.iter()
+                    .find(|p| p.source_polygon_id == image_id) {
+                    self.move_path(
+                        self.last_top_left,
+                        start,
+                        path.id,
+                        window_size,
+                        device,
+                    );
+                }
             }
         }
 
         if let Some(video_id) = self.dragging_video {
             if let Some(start) = self.drag_start {
                 self.move_video(self.last_top_left, start, video_id, window_size, device);
+
+                if let Some(path) = self.motion_paths.iter()
+                    .find(|p| p.source_polygon_id == video_id) {
+                    self.move_path(
+                        self.last_top_left,
+                        start,
+                        path.id,
+                        window_size,
+                        device,
+                    );
+                }
             }
         }
 
@@ -5220,6 +5251,9 @@ impl Editor {
 
         } else if let Some(handle_id) = self.dragging_path_handle {
 
+        } else if let Some(handle_id) = self.dragging_handle {
+            // TODO: need self.sync_object_size_to_saved_date() use self.selected_object.object_id and object_type
+            self.sync_object_size_to_saved_date();
         } 
 
         // if object_id != Uuid::nil() && active_point.is_some() {
@@ -5355,6 +5389,120 @@ impl Editor {
         // self.update_cursor();
 
         action_edit
+    }
+
+    pub fn sync_object_size_to_saved_date(&mut self) {
+        // TODO: use self.selected_object.object_id and object_type
+        let selected_object = self.selected_object.as_ref().expect("Couldn't get selected object");
+        let object_id = selected_object.object_id;
+        let object_type = selected_object.object_type.clone();
+        let current_sequence_id = self.current_sequence_data.as_ref().expect("Couldn't get sequence data").id.clone();
+
+        match object_type {
+            ObjectType::Polygon => {
+                if let Some(polygon) = self.polygons.iter().find(|p| p.id == object_id) {
+                    // Update current_sequence_data
+                    if let Some(current_sequence) = &mut self.current_sequence_data {
+                        if let Some(saved_polygon) = current_sequence.active_polygons
+                            .iter_mut()
+                            .find(|p| p.id == object_id.to_string()) {
+                            saved_polygon.dimensions = (polygon.dimensions.0 as i32, polygon.dimensions.1 as i32);
+                        }
+                    }
+                    
+                    // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if sequence.id == current_sequence_id {
+                                // Update the sequence with the current_sequence_data
+                                if let Some(current_sequence) = &self.current_sequence_data {
+                                    *sequence = current_sequence.clone();
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+            ObjectType::TextItem => {
+                if let Some(text_item) = self.text_items.iter().find(|t| t.id == object_id) {
+                    // Update current_sequence_data
+                    if let Some(current_sequence) = &mut self.current_sequence_data {
+                        if let Some(saved_text) = current_sequence.active_text_items
+                            .iter_mut()
+                            .find(|t| t.id == object_id.to_string()) {
+                            saved_text.dimensions = (text_item.dimensions.0 as i32, text_item.dimensions.1 as i32);
+                        }
+                    }
+                    
+                    // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if sequence.id == current_sequence_id {
+                                // Update the sequence with the current_sequence_data
+                                if let Some(current_sequence) = &self.current_sequence_data {
+                                    *sequence = current_sequence.clone();
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+            ObjectType::ImageItem => {
+                if let Some(image_item) = self.image_items.iter().find(|i| i.id == object_id.to_string()) {
+                    // Update current_sequence_data
+                    if let Some(current_sequence) = &mut self.current_sequence_data {
+                        if let Some(saved_image) = current_sequence.active_image_items
+                            .iter_mut()
+                            .find(|i| i.id == object_id.to_string()) {
+                            saved_image.dimensions = (image_item.transform.scale.x as u32, image_item.transform.scale.y as u32);
+                        }
+                    }
+                    
+                    // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if sequence.id == current_sequence_id {
+                                // Update the sequence with the current_sequence_data
+                                if let Some(current_sequence) = &self.current_sequence_data {
+                                    *sequence = current_sequence.clone();
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                }
+            },
+            ObjectType::VideoItem => {
+                if let Some(video_item) = self.video_items.iter().find(|v| v.id == object_id.to_string()) {
+                    // Update current_sequence_data
+                    if let Some(current_sequence) = &mut self.current_sequence_data {
+                        if let Some(saved_video) = current_sequence.active_video_items
+                            .iter_mut()
+                            .find(|v| v.id == object_id.to_string()) {
+                            saved_video.dimensions = (video_item.transform.scale.x as u32, video_item.transform.scale.y as u32);
+
+                        }
+                    }
+                    
+                    // Update saved_state
+                    if let Some(saved_state) = &mut self.saved_state {
+                        for sequence in &mut saved_state.sequences {
+                            if sequence.id == current_sequence_id {
+                                // Update the sequence with the current_sequence_data
+                                if let Some(current_sequence) = &self.current_sequence_data {
+                                    *sequence = current_sequence.clone();
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                }
+            },
+        }
     }
 
     pub fn reset_bounds(&mut self, window_size: &WindowSize) {
