@@ -367,13 +367,13 @@ impl ExportPipeline {
         sequences.iter().enumerate().for_each(|(i, s)| {
             export_editor.restore_sequence_objects(
                 &s,
-                WindowSize {
-                    // width: window_size.width as u32,
-                    // height: window_size.height as u32,
-                    width: video_width.clone(),
-                    height: video_height.clone(),
-                },
-                &camera,
+                // WindowSize {
+                //     // width: window_size.width as u32,
+                //     // height: window_size.height as u32,
+                //     width: video_width.clone(),
+                //     height: video_height.clone(),
+                // },
+                // &camera,
                 if i == 0 { false } else { true },
                 // &gpu_resources.device,
                 // &gpu_resources.queue,

@@ -968,8 +968,8 @@ impl Editor {
     pub fn restore_sequence_objects(
         &mut self,
         saved_sequence: &Sequence,
-        window_size: WindowSize,
-        camera: &Camera,
+        // window_size: WindowSize,
+        // camera: &Camera,
         hidden: bool,
         // device: &wgpu::Device,
         // queue: &wgpu::Queue,
@@ -980,6 +980,8 @@ impl Editor {
             .expect("Couldn't get gpu resources");
         let device = &gpu_resources.device;
         let queue = &gpu_resources.queue;
+        let camera = self.camera.as_ref().expect("Couldn't get camera");
+        let window_size = camera.window_size;
 
         saved_sequence.active_polygons.iter().for_each(|p| {
             // let gpu_resources = self
@@ -6172,6 +6174,8 @@ impl Editor {
                 }
             },
         }
+
+        save_saved_state_raw(self.saved_state.clone().expect("Couldn't get saved state"));
     }
 }
 
