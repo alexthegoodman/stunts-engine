@@ -49,6 +49,20 @@ impl Shape for MotionArrow {
         // Check if point is close to the arrow line
         distance_to_start + distance_to_end <= arrow_length + ARROW_SHAFT_THICKNESS * 2.0
     }
+
+    fn contains_point_with_tolerance(&self, point: &Point, camera: &Camera, tolerance_percent: f32) -> bool {
+        // Enhanced detection for motion arrows with configurable tolerance
+        let distance_to_start = ((point.x - self.start.x).powi(2) + (point.y - self.start.y).powi(2)).sqrt();
+        let distance_to_end = ((point.x - self.end.x).powi(2) + (point.y - self.end.y).powi(2)).sqrt();
+        let arrow_length = ((self.end.x - self.start.x).powi(2) + (self.end.y - self.start.y).powi(2)).sqrt();
+        
+        // Apply tolerance multiplier to the detection area
+        let base_tolerance = ARROW_SHAFT_THICKNESS * 2.0;
+        let enhanced_tolerance = base_tolerance * (1.0 + tolerance_percent / 100.0);
+        
+        // Check if point is close to the arrow line
+        distance_to_start + distance_to_end <= arrow_length + enhanced_tolerance
+    }
 }
 
 pub fn get_motion_arrow_data(

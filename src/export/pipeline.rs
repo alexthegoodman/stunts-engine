@@ -363,6 +363,9 @@ impl ExportPipeline {
         //     .as_ref()
         //     .expect("Couldn't get gpu resources");
 
+        // begin playback
+        export_editor.camera = Some(camera);
+
         // restore objects to the editor
         sequences.iter().enumerate().for_each(|(i, s)| {
             export_editor.restore_sequence_objects(
@@ -379,9 +382,7 @@ impl ExportPipeline {
                 // &gpu_resources.queue,
             );
         });
-
-        // begin playback
-        export_editor.camera = Some(camera);
+        
         let now = std::time::Instant::now();
         export_editor.video_start_playing_time = Some(now.clone());
 

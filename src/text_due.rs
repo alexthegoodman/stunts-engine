@@ -577,6 +577,24 @@ impl TextRenderer {
             && untranslated.y <= 0.5 * self.dimensions.1 as f32
     }
 
+    pub fn contains_point_with_tolerance(&self, point: &Point, camera: &Camera, tolerance_percent: f32) -> bool {
+        let untranslated = Point {
+            x: point.x - (self.transform.position.x),
+            y: point.y - self.transform.position.y,
+        };
+
+        // Apply tolerance expansion to the detection area
+        let tolerance_multiplier = 1.0 + (tolerance_percent / 100.0);
+        let enhanced_width = self.dimensions.0 * tolerance_multiplier;
+        let enhanced_height = self.dimensions.1 * tolerance_multiplier;
+
+        // Check if the point is within the enhanced bounds
+        untranslated.x >= -0.5 * enhanced_width as f32
+            && untranslated.x <= 0.5 * enhanced_width as f32
+            && untranslated.y >= -0.5 * enhanced_height as f32
+            && untranslated.y <= 0.5 * enhanced_height as f32
+    }
+
     pub fn to_local_space(&self, world_point: Point, camera: &Camera) -> Point {
         let untranslated = Point {
             x: world_point.x - (self.transform.position.x),

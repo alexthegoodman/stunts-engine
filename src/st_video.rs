@@ -694,6 +694,28 @@ impl StVideo {
             && untranslated.y <= 0.5 * scaled_height as f32
     }
 
+    pub fn contains_point_with_tolerance(&self, point: &Point, camera: &Camera, tolerance_percent: f32) -> bool {
+        let untranslated = Point {
+            x: point.x - (self.transform.position.x),
+            y: point.y - self.transform.position.y,
+        };
+
+        let (width, height) = self.dimensions;
+        let scaled_width = self.transform.scale.x;
+        let scaled_height = self.transform.scale.y;
+
+        // Apply tolerance expansion to the detection area
+        let tolerance_multiplier = 1.0 + (tolerance_percent / 100.0);
+        let enhanced_width = scaled_width * tolerance_multiplier;
+        let enhanced_height = scaled_height * tolerance_multiplier;
+        
+        // Check if the point is within the enhanced bounds
+        untranslated.x >= -0.5 * enhanced_width as f32
+            && untranslated.x <= 0.5 * enhanced_width as f32
+            && untranslated.y >= -0.5 * enhanced_height as f32
+            && untranslated.y <= 0.5 * enhanced_height as f32
+    }
+
     pub fn update_layer(&mut self, layer_index: i32) {
         // -10.0 to provide 10 spots for internal items on top of objects
         let layer_index = layer_index - 0;

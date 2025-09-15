@@ -84,6 +84,10 @@ pub struct BoundingBox {
 pub trait Shape {
     fn bounding_box(&self) -> BoundingBox;
     fn contains_point(&self, point: &Point, camera: &Camera) -> bool;
+    fn contains_point_with_tolerance(&self, point: &Point, camera: &Camera, tolerance_percent: f32) -> bool {
+        // Default implementation - subclasses should override for proper enhanced detection
+        self.contains_point(point, camera)
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, EnumIter, Debug)]
@@ -309,6 +313,7 @@ pub struct Editor {
     pub canvas_hidden: bool,
     pub motion_arrow_just_placed: bool,
     pub last_motion_arrow_object_id: Uuid,
+    pub last_motion_arrow_object_type: ObjectType,
     pub last_motion_arrow_object_dimensions: Option<(f32, f32)>,
     pub last_motion_arrow_end_positions: Option<(Point, Point)>,
 
@@ -424,6 +429,7 @@ impl Editor {
             // inference,
             selected_polygon_id: Uuid::nil(),
             last_motion_arrow_object_id: Uuid::nil(),
+            last_motion_arrow_object_type: ObjectType::Polygon,
             polygons: Vec::new(),
             dragging_polygon: None,
             dragging_path_assoc_path: None,
@@ -4675,6 +4681,10 @@ impl Editor {
             return None;
         }
 
+        if self.canvas_hidden {
+            return None;
+        }
+
         // Handle motion mode - start placing motion arrow
         if self.motion_mode {
             self.drag_start = Some(self.last_top_left);
@@ -4945,6 +4955,10 @@ impl Editor {
         x: f32,
         y: f32,
     ) {
+        if self.canvas_hidden {
+            return;
+        }
+
         let camera = self.camera.as_mut().expect("Couldn't get camera");
         let mouse_pos = Point { x, y };
         
@@ -5126,6 +5140,10 @@ impl Editor {
     }
 
     pub fn handle_mouse_up(&mut self) -> Option<ObjectEditConfig> {
+        if self.canvas_hidden {
+            return None;
+        }
+
         let mut action_edit = None;
 
         let camera = self.camera.as_ref().expect("Couldn't get camera");
@@ -5138,21 +5156,24 @@ impl Editor {
                 // Find object dimensions at start position
                 let mut object_dimensions: Option<(f32, f32)> = None;
                 let mut object_id = Uuid::nil();
+                let mut object_type = ObjectType::Polygon;
                 
-                // Check for objects at start position
+                // Check for objects at start position with enhanced detection for easier UX
                 for polygon in &self.polygons {
-                    if !polygon.hidden && polygon.contains_point(&start_pos, &camera) {
+                    if !polygon.hidden && polygon.contains_point_with_tolerance(&start_pos, &camera, 25.0) {
                         object_id = polygon.id;
                         object_dimensions = Some((polygon.dimensions.0 as f32, polygon.dimensions.1 as f32));
+                        object_type = ObjectType::Polygon;
                         break;
                     }
                 }
                 
                 if object_dimensions.is_none() {
                     for text_item in &self.text_items {
-                        if !text_item.hidden && text_item.contains_point(&start_pos, &camera) {
+                        if !text_item.hidden && text_item.contains_point_with_tolerance(&start_pos, &camera, 25.0) {
                             object_id = text_item.id;
                             object_dimensions = Some((text_item.dimensions.0 as f32, text_item.dimensions.1 as f32));
+                            object_type = ObjectType::TextItem;
                             break;
                         }
                     }
@@ -5160,9 +5181,10 @@ impl Editor {
                 
                 if object_dimensions.is_none() {
                     for image_item in &self.image_items {
-                        if !image_item.hidden && image_item.contains_point(&start_pos, &camera) {
+                        if !image_item.hidden && image_item.contains_point_with_tolerance(&start_pos, &camera, 25.0) {
                             object_id = Uuid::from_str(&image_item.id).expect("Couldn't make uuid");
                             object_dimensions = Some((image_item.dimensions.0 as f32, image_item.dimensions.1 as f32));
+                            object_type = ObjectType::ImageItem;
                             break;
                         }
                     }
@@ -5170,15 +5192,17 @@ impl Editor {
                 
                 if object_dimensions.is_none() {
                     for video_item in &self.video_items {
-                        if !video_item.hidden && video_item.contains_point(&start_pos, &camera) {
+                        if !video_item.hidden && video_item.contains_point_with_tolerance(&start_pos, &camera, 25.0) {
                             object_id = Uuid::from_str(&video_item.id).expect("Couldn't make uuid");
                             object_dimensions = Some((video_item.dimensions.0 as f32, video_item.dimensions.1 as f32));
+                            object_type = ObjectType::VideoItem;
                             break;
                         }
                     }
                 }
 
                 self.last_motion_arrow_object_id = object_id;
+                self.last_motion_arrow_object_type = object_type;
                 self.last_motion_arrow_object_dimensions = object_dimensions;
                 self.last_motion_arrow_end_positions = Some((start_pos, end_pos));
                 

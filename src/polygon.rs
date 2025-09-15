@@ -63,6 +63,57 @@ impl Shape for Polygon {
 
         inside
     }
+
+    fn contains_point_with_tolerance(&self, point: &Point, camera: &Camera, tolerance_percent: f32) -> bool {
+        // For polygon detection with tolerance, we expand the polygon bounds
+        let local_point = self.to_local_space(*point, camera);
+        
+        // Calculate bounding box expansion based on tolerance
+        let bbox = self.bounding_box();
+        let width = bbox.max.x - bbox.min.x;
+        let height = bbox.max.y - bbox.min.y;
+        let avg_dimension = (width + height) / 2.0;
+        let tolerance_expansion = avg_dimension * (tolerance_percent / 100.0);
+        
+        // Create expanded points for tolerance detection
+        let mut expanded_points = Vec::new();
+        for point in &self.points {
+            // Expand each point outward from the center
+            let center_x = (bbox.min.x + bbox.max.x) / 2.0;
+            let center_y = (bbox.min.y + bbox.max.y) / 2.0;
+            
+            let dx = point.x - center_x;
+            let dy = point.y - center_y;
+            let distance = (dx * dx + dy * dy).sqrt();
+            
+            if distance > 0.0 {
+                let expansion_factor = (distance + tolerance_expansion) / distance;
+                expanded_points.push(Point {
+                    x: center_x + dx * expansion_factor,
+                    y: center_y + dy * expansion_factor,
+                });
+            } else {
+                expanded_points.push(*point);
+            }
+        }
+        
+        // Implement point-in-polygon test on expanded polygon
+        let mut inside = false;
+        let mut j = expanded_points.len() - 1;
+        for i in 0..expanded_points.len() {
+            let pi = &expanded_points[i];
+            let pj = &expanded_points[j];
+
+            if ((pi.y > local_point.y) != (pj.y > local_point.y))
+                && (local_point.x < (pj.x - pi.x) * (local_point.y - pi.y) / (pj.y - pi.y) + pi.x)
+            {
+                inside = !inside;
+            }
+            j = i;
+        }
+
+        inside
+    }
 }
 
 use lyon_tessellation::{
