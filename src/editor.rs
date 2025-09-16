@@ -3603,7 +3603,7 @@ impl Editor {
         }
     }
 
-    pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
+    pub fn update_polygon(&mut self, selected_id: Uuid, key: &str, new_value: InputValue, auto_save: bool) {
         // First iteration: find the index of the selected polygon
         let polygon_index = self.polygons.iter().position(|p| p.id == selected_id);
 
@@ -3906,10 +3906,12 @@ impl Editor {
             println!("No polygon found with the selected ID: {}", selected_id);
         }
 
-        save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
+        if (auto_save) {
+            save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
+        }
     }
 
-    pub fn update_text(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
+    pub fn update_text(&mut self, selected_id: Uuid, key: &str, new_value: InputValue, auto_save: bool) {
         // First iteration: find the index of the selected polygon
         let text_index = self.text_items.iter().position(|p| p.id == selected_id);
 
@@ -4081,7 +4083,9 @@ impl Editor {
             println!("No text found with the selected ID: {}", selected_id);
         }
 
-        save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
+        if (auto_save) {
+            save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
+        }
     }
 
     pub fn update_image(&mut self, selected_id: Uuid, key: &str, new_value: InputValue) {
