@@ -70,7 +70,7 @@ impl ExportPipeline {
         let center_y = video_height as f32 / 2.0;
         let zoom_level = 0.05; // Adjust as needed
         
-        camera.birds_eye_zoom_on_point(-0.44, -0.40, 1.25); 
+        camera.birds_eye_zoom_on_point(-0.48, -0.40, 1.25); 
         // camera.position = Vector3::new(-0.5, -0.5, 1.4);
 
         let viewport = Arc::new(Mutex::new(Viewport::new(
