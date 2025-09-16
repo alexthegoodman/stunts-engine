@@ -3339,6 +3339,8 @@ impl Editor {
 
         let camera = self.camera.as_ref().expect("Couldn't get camera");
         let window_size = camera.window_size;
+        let current_sequence = self.current_sequence_data.as_mut().expect("Couldn't get sequence data");
+        let current_sequence_id = current_sequence.id.clone();
 
         match property {
             ObjectProperty::FontFamily(new_font_family) => {
@@ -3351,18 +3353,48 @@ impl Editor {
                 
                 // Re-render the text
                 text_item.render_text(device, queue);
+
+                current_sequence.active_text_items.iter_mut().for_each(|p| {
+                    if p.id == text_id.to_string() {
+                        p.font_family = new_font_family.clone();
+                    }
+                });
             },
             ObjectProperty::FontSize(new_size) => {
                 text_item.font_size = new_size as i32;
                 text_item.render_text(device, queue);
+
+                current_sequence.active_text_items.iter_mut().for_each(|p| {
+                    if p.id == text_id.to_string() {
+                        p.font_size = new_size as i32;
+                    }
+                });
             },
             ObjectProperty::Text(new_text) => {
                 text_item.text = new_text.clone();
                 text_item.render_text(device, queue);
+
+                current_sequence.active_text_items.iter_mut().for_each(|p| {
+                    if p.id == text_id.to_string() {
+                        p.text = new_text.clone();
+                    }
+                });
             },
             // Handle other properties like position, color, etc.
             _ => return Err("Property not supported for text items".to_string()),
         }
+
+        // update saved state
+        
+        // Remove existing background
+        let saved_state = self.saved_state.as_mut().expect("Couldn't get saved state");
+
+        saved_state.sequences
+            .retain(|p| p.id != current_sequence_id);
+
+        saved_state.sequences.push(current_sequence.clone());
+
+        save_saved_state_raw(saved_state.clone());
 
         Ok(())
     }
