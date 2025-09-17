@@ -1,23 +1,20 @@
 use cgmath::SquareMatrix;
-use cgmath::{Matrix4, Vector2, Vector3};
+use cgmath::{Matrix4, Vector2};
 use image::GenericImageView;
-use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
-use wgpu::{Device, Queue, TextureView};
+use wgpu::{Device, Queue};
 
 use crate::animations::{EasingType, KeyType, KeyframeValue, Sequence, UIKeyframe};
 use crate::camera::Camera3D as Camera;
 use crate::editor::{get_full_color, interpolate_position, rgb_to_wgpu, Point};
-use crate::polygon::{Polygon, SavedPoint, Stroke, INTERNAL_LAYER_SPACE};
+use crate::polygon::{Polygon, Stroke};
 use crate::transform::matrix4_to_raw_array;
 use crate::{
     editor::WindowSize,
     transform::Transform,
-    vertex::{get_z_layer, Vertex},
 };
 
 // maybe unnecessary for MotionPath
@@ -256,7 +253,7 @@ impl MotionPath {
             label: None,
         });
 
-        let mut group_transform = Transform::new(
+        let group_transform = Transform::new(
             Vector2::new(initial_position[0] as f32, initial_position[1] as f32), // everything can move relative to this
             0.0,
             Vector2::new(1.0, 1.0),
@@ -344,7 +341,7 @@ fn create_path_segment(
     };
 
     // Create polygon using default square points
-    let mut polygon = Polygon::new(
+    let polygon = Polygon::new(
         window_size,
         device,
         queue,
@@ -397,7 +394,7 @@ fn create_path_handle(
 ) -> Polygon {
     // println!("make handle");
 
-    let mut polygon = Polygon::new(
+    let polygon = Polygon::new(
         window_size,
         device,
         queue,

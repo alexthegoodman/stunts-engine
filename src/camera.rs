@@ -1,7 +1,6 @@
-use cgmath::{Matrix4, Point3, Vector2, Vector3, Rad, Deg, perspective, InnerSpace};
+use cgmath::{Matrix4, Point3, Vector2, Vector3, Rad, perspective, InnerSpace};
 
 use crate::editor::{size_to_normal, Point, WindowSize};
-use crate::vertex::get_z_layer;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Camera {

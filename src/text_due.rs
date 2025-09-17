@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
 use cgmath::{Matrix4, Vector2};
 use fontdue::{
@@ -8,10 +8,9 @@ use fontdue::{
     Font,
 };
 use uuid::Uuid;
-use wgpu::{BindGroup, Buffer, Device, Queue, RenderPipeline, TextureFormat};
+use wgpu::{BindGroup, Buffer, Device, Queue};
 // use allsorts::binary::read::ReadScope;
 // use allsorts::font::read_cmap_subtable;
-use bytemuck::{Pod, Zeroable};
 use cgmath::SquareMatrix;
 use serde::Deserialize;
 use serde::Serialize;
@@ -19,7 +18,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
-use crate::vertex::get_z_layer;
 use crate::{
     camera::Camera3D as Camera,
     editor::{Point, WindowSize},
@@ -27,7 +25,7 @@ use crate::{
     vertex::Vertex,
 };
 use crate::{editor::rgb_to_wgpu, transform::create_empty_group_transform};
-use crate::{editor::wgpu_to_human, polygon::INTERNAL_LAYER_SPACE};
+use crate::editor::wgpu_to_human;
 use crate::{
     editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET},
     polygon::{Polygon, SavedPoint, Stroke},

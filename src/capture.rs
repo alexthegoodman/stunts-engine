@@ -1,27 +1,15 @@
 use device_query::{DeviceQuery, DeviceState, MouseState};
 use serde_json::json;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
 use windows_capture::encoder::VideoSettingsSubType;
 
 use serde::{Deserialize, Serialize};
 use serde_json;
-use serde_json::Value;
-use std::collections::HashMap;
-use std::collections::VecDeque;
-use std::env;
-use std::error::Error;
 use std::fs;
-use std::fs::File;
-use std::io::BufReader;
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc;
 use std::thread;
-use std::time;
-use std::time::Instant;
 use windows_capture::window::Window;
 
 use windows::{
@@ -29,7 +17,6 @@ use windows::{
     Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowRect, GetWindowTextW, IsWindowVisible},
 };
 
-use core::ffi::c_int;
 use std::ffi::c_void;
 use windows_capture::monitor::Monitor;
 use windows_capture::{
@@ -191,7 +178,7 @@ impl StCapture {
         Ok(true)
     }
 
-    pub fn stop_mouse_tracking(&mut self, project_id: String) -> Result<(String), String> {
+    pub fn stop_mouse_tracking(&mut self, project_id: String) -> Result<String, String> {
         // Signal the tracking thread to stop
         self.state.is_tracking.store(false, Ordering::SeqCst);
 
@@ -214,10 +201,10 @@ impl StCapture {
         // reset mouse positions
         self.state.mouse_positions = Arc::new(Mutex::new(Vec::new()));
 
-        Ok((file_path
+        Ok(file_path
             .to_str()
             .expect("Couldn't create string from path")
-            .to_string()))
+            .to_string())
     }
 
     pub fn get_project_data(
@@ -298,7 +285,7 @@ impl StCapture {
 
         // hardcode hd for testing to avoid miscolored recording,
         // TBD: scale to fullscreen width / height for users
-        if (width > 1920 || height > 1080) {
+        if width > 1920 || height > 1080 {
             let primary_monitor = Monitor::primary().expect("There is no primary monitor");
 
             // windows-capture 1.4.2?

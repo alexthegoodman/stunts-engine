@@ -1,6 +1,5 @@
-use std::mem::MaybeUninit;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use cgmath::SquareMatrix;
 use cgmath::{Matrix4, Vector2};
@@ -9,19 +8,15 @@ use std::sync::Arc;
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue};
-use windows::Win32::Foundation::*;
 use windows::Win32::Media::KernelStreaming::GUID_NULL;
 use windows::Win32::Media::MediaFoundation::*;
-use windows::Win32::System::Com::StructuredStorage::{
-    InitPropVariantFromUInt64Vector, PropVariantToInt64,
-};
-use windows::Win32::System::Variant::{VariantClear, VariantInit, VT_I8};
+use windows::Win32::System::Com::StructuredStorage::PropVariantToInt64;
 use windows_core::{PCWSTR, PROPVARIANT};
 
 use crate::camera::Camera3D as Camera;
 use crate::capture::{MousePosition, SourceData};
 use crate::editor::{Point, WindowSize};
-use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
+use crate::polygon::SavedPoint;
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array, Transform};
 use crate::vertex::Vertex;
 use crate::{
@@ -350,10 +345,10 @@ impl StVideo {
         let mut source_width = 0;
         let mut source_height = 0;
         unsafe {
-            let mut media_type = source_reader
+            let media_type = source_reader
                 .GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, 0)?;
 
-            let mut size_attr = media_type.GetUINT64(&MF_MT_FRAME_SIZE)?;
+            let size_attr = media_type.GetUINT64(&MF_MT_FRAME_SIZE)?;
             source_width = (size_attr >> 32) as u32;
             source_height = (size_attr & 0xFFFFFFFF) as u32;
         }
@@ -361,11 +356,11 @@ impl StVideo {
         // Get source frame rate
         let mut source_frame_rate = 0.0;
         unsafe {
-            let mut media_type = source_reader
+            let media_type = source_reader
                 .GetNativeMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32, 0)
                 .expect("Failed to get media type");
 
-            let mut frame_rate_attr = media_type
+            let frame_rate_attr = media_type
                 .GetUINT64(&MF_MT_FRAME_RATE)
                 .expect("Failed to get frame rate");
 
@@ -396,22 +391,22 @@ impl StVideo {
             let wide_path: Vec<u16> = file_path.encode_utf16().chain(Some(0)).collect();
 
             // Create the media source from the file path
-            let mut attributes: &mut Option<IMFAttributes> = &mut None;
+            let attributes: &mut Option<IMFAttributes> = &mut None;
             MFCreateAttributes(attributes, 0).expect("Couldn't create video decoder attributes");
 
-            let mut attributes = attributes
+            let attributes = attributes
                 .as_ref()
                 .expect("Couldn't get video decoder attributes");
             attributes.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1)?; // not necessary, can use nv12 which is YUV
             attributes.SetUINT32(&MF_READWRITE_DISABLE_CONVERTERS, 0)?; // not necessary, can use nv12 which is YUV
 
             // the only source reader needed for video
-            let mut source_reader =
+            let source_reader =
                 MFCreateSourceReaderFromURL(PCWSTR(wide_path.as_ptr()), *&attributes)?;
 
             // Set the output format to RGB32
             // let mut media_type: IMFMediaType = std::ptr::null_mut();
-            let mut media_type = MFCreateMediaType()?;
+            let media_type = MFCreateMediaType()?;
             media_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
             media_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_RGB32)?;
             // media_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)?;
@@ -431,7 +426,7 @@ impl StVideo {
             let mut flags: u32 = 0;
             let mut timestamp: i64 = 0; // store timestamp for later use?
             let mut sample: Option<IMFSample> = None;
-            let mut actual_stream_index: &mut u32 = &mut 0;
+            let actual_stream_index: &mut u32 = &mut 0;
 
             // println!("Reading sample");
             self.source_reader.ReadSample(
@@ -444,8 +439,8 @@ impl StVideo {
             )?;
 
             // println!("Convert to buffer");
-            let mut sample = sample.as_ref().expect("Couldn't get sample container");
-            let mut buffer = sample.ConvertToContiguousBuffer()?;
+            let sample = sample.as_ref().expect("Couldn't get sample container");
+            let buffer = sample.ConvertToContiguousBuffer()?;
 
             // println!("Lock buffer");
             let mut data_ptr: *mut u8 = std::ptr::null_mut();
@@ -636,7 +631,7 @@ impl StVideo {
         let uv_mouse_x = mouse_point.x / video_width as f32;
         let uv_mouse_y = mouse_point.y / video_height as f32;
 
-        let mut new_vertices = &mut self.vertices;
+        let new_vertices = &mut self.vertices;
 
         let (popout_width, popout_height) = popout_dimensions;
         let radius_x = popout_width / (2.0 * video_width as f32);

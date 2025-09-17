@@ -18,7 +18,7 @@ unsafe impl Zeroable for Vertex {}
 /// to be smaller without being negative to be on top
 pub fn get_z_layer(layer: f32) -> f32 {
     // let z = (layer as f32 / 1000.0) - 2.5;
-    let z = (layer as f32 / 1000.0);
+    let z = layer as f32 / 1000.0;
     z
 }
 

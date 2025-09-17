@@ -1,16 +1,13 @@
-use std::cell::RefCell;
-use std::fmt::Display;
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use cgmath::{Matrix4, Point3, Vector2, Vector3, Vector4};
+use cgmath::{Point3, Vector3, Vector4};
 use crate::gpu_resources::GpuResources;
 
 use cgmath::SquareMatrix;
-use cgmath::Transform;
 
 use crate::animations::{
     AnimationData, AnimationProperty, BackgroundFill, EasingType, KeyType, KeyframeValue,
@@ -20,26 +17,23 @@ use crate::camera::{Camera3D as Camera, CameraBinding};
 use crate::capture::{MousePosition, SourceData};
 use crate::dot::RingDot;
 use crate::fonts::FontManager;
-use crate::motion_arrow::{MotionArrow, MotionArrowConfig};
-use crate::motion_path::{MotionPath, MotionPathConfig};
+use crate::motion_arrow::MotionArrow;
+use crate::motion_path::MotionPath;
 use crate::polygon::{Polygon, PolygonConfig, Stroke};
 use crate::saved_state::SavedState;
 use crate::st_image::{StImage, StImageConfig};
-use crate::st_video::{FrameTimer, StVideo, StVideoConfig};
+use crate::st_video::{StVideo, StVideoConfig};
 use crate::text_due::{TextRenderer, TextRendererConfig};
 use crate::timelines::{SavedTimelineStateConfig, TrackType};
-use crate::transform::{angle_between_points, degrees_between_points};
 use crate::saved_state::save_saved_state_raw;
 use crate::{
-    capture::{StCapture, get_sources, WindowInfo},
+    capture::StCapture,
     export::exporter::Exporter,
 };
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::f32::consts::PI;
 use uuid::Uuid;
-use winit::window::CursorIcon;
 
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -371,7 +365,6 @@ pub struct Editor {
     pub generation_fade: bool,
 }
 
-use std::borrow::{Borrow, BorrowMut};
 
 #[cfg(target_os = "windows")]
 pub fn init_editor_with_model(viewport: Arc<Mutex<Viewport>>, project_id: String) -> Editor {
@@ -420,7 +413,7 @@ impl Editor {
         }
 
         // Initialize StCapture - this handles the non-Send+Sync Windows capture types
-        let mut st_capture = StCapture::new(project_path);
+        let st_capture = StCapture::new(project_path);
 
         Editor {
             st_capture,
@@ -1391,7 +1384,7 @@ impl Editor {
                 total = total + 1;
             }
 
-            if (total > 6) {
+            if total > 6 {
                 break;
             }
         }
@@ -1420,7 +1413,7 @@ impl Editor {
                 prompt.push_str("\n");
                 total = total + 1;
             }
-            if (total > 6) {
+            if total > 6 {
                 break;
             }
         }
@@ -1450,7 +1443,7 @@ impl Editor {
                 total = total + 1;
             }
 
-            if (total > 6) {
+            if total > 6 {
                 break;
             }
         }
@@ -1480,7 +1473,7 @@ impl Editor {
                 total = total + 1;
             }
 
-            if (total > 6) {
+            if total > 6 {
                 break;
             }
         }
@@ -1951,7 +1944,7 @@ impl Editor {
             let item_id = self.get_item_id(object_idx);
             let object_type = self.get_object_type(object_idx);
 
-            let mut total_duration = match object_type.clone().expect("Couldn't get object type") {
+            let total_duration = match object_type.clone().expect("Couldn't get object type") {
                 ObjectType::VideoItem => {
                     self.video_items
                         .iter()
@@ -2513,9 +2506,9 @@ impl Editor {
                 // );
 
                 // Only draw the frame if the current time is within the frame's display interval
-                if (current_time.as_secs_f64() >= current_frame_time
+                if current_time.as_secs_f64() >= current_frame_time
                     && current_time.as_secs_f64()
-                        < current_frame_time + frame_interval.as_secs_f64())
+                        < current_frame_time + frame_interval.as_secs_f64()
                 {
                     if current_time.as_millis() + 1000 < source_duration_ms as u128 {
                         self.video_items[object_idx]
@@ -3163,7 +3156,7 @@ impl Editor {
     }
 
     pub fn update_camera_binding(&mut self) {
-        if (self.camera_binding.is_some()) {
+        if self.camera_binding.is_some() {
             let gpu_resources = self
                 .gpu_resources
                 .as_ref()
@@ -3198,10 +3191,10 @@ impl Editor {
         //     return;
         // }
 
-        if (self.last_screen.x < self.interactive_bounds.min.x
+        if self.last_screen.x < self.interactive_bounds.min.x
             || self.last_screen.x > self.interactive_bounds.max.x
             || self.last_screen.y < self.interactive_bounds.min.y
-            || self.last_screen.y > self.interactive_bounds.max.y)
+            || self.last_screen.y > self.interactive_bounds.max.y
         {
             return;
         }
@@ -3234,7 +3227,7 @@ impl Editor {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
         let window_size = &camera.window_size;
 
-        let mut polygon = Polygon::new(
+        let polygon = Polygon::new(
             window_size,
             device,
             queue,
@@ -3415,7 +3408,7 @@ impl Editor {
         selected_sequence_id: String,
     ) {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
-        let mut image_item = StImage::new(
+        let image_item = StImage::new(
             device,
             queue,
             path,
@@ -3938,7 +3931,7 @@ impl Editor {
             println!("No polygon found with the selected ID: {}", selected_id);
         }
 
-        if (auto_save) {
+        if auto_save {
             save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
         }
     }
@@ -4115,7 +4108,7 @@ impl Editor {
             println!("No text found with the selected ID: {}", selected_id);
         }
 
-        if (auto_save) {
+        if auto_save {
             save_saved_state_raw(self.saved_state.clone().expect("Couldn't clone saved state"));
         }
     }
@@ -4709,10 +4702,10 @@ impl Editor {
     ) -> Option<ObjectEditConfig> {
         let camera = self.camera.as_ref().expect("Couldn't get camera");
 
-        if (self.last_screen.x < self.interactive_bounds.min.x
+        if self.last_screen.x < self.interactive_bounds.min.x
             || self.last_screen.x > self.interactive_bounds.max.x
             || self.last_screen.y < self.interactive_bounds.min.y
-            || self.last_screen.y > self.interactive_bounds.max.y)
+            || self.last_screen.y > self.interactive_bounds.max.y
         {
             return None;
         }
@@ -4866,7 +4859,7 @@ impl Editor {
                     );
 
                     // TODO: make DRY with below
-                    if (self.handle_polygon_click.is_some()) {
+                    if self.handle_polygon_click.is_some() {
                         let handler_creator = self
                             .handle_polygon_click
                             .as_ref()
@@ -4895,7 +4888,7 @@ impl Editor {
                     );
 
                     // TODO: make DRY with below
-                    if (self.handle_text_click.is_some()) {
+                    if self.handle_text_click.is_some() {
                         let handler_creator = self
                             .handle_text_click
                             .as_ref()
@@ -4929,7 +4922,7 @@ impl Editor {
                     );
 
                     // TODO: make DRY with below
-                    if (self.handle_image_click.is_some()) {
+                    if self.handle_image_click.is_some() {
                         let handler_creator = self
                             .handle_image_click
                             .as_ref()
@@ -4962,7 +4955,7 @@ impl Editor {
                         crate::animations::ObjectType::VideoItem
                     );
 
-                    if (self.handle_video_click.is_some()) {
+                    if self.handle_video_click.is_some() {
                         let handler_creator = self
                             .handle_video_click
                             .as_ref()
@@ -5014,10 +5007,10 @@ impl Editor {
         self.global_top_left = top_left;
         self.last_screen = Point { x, y };
 
-        if (self.last_screen.x < self.interactive_bounds.min.x
+        if self.last_screen.x < self.interactive_bounds.min.x
             || self.last_screen.x > self.interactive_bounds.max.x
             || self.last_screen.y < self.interactive_bounds.min.y
-            || self.last_screen.y > self.interactive_bounds.max.y)
+            || self.last_screen.y > self.interactive_bounds.max.y
         {
             // reset when out of bounds
             self.is_panning = false;
@@ -5041,8 +5034,8 @@ impl Editor {
 
         // handle panning
         if self.control_mode == ControlMode::Pan && self.is_panning {
-            let dx = (self.previous_top_left.x - self.last_top_left.x);
-            let dy = (self.last_top_left.y - self.previous_top_left.y);
+            let dx = self.previous_top_left.x - self.last_top_left.x;
+            let dy = self.last_top_left.y - self.previous_top_left.y;
             let new_x = camera.position.x + dx;
             let new_y = camera.position.y + dy;
 
@@ -5180,7 +5173,7 @@ impl Editor {
             return None;
         }
 
-        let mut action_edit = None;
+        let action_edit = None;
 
         let camera = self.camera.as_ref().expect("Couldn't get camera");
 
@@ -5288,10 +5281,10 @@ impl Editor {
             return None;
         }
 
-        if (self.last_screen.x < self.interactive_bounds.min.x
+        if self.last_screen.x < self.interactive_bounds.min.x
             || self.last_screen.x > self.interactive_bounds.max.x
             || self.last_screen.y < self.interactive_bounds.min.y
-            || self.last_screen.y > self.interactive_bounds.max.y)
+            || self.last_screen.y > self.interactive_bounds.max.y
         {
             return None;
         }
@@ -5568,7 +5561,7 @@ impl Editor {
     }
 
     pub fn reset_bounds(&mut self, window_size: &WindowSize) {
-        let mut camera = self.camera.as_mut().expect("Couldn't get camera");
+        let camera = self.camera.as_mut().expect("Couldn't get camera");
 
         // camera.position = Vector2::new(0.0, 0.0);
         camera.position = Vector3::new(0.0, 0.0, 0.0);
@@ -6411,7 +6404,6 @@ pub fn interpolate_position(start: &UIKeyframe, end: &UIKeyframe, time: f32) -> 
     }
 }
 
-use cgmath::InnerSpace;
 
 #[derive(Debug)]
 pub struct Ray {

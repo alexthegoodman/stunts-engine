@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicI32, Ordering};
-use windows::core::{implement, Interface, Result, GUID, HRESULT, PROPVARIANT};
+use std::sync::atomic::AtomicI32;
+use windows::core::{implement, Interface, Result, HRESULT, PROPVARIANT};
 use windows::Win32::Foundation::*;
 use windows::Win32::Media::KernelStreaming::GUID_NULL;
 use windows::Win32::Media::MediaFoundation::*;

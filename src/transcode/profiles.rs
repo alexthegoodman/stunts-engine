@@ -1,4 +1,3 @@
-use windows::Win32::Foundation::*;
 use windows::Win32::Media::MediaFoundation::*;
 
 #[derive(Debug, Clone)]

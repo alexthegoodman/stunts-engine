@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 mod animations;
 mod camera;
 mod capture;

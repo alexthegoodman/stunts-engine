@@ -9,17 +9,17 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera::Camera3D as Camera,
-    editor::{rgb_to_wgpu, BoundingBox, Point, Shape, WindowSize},
+    editor::{BoundingBox, Point, Shape, WindowSize},
     polygon::Stroke,
     transform::{
-        self, create_empty_group_transform, matrix4_to_raw_array, Transform as SnTransform,
+        create_empty_group_transform, matrix4_to_raw_array, Transform as SnTransform,
     },
-    vertex::{get_z_layer, Vertex},
+    vertex::Vertex,
 };
 use crate::editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET};
 
 use lyon_tessellation::{
-    geom::CubicBezierSegment, math::Point as LyonPoint, path::Path as LyonPath, BuffersBuilder,
+    math::Point as LyonPoint, path::Path as LyonPath, BuffersBuilder,
     FillOptions, FillTessellator, FillVertex, StrokeOptions, StrokeTessellator, StrokeVertex,
     VertexBuffers,
 };

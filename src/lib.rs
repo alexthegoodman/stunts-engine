@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 pub mod animations;
 pub mod camera;
 pub mod capture;

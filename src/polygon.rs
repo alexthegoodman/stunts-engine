@@ -1,21 +1,18 @@
 use std::sync::Arc;
 
-use cgmath::{Matrix4, Point3, Vector2, Vector3};
+use cgmath::{Matrix4, Vector2};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use uuid::Uuid;
 use wgpu::util::DeviceExt;
 
 use crate::{
-    camera::{self, Camera3D as Camera},
-    dot::{
-        closest_point_on_line_segment, closest_point_on_line_segment_with_info, distance, EdgePoint,
-    },
-    editor::{rgb_to_wgpu, visualize_ray_intersection, BoundingBox, Point, Shape, WindowSize},
+    camera::{Camera3D as Camera},
+    editor::{BoundingBox, Point, Shape, WindowSize},
     transform::{
-        self, create_empty_group_transform, matrix4_to_raw_array, Transform as SnTransform,
+        create_empty_group_transform, matrix4_to_raw_array, Transform as SnTransform,
     },
-    vertex::{get_z_layer, Vertex},
+    vertex::Vertex,
 };
 use crate::{
     editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET},
@@ -171,7 +168,7 @@ pub fn get_polygon_data(
         .unwrap();
 
     // Stroke the polygon (optional, for a border effect)
-    if (stroke.thickness > 0.0) {
+    if stroke.thickness > 0.0 {
         stroke_tessellator
             .tessellate_path(
                 &path,
@@ -399,7 +396,6 @@ fn create_rounded_polygon_path(
 }
 
 use cgmath::SquareMatrix;
-use cgmath::Transform;
 
 impl Polygon {
     pub fn new(

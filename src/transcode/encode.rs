@@ -1,5 +1,5 @@
 use std::path::Path;
-use windows::core::{IUnknown, HRESULT, PCWSTR};
+use windows::core::{IUnknown, PCWSTR};
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Media::MediaFoundation::{MFShutdown, MFStartup, MF_VERSION};
 use windows::Win32::System::Com::Urlmon::E_PENDING;
@@ -97,7 +97,7 @@ pub fn encode_file(input: PCWSTR, output: PCWSTR, config: &EncoderConfig) -> Res
     // Create the topology
     let topology = unsafe {
         // let mut topology = None;
-        let mut topology = MFCreateTranscodeTopology(&source, output, &profile)?;
+        let topology = MFCreateTranscodeTopology(&source, output, &profile)?;
         topology
     };
 
@@ -120,7 +120,6 @@ pub fn encode_file(input: PCWSTR, output: PCWSTR, config: &EncoderConfig) -> Res
 // Helper function to create the media source
 // use windows::core::{ComPtr, Interface, Result, PCWSTR};
 use windows::core::Interface;
-use windows::Win32::Media::MediaFoundation::*;
 // use windows::Win32::System::Com::IUnknown;
 
 fn create_media_source(url: PCWSTR) -> Result<IMFMediaSource> {
@@ -128,7 +127,7 @@ fn create_media_source(url: PCWSTR) -> Result<IMFMediaSource> {
         // Create the source resolver
         let resolver: IMFSourceResolver = {
             // let mut resolver = None;
-            let mut resolver = MFCreateSourceResolver();
+            let resolver = MFCreateSourceResolver();
             resolver.unwrap()
         };
 

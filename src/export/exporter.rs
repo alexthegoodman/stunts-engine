@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use crate::gpu_resources;
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedSender};
 
 use super::{encode::VideoEncoder, frame_buffer::FrameCaptureBuffer, pipeline::ExportPipeline};
 use crate::{animations::Sequence, editor::WindowSize, timelines::SavedTimelineStateConfig};
@@ -112,6 +111,6 @@ impl Exporter {
 
         println!("Export finished!");
 
-        Ok(Arc::new((total_frames)))
+        Ok(Arc::new(total_frames))
     }
 }

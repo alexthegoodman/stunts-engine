@@ -4,10 +4,10 @@ use wgpu::util::DeviceExt;
 
 use crate::transform::create_empty_group_transform;
 use crate::{
-    camera::{self, Camera3D as Camera},
+    camera::{Camera3D as Camera},
     editor::{Point, WindowSize},
     transform::{matrix4_to_raw_array, Transform},
-    vertex::{get_z_layer, Vertex},
+    vertex::Vertex,
 };
 use crate::{
     editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET},

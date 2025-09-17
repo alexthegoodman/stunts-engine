@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 
 use cgmath::SquareMatrix;
-use cgmath::{Deg, Matrix3, Matrix4, Rad, Vector2, Vector3};
+use cgmath::{Matrix3, Matrix4, Rad, Vector2, Vector3};
 use wgpu::util::DeviceExt;
 use crate::vertex::get_z_layer;
 
@@ -172,7 +172,7 @@ pub fn create_empty_group_transform(
         label: None,
     });
 
-    let mut group_transform = Transform::new(
+    let group_transform = Transform::new(
         Vector2::new(0.0, 0.0),
         0.0,
         Vector2::new(1.0, 1.0),

@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use windows::{core::*, Win32::Media::MediaFoundation::*, Win32::System::Com::*};
 
 const VIDEO_WIDTH: u32 = 1920; // HD resolution
@@ -36,13 +35,13 @@ impl VideoEncoder {
             // Create sink writer
             let wide_path: Vec<u16> = output_path.encode_utf16().chain(Some(0)).collect();
             // let mut sink_writer = None;
-            let mut sink_writer =
+            let sink_writer =
                 MFCreateSinkWriterFromURL(PCWSTR(wide_path.as_ptr()), None, None)?;
 
             // Configure output media type (H264)
             let media_type_out = {
                 // let mut type_out = None;
-                let mut type_out = MFCreateMediaType()?;
+                let type_out = MFCreateMediaType()?;
                 // let type_out = type_out.unwrap();
 
                 type_out.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
@@ -68,7 +67,7 @@ impl VideoEncoder {
             // Configure input media type (RGBA from wgpu)
             let media_type_in = {
                 // let mut type_in = None;
-                let mut type_in = MFCreateMediaType()?;
+                let type_in = MFCreateMediaType()?;
                 // let type_in = type_in.unwrap();
 
                 type_in.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
@@ -102,7 +101,7 @@ impl VideoEncoder {
 
             // Create and fill the media buffer
             // let mut media_buffer = None;
-            let mut media_buffer = MFCreateMemoryBuffer(buffer_size)?;
+            let media_buffer = MFCreateMemoryBuffer(buffer_size)?;
             // let media_buffer = media_buffer.unwrap();
 
             // Lock the buffer and copy frame data
@@ -127,7 +126,7 @@ impl VideoEncoder {
 
                 // Create a media sample and add the buffer
                 // let mut sample = None;
-                let mut sample = MFCreateSample()?;
+                let sample = MFCreateSample()?;
                 // let sample = sample.unwrap();
                 sample.AddBuffer(&media_buffer)?;
 

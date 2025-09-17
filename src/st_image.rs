@@ -1,5 +1,5 @@
 use cgmath::SquareMatrix;
-use cgmath::{Matrix4, Vector2, Vector3};
+use cgmath::{Matrix4, Vector2};
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -10,14 +10,13 @@ use wgpu::util::DeviceExt;
 use wgpu::{Device, Queue, TextureView};
 
 use crate::camera::Camera3D as Camera;
-use crate::capture::MousePosition;
 use crate::editor::Point;
-use crate::polygon::{SavedPoint, INTERNAL_LAYER_SPACE};
+use crate::polygon::SavedPoint;
 use crate::transform::{create_empty_group_transform, matrix4_to_raw_array};
 use crate::{
     editor::WindowSize,
     transform::Transform,
-    vertex::{get_z_layer, Vertex},
+    vertex::Vertex,
 };
 use crate::{
     editor::{CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET},
@@ -89,7 +88,7 @@ impl StImage {
         // self.orginal_dimensions = dimensions;
 
         // Option 1: Resize image data before creating texture
-        let img = if (feature == "high_quality_resize") {
+        let img = if feature == "high_quality_resize" {
             img.resize_exact(
                 dimensions.0,
                 dimensions.1,
@@ -101,12 +100,12 @@ impl StImage {
 
         // Create texture with original or resized dimensions
         let texture_size = wgpu::Extent3d {
-            width: if (feature == "high_quality_resize") {
+            width: if feature == "high_quality_resize" {
                 dimensions.0
             } else {
                 original_dimensions.0
             },
-            height: if (feature == "high_quality_resize") {
+            height: if feature == "high_quality_resize" {
                 dimensions.1
             } else {
                 original_dimensions.1
@@ -153,7 +152,7 @@ impl StImage {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: if (feature == "high_quality_resize") {
+            mag_filter: if feature == "high_quality_resize" {
                 wgpu::FilterMode::Linear
             } else {
                 wgpu::FilterMode::Linear // You might want to use Nearest for pixel art
@@ -198,7 +197,7 @@ impl StImage {
         println!("scales {} {}", scale_x, scale_y);
 
         // Option 2: Use scale in transform to adjust size
-        let mut transform = if (feature != "high_quality_resize") {
+        let mut transform = if feature != "high_quality_resize" {
             Transform::new(
                 Vector2::new(image_config.position.x, image_config.position.y),
                 0.0,

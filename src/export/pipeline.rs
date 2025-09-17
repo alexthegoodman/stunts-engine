@@ -2,16 +2,14 @@ use crate::{
     animations::Sequence,
     camera::{Camera3D as Camera, CameraBinding},
     editor::{
-        Editor, Viewport, WindowSize, WindowSizeShader, CANVAS_HORIZ_OFFSET, CANVAS_VERT_OFFSET,
+        Editor, Viewport, WindowSize, WindowSizeShader,
     },
-    timelines::{SavedTimelineStateConfig, TimelineSequence},
+    timelines::SavedTimelineStateConfig,
     vertex::Vertex,
 };
-use cgmath::{Vector2, Vector3};
 use crate::gpu_resources::GpuResources;
 use std::sync::{Arc, Mutex};
 use wgpu::{util::DeviceExt, RenderPipeline};
-use crate::vertex::get_z_layer;
 
 use super::frame_buffer::FrameCaptureBuffer;
 
@@ -411,7 +409,7 @@ impl ExportPipeline {
     }
 
     pub fn render_frame(&mut self, current_time: f64) {
-        let mut editor = self.export_editor.as_mut().expect("Couldn't get editor");
+        let editor = self.export_editor.as_mut().expect("Couldn't get editor");
         let gpu_resources = self
             .gpu_resources
             .as_ref()

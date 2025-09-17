@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use directories::{BaseDirs, UserDirs};
+use directories::UserDirs;
 use std::{fs, path::PathBuf, sync::MutexGuard};
-use serde_with::serde_as;
 use uuid::Uuid;
 
 use crate::animations::AnimationData;
@@ -422,7 +421,7 @@ fn parse_motion_paths(
 
     // Convert grouped keyframes into AnimationData structures
     for (polygon_id, keyframes) in current_polygon_keyframes {
-        let mut position_property = AnimationProperty {
+        let position_property = AnimationProperty {
             name: "Position".to_string(),
             property_path: "position".to_string(),
             children: Vec::new(),

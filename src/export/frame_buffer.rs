@@ -1,5 +1,5 @@
 use futures::channel::oneshot;
-use wgpu::{CommandEncoder, Device, Queue, Surface, TextureFormat, TextureView};
+use wgpu::CommandEncoder;
 
 pub struct FrameCaptureBuffer {
     capture_texture: wgpu::Texture,
